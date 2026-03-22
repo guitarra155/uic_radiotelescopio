@@ -515,14 +515,14 @@ def main(page: ft.Page):
     tab_view = ft.TabBarView(controls=tab_contents, expand=True)
 
     tabs = ft.Tabs(
-        content=tab_view,
+        content=ft.Column([
+            tab_bar,
+            tab_view
+        ], expand=True, spacing=0),
         length=len(tab_labels),
         selected_index=0,
         expand=True,
     )
-
-    # Conectar TabBar al mismo controlador Tabs
-    tab_bar.tabs_ref = tabs  # type: ignore
 
     # ── Footer ────────────────────────────────────────
     footer = ft.Container(
@@ -542,7 +542,6 @@ def main(page: ft.Page):
 
     page.add(ft.Column([
         header,
-        tab_bar,
         tabs,
         footer,
     ], expand=True, spacing=0))
