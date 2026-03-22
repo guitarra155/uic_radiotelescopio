@@ -36,20 +36,26 @@ def style_ax(ax, title="", xlabel="", ylabel=""):
     ax.set_ylabel(ylabel, color=TEXT_MUTED, fontsize=8)
     ax.grid(True, color=MPL_GRID, linestyle="--", linewidth=0.5, alpha=0.6)
 
-def chart_amplitude() -> str:
+def chart_amplitude(offset=0.0) -> str:
     fig, ax = plt.subplots(figsize=(7, 2.8))
     fig.patch.set_facecolor(MPL_BG)
     t = np.linspace(0, 10, 1000)
-    sig = (0.5 * np.sin(2*np.pi*1.5*t) + 0.3*np.sin(2*np.pi*4.2*t+0.8)
+    
+    # Simula la fase continua añadiendo el offset
+    sig = (0.5 * np.sin(2*np.pi*1.5*(t + offset)) 
+           + 0.3*np.sin(2*np.pi*4.2*(t + offset)+0.8)
            + np.random.normal(0, 0.12, len(t)))
+           
+    # Simula un pulso RFI esporádico si el offset coincide con cierta ventana
     m = (t > 4.5) & (t < 5.5)
     sig[m] += 1.8 * np.sin(2*np.pi*5*t[m])
+    
     ax.plot(t, sig, color=ACCENT_CYAN, linewidth=0.9, alpha=0.85)
     ax.fill_between(t, sig, alpha=0.15, color=ACCENT_CYAN)
     ax.axvline(5.0, color=ACCENT_RED, linestyle="--", linewidth=0.9,
                alpha=0.85, label="Pico RFI")
     ax.legend(fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL, labelcolor=MPL_TEXT)
-    style_ax(ax, "Amplitud vs Tiempo", "Tiempo (s)", "Amplitud (dBm)")
+    style_ax(ax, "Amplitud vs Tiempo (Vivo)", "Tiempo (s)", "Amplitud (dBm)")
     fig.tight_layout(pad=0.6)
     return fig_to_b64(fig)
 
