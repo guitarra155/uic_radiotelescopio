@@ -4,17 +4,61 @@ Define la cabecera (Header) y el pie de página (Footer) de la aplicación.
 """
 
 import flet as ft
+import os
 from constants import *
 from components.shared import border_all
+from dsp_engine import engine_instance
 
 def build_header(page: ft.Page) -> ft.Control:
     sdr_dot = ft.Text("●", color=ACCENT_RED, size=16)
-    sdr_lbl = ft.Text("Estado SDR: Desconectado", color=ACCENT_RED,
-                      size=12, weight=ft.FontWeight.W_600)
+    sdr_lbl = ft.Text("Estado SDR: Detenido", color=ACCENT_RED, size=12, weight=ft.FontWeight.W_600)
 
+    # --- Botón de Play Global ---
+    def toggle_stream(e):
+        if not engine_instance.is_playing:
+            if engine_instance.stream_mode == 'file':
+                path = engine_instance.iq_filename
+                if not os.path.exists(path):
+                    page.snack_bar = ft.SnackBar(ft.Text(f"⚠ Archivo no encontrado en: {path}", color="#fff"), bgcolor=ACCENT_RED)
+                    page.snack_bar.open = True
+                    page.update()
+                    return
+                engine_instance.start_stream('file', {'filename': path, 'format': engine_instance.iq_format})
+            else:
+                engine_instance.start_stream('sdr', {})
+                
+            play_btn.content = "⏸ Detener Adquisición"
+            play_btn.bgcolor = ACCENT_AMBER
+            sdr_dot.color = ACCENT_AMBER
+            sdr_lbl.value = "Streaming Activo..."
+            sdr_lbl.color = ACCENT_AMBER
+        else:
+            engine_instance.stop_stream()
+            play_btn.content = "▶ Iniciar Adquisición"
+            play_btn.bgcolor = ACCENT_GREEN
+            sdr_dot.color = ACCENT_RED
+            sdr_lbl.value = "Estado SDR: Detenido"
+            sdr_lbl.color = ACCENT_RED
+        page.update()
+
+    play_btn = ft.Button(
+        content="▶ Iniciar Adquisición", bgcolor=ACCENT_GREEN, color=DARK_BG,
+        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
+        on_click=toggle_stream
+    )
+
+    # --- Botón de Emergencia ---
     def on_emergency(e):
+        engine_instance.stop_stream()
+        if hasattr(play_btn, 'content') and "Detener" in play_btn.content:
+            play_btn.content = "▶ Iniciar Adquisición"
+            play_btn.bgcolor = ACCENT_GREEN
+            sdr_dot.color = ACCENT_RED
+            sdr_lbl.value = "EMERGENCIA DETENIDA"
+            sdr_lbl.color = ACCENT_RED
+            
         sb = ft.SnackBar(
-            content=ft.Text("⛔  EMERGENCIA: Adquisición detenida.",
+            content=ft.Text("⛔  EMERGENCIA: Todos los hilos DSP han sido abortados.",
                             color="#FFFFFF", weight=ft.FontWeight.BOLD),
             bgcolor=ACCENT_RED,
         )
@@ -23,7 +67,7 @@ def build_header(page: ft.Page) -> ft.Control:
         page.update()
 
     emg_btn = ft.Button(
-        content="⛔  Emergencia / Detener",
+        content="⛔  Stop",
         bgcolor=ACCENT_RED, color="#FFFFFF",
         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
         on_click=on_emergency,
@@ -36,12 +80,17 @@ def build_header(page: ft.Page) -> ft.Control:
         content=ft.Row([
             ft.Icon(ft.Icons.WIFI_TETHERING, color=ACCENT_CYAN, size=26),
             ft.Text(
-                "Procesamiento de Señales — Radiotelescopio (1420.40 MHz)",
-                color=TEXT_MAIN, size=15, weight=ft.FontWeight.BOLD, expand=True,
+                "Procesamiento DSP —",
+                color=TEXT_MAIN, size=15, weight=ft.FontWeight.BOLD,
+            ),
+            ft.Text(
+                "Radiotelescopio (1420.40 MHz)",
+                color=ACCENT_CYAN, size=14, weight=ft.FontWeight.BOLD, expand=True,
             ),
             ft.Row([sdr_dot, sdr_lbl], spacing=5,
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
-            ft.Container(width=24),
+            ft.Container(width=16),
+            play_btn,
             emg_btn,
         ], vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=12),
     )

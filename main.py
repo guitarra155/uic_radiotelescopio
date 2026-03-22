@@ -66,6 +66,19 @@ def main(page: ft.Page):
         expand=True,
     )
 
+    import asyncio
+    from dsp_engine import engine_instance
+    
+    # ── Tarea Asíncrona de Refresco de Interfaz ──────────────
+    async def refresh_loop():
+        while True:
+            if engine_instance.is_playing:
+                page.pubsub.send_all("refresh_charts")
+            # 0.016s equivale a ~60 FPS (1000ms / 60)
+            await asyncio.sleep(0.016)
+            
+    page.run_task(refresh_loop)
+
     # ── Renderizado Final en Pantalla ──────────────
     page.add(ft.Column([
         header,

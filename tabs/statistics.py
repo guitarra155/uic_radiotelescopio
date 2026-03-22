@@ -45,6 +45,13 @@ def build_statistics(page: ft.Page) -> ft.Control:
     img = ft.Image(src=chart_histogram(), fit=ft.BoxFit.CONTAIN,
                    border_radius=8, expand=True)
 
+    async def on_refresh(msg):
+        if msg == "refresh_charts":
+            img.src = chart_histogram()
+            img.update()
+            
+    page.pubsub.subscribe(on_refresh)
+
     stat_data = [("Media (σ)", "0.023", ACCENT_GREEN),
                  ("Std Dev",   "1.041", ACCENT_GREEN),
                  ("Kurtosis",  "3.87",  ACCENT_AMBER),

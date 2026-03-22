@@ -1,7 +1,7 @@
 """
 charts.py
-Agrupa toda la lógica de Python matemático y ploteo con Matplotlib.
-Retorna URIs en Base64 para consumo de Flet.
+Agrupa toda la lógica de ploteo con Matplotlib.
+Ahora lee directamente de los buffers del DSPEngine para visualización en tiempo real.
 """
 
 import math
@@ -12,6 +12,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from constants import *
+from dsp_engine import engine_instance
 
 matplotlib.use("Agg")
 
@@ -36,92 +37,112 @@ def style_ax(ax, title="", xlabel="", ylabel=""):
     ax.set_ylabel(ylabel, color=TEXT_MUTED, fontsize=8)
     ax.grid(True, color=MPL_GRID, linestyle="--", linewidth=0.5, alpha=0.6)
 
-def chart_amplitude(offset=0.0) -> str:
+def chart_amplitude() -> str:
     fig, ax = plt.subplots(figsize=(7, 2.8))
     fig.patch.set_facecolor(MPL_BG)
-    t = np.linspace(0, 10, 1000)
     
-    # Simula la fase continua añadiendo el offset
-    sig = (0.5 * np.sin(2*np.pi*1.5*(t + offset)) 
-           + 0.3*np.sin(2*np.pi*4.2*(t + offset)+0.8)
-           + np.random.normal(0, 0.12, len(t)))
-           
-    # Simula un pulso RFI esporádico si el offset coincide con cierta ventana
-    m = (t > 4.5) & (t < 5.5)
-    sig[m] += 1.8 * np.sin(2*np.pi*5*t[m])
+    # Leemos del DSP puro en tiempo real
+    sig = engine_instance.amplitude_data
+    t = np.linspace(0, len(sig), len(sig))
     
     ax.plot(t, sig, color=ACCENT_CYAN, linewidth=0.9, alpha=0.85)
     ax.fill_between(t, sig, alpha=0.15, color=ACCENT_CYAN)
-    ax.axvline(5.0, color=ACCENT_RED, linestyle="--", linewidth=0.9,
-               alpha=0.85, label="Pico RFI")
+    
+    # Marcador decorativo de pico más alto actual
+    if len(sig) > 0:
+        max_idx = np.argmax(sig)
+        ax.axvline(max_idx, color=ACCENT_RED, linestyle="--", linewidth=0.9,
+                   alpha=0.85, label="Pico Señal")
+        
     ax.legend(fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL, labelcolor=MPL_TEXT)
-    style_ax(ax, "Amplitud vs Tiempo (Vivo)", "Tiempo (s)", "Amplitud (dBm)")
+    style_ax(ax, "Amplitud vs Tiempo (Streaming)", "Muestras", "Amplitud Baseband (Volt)")
     fig.tight_layout(pad=0.6)
     return fig_to_b64(fig)
 
 def chart_spectrum() -> str:
     fig, ax = plt.subplots(figsize=(7, 2.8))
     fig.patch.set_facecolor(MPL_BG)
-    freq = np.linspace(1418, 1423, 500)
-    hi   = 2.5 * np.exp(-0.5 * ((freq - 1420.40)/0.15)**2)
-    spec = hi + np.random.normal(0, 0.12, len(freq)) - 80
-    ax.plot(freq, spec, color=ACCENT_GREEN, linewidth=1.0)
-    ax.fill_between(freq, spec, min(spec), alpha=0.2, color=ACCENT_GREEN)
+    
+    spec = engine_instance.spectrum_data
+    # Convertimos los bins de la FFT a frecuencias absolutas (MHz)
+    fc = engine_instance.center_freq
+    fs = engine_instance.sample_rate / 1_000_000 # En MHz
+    
+    full_freq = np.linspace(fc - fs/2, fc + fs/2, len(spec))
+    fmin, fmax = engine_instance.f_min, engine_instance.f_max
+    
+    # Recorte Horizontal (Zoom)
+    mask = (full_freq >= fmin) & (full_freq <= fmax)
+    freq_cr = full_freq[mask]
+    spec_cr = spec[mask]
+    if len(freq_cr) == 0: freq_cr, spec_cr = full_freq, spec
+    
+    ax.plot(freq_cr, spec_cr, color=ACCENT_GREEN, linewidth=1.0)
+    ax.fill_between(freq_cr, spec_cr, engine_instance.db_min, alpha=0.2, color=ACCENT_GREEN)
     ax.axvline(1420.40, color=ACCENT_AMBER, linestyle="--", linewidth=1.0,
                alpha=0.9, label="HI 1420.40 MHz")
+    ax.set_ylim([engine_instance.db_min, engine_instance.db_max])
+    ax.set_xlim([fmin, fmax])
     ax.legend(fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL, labelcolor=MPL_TEXT)
-    style_ax(ax, "Espectro de Frecuencia", "Frecuencia (MHz)", "Potencia (dBm)")
+    style_ax(ax, "Espectro de Frecuencia (Tiempo Real)", "Frecuencia (MHz)", "Potencia (dBFS)")
     fig.tight_layout(pad=0.6)
     return fig_to_b64(fig)
 
 def chart_spectrogram() -> str:
     fig, ax = plt.subplots(figsize=(10, 5))
     fig.patch.set_facecolor(MPL_BG)
-    np.random.seed(42)
-    T, F = 250, 200
-    data = np.random.normal(-85, 4, (F, T))
-    g = np.exp(-0.5 * ((np.linspace(0,1,25)-0.5)/0.15)**2)
-    data[90:115, :] += 18 * g[:, np.newaxis]
-    data[40:55, 60:85]    += 22
-    data[150:165, 170:200] += 15
-    for i in range(T):
-        r = max(0, min(F-1, 100+int(10*np.sin(2*np.pi*i/T))))
-        data[r, i] += 8
-    im = ax.imshow(data, aspect="auto", origin="lower",
-                   extent=[0,10,1418,1423], cmap="inferno",
-                   vmin=-95, vmax=-60, interpolation="bilinear")
+    
+    data = engine_instance.waterfall_data
+    fc = engine_instance.center_freq
+    fs = engine_instance.sample_rate / 1_000_000 # En MHz
+    
+    fmin, fmax = engine_instance.f_min, engine_instance.f_max
+    full_freq = np.linspace(fc - fs/2, fc + fs/2, data.shape[1])
+    
+    # Recorte (Zoom Horizontal)
+    mask = (full_freq >= fmin) & (full_freq <= fmax)
+    data_cr = data[:, mask]
+    if data_cr.shape[1] == 0: data_cr = data
+    
+    # El waterfall dibuja la historia recortada
+    im = ax.imshow(data_cr, aspect="auto", origin="lower",
+                   extent=[fmin, fmax, 0, engine_instance.waterfall_steps], 
+                   cmap="inferno", interpolation="nearest", 
+                   vmin=engine_instance.db_min, vmax=engine_instance.db_max)
+                   
     cb = fig.colorbar(im, ax=ax, shrink=0.9, pad=0.02)
-    cb.set_label("Potencia (dBm)", color=MPL_TEXT, fontsize=9)
+    cb.set_label("Potencia (dBFS)", color=MPL_TEXT, fontsize=9)
     cb.ax.yaxis.set_tick_params(color=MPL_TEXT)
     plt.setp(cb.ax.yaxis.get_ticklabels(), color=MPL_TEXT, fontsize=8)
-    ax.axhline(1420.40, color=ACCENT_CYAN, linestyle="--", linewidth=1.2,
+    
+    ax.axvline(1420.40, color=ACCENT_CYAN, linestyle="--", linewidth=1.2,
                alpha=0.85, label="HI 1420.40 MHz")
     ax.legend(fontsize=8, facecolor=MPL_AXBG, edgecolor=BORDER_COL,
               labelcolor=MPL_TEXT, loc="upper right")
-    style_ax(ax, "Espectrograma Tiempo-Frecuencia (1418–1423 MHz)",
-             "Tiempo (s)", "Frecuencia (MHz)")
+    style_ax(ax, "Cascada Espectral (Waterfall)", "Frecuencia (MHz)", "Líneas de Tiempo")
     fig.tight_layout(pad=0.6)
     return fig_to_b64(fig)
 
 def chart_histogram() -> str:
     fig, ax = plt.subplots(figsize=(5.5, 4.0))
     fig.patch.set_facecolor(MPL_BG)
-    np.random.seed(7)
-    noise   = np.random.normal(0, 1, 8000)
-    skewed  = np.random.gamma(shape=2.5, scale=0.9, size=1500) + 1.5
-    samples = np.concatenate([noise, skewed])
-    ax.hist(samples, bins=70, density=True, color=ACCENT_CYAN,
-            alpha=0.55, edgecolor=MPL_BG, linewidth=0.3, label="Distribución muestral")
-    x = np.linspace(samples.min(), samples.max(), 300)
-    gauss = (1/math.sqrt(2*math.pi)) * np.exp(-0.5*x**2)
-    ax.plot(x, gauss, color=ACCENT_GREEN, linewidth=1.5, label="Gaussiana teórica")
-    xp = np.linspace(0, 8, 300)
-    g25 = 1.3293  # Γ(2.5)
-    pdf = (xp**1.5 * np.exp(-xp/0.9)) / (0.9**2.5 * g25)
-    ax.plot(xp+1.5, pdf*(1500/9500), color=ACCENT_AMBER, linewidth=1.5,
-            linestyle="--", label="Señal HI (asimétrica)")
-    ax.axvline(3.2, color=ACCENT_RED, linewidth=1.2, linestyle=":", label="Umbral anomalía")
+    
+    samples = engine_instance.histogram_data
+    if len(samples) > 0 and np.std(samples) > 0:
+        ax.hist(samples, bins=70, density=True, color=ACCENT_CYAN,
+                alpha=0.55, edgecolor=MPL_BG, linewidth=0.3, label="Muestras en vivo")
+        
+        # Superponer gaussiana teórica basada en media y desviación estándar real
+        mu, std = np.mean(samples), np.std(samples)
+        x = np.linspace(np.min(samples), np.max(samples), 300)
+        gauss = (1/(std * math.sqrt(2*math.pi))) * np.exp(-0.5*((x - mu)/std)**2)
+        ax.plot(x, gauss, color=ACCENT_GREEN, linewidth=1.5, label=f"Fit (μ={mu:.2f}, σ={std:.2f})")
+        
+        # Umbral anomalía basado en el 99th percentil real
+        p99 = np.percentile(samples, 99.5) if len(samples) > 0 else 0
+        ax.axvline(p99, color=ACCENT_RED, linewidth=1.2, linestyle=":", label="Umbral Smart Trigger")
+        
     ax.legend(fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL, labelcolor=MPL_TEXT)
-    style_ax(ax, "Histograma de Amplitud", "Amplitud (σ)", "Densidad de prob.")
+    style_ax(ax, "Histograma Baseband", "Magnitud (Abs)", "Ocurrencia Relativa")
     fig.tight_layout(pad=0.6)
     return fig_to_b64(fig)

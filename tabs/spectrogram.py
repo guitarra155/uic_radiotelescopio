@@ -12,6 +12,13 @@ def build_spectrogram(page: ft.Page) -> ft.Control:
     img = ft.Image(src=chart_spectrogram(), fit=ft.BoxFit.CONTAIN,
                    border_radius=10, expand=True)
 
+    async def on_refresh(msg):
+        if msg == "refresh_charts":
+            img.src = chart_spectrogram()
+            img.update()
+            
+    page.pubsub.subscribe(on_refresh)
+
     def sw(color): return ft.Container(width=14, height=14, bgcolor=color, border_radius=4)
 
     legend = ft.Row([

@@ -26,25 +26,19 @@ def build_monitoring(page: ft.Page) -> ft.Control:
 
     rfi_switch.on_change = on_rfi
 
-    img_amp  = ft.Image(src=chart_amplitude(offset=0.0),  fit=ft.BoxFit.CONTAIN,
+    img_amp  = ft.Image(src=chart_amplitude(),  fit=ft.BoxFit.CONTAIN,
                         border_radius=8, expand=True)
     img_spec = ft.Image(src=chart_spectrum(),   fit=ft.BoxFit.CONTAIN,
                         border_radius=8, expand=True)
 
-    def update_loop():
-        offset = 0.0
-        import time
-        while True:
-            time.sleep(0.12)  # ~8 FPS
-            offset += 0.15
-            try:
-                img_amp.src = chart_amplitude(offset=offset)
-                img_amp.update()
-            except Exception:
-                break  # Termina si se cerró la aplicación
-                
-    import threading
-    threading.Thread(target=update_loop, daemon=True).start()
+    async def on_refresh(msg):
+        if msg == "refresh_charts":
+            img_amp.src  = chart_amplitude()
+            img_spec.src = chart_spectrum()
+            img_amp.update()
+            img_spec.update()
+            
+    page.pubsub.subscribe(on_refresh)
 
     graphs = ft.Column([
         ft.Container(content=img_amp,  expand=1, bgcolor=PANEL_BG,
