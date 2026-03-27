@@ -12,6 +12,25 @@ from dsp_engine import engine_instance
 def build_header(page: ft.Page) -> ft.Control:
     sdr_dot = ft.Text("●", color=ACCENT_RED, size=16)
     sdr_lbl = ft.Text("Estado SDR: Detenido", color=ACCENT_RED, size=12, weight=ft.FontWeight.W_600)
+    timer_lbl = ft.Text("", color=ACCENT_AMBER, size=14, weight=ft.FontWeight.W_700)
+
+    async def on_header_msg(msg):
+        if msg == "stream_stopped":
+            play_btn.content = "▶ Iniciar Adquisición"
+            play_btn.bgcolor = ACCENT_GREEN
+            sdr_dot.color = ACCENT_RED
+            sdr_lbl.value = "Estado SDR: Finalizado"
+            sdr_lbl.color = ACCENT_RED
+            page.update()
+        elif msg == "refresh_charts":
+            if engine_instance.stream_mode == "file":
+                # Renderiza tiempo transcurrido en el header
+                c = engine_instance.current_file_time
+                t = engine_instance.total_file_time
+                timer_lbl.value = f"⏱ {c:.1f}s / {t:.1f}s"
+                timer_lbl.update()
+                
+    page.pubsub.subscribe(on_header_msg)
 
     # --- Botón de Play Global ---
     def toggle_stream(e):
@@ -56,6 +75,7 @@ def build_header(page: ft.Page) -> ft.Control:
             sdr_dot.color = ACCENT_RED
             sdr_lbl.value = "EMERGENCIA DETENIDA"
             sdr_lbl.color = ACCENT_RED
+            timer_lbl.value = ""
             
         sb = ft.SnackBar(
             content=ft.Text("⛔  EMERGENCIA: Todos los hilos DSP han sido abortados.",
@@ -90,6 +110,8 @@ def build_header(page: ft.Page) -> ft.Control:
             ft.Row([sdr_dot, sdr_lbl], spacing=5,
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
             ft.Container(width=16),
+            timer_lbl,
+            ft.Container(width=10),
             play_btn,
             emg_btn,
         ], vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=12),

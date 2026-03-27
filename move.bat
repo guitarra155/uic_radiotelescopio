@@ -1,0 +1,12 @@
+move dsp_engine.py core\
+move constants.py core\
+move config.json core\
+move charts.py ui\
+move tabs ui\
+move components ui\
+move make_word.py scripts\
+move create_dummy_iq.py scripts\
+move test_file.py scripts\
+move *.docx docs\
+move *.txt docs\
+move *.iq data\

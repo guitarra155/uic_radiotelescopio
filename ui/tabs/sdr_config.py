@@ -5,16 +5,19 @@ Lógica y UI para la pestaña de "Configuración SDR" y Lector .iq
 
 import flet as ft
 import os
-from constants import *
-from components.shared import panel, txt_field
-from dsp_engine import engine_instance
+from core.constants import *
+from ui.components.shared import panel, txt_field
+from core.dsp_engine import engine_instance
 
 def build_config(page: ft.Page) -> ft.Control:
     # --- Ruta de Archivo Directa ---
     # Reemplazamos FilePicker porque flet > 0.80 extrajo muchos controles binarios a paquetes separados.
     # Usar un TextField es un proxy 100% confiable.
     filepath_input = txt_field("Ruta del Archivo .iq", engine_instance.iq_filename, "Ej: C:\\Datos\\señal.iq")
-    filepath_input.on_change = lambda e: setattr(engine_instance, 'iq_filename', e.control.value)
+    def on_filepath_change(e):
+        engine_instance.iq_filename = e.control.value
+        engine_instance.save_config()
+    filepath_input.on_change = on_filepath_change
 
     def dd(label, value, options):
         return ft.Dropdown(
@@ -27,14 +30,20 @@ def build_config(page: ft.Page) -> ft.Control:
 
     algo_dd = dd("Algoritmo", "Periodograma (FFT)", ["Periodograma (FFT)", "Burg", "Yule"])
     fmt_dd  = dd("Formato Datos .iq", engine_instance.iq_format, ["uint8", "int8", "complex64"])
-    fmt_dd.on_change = lambda e: setattr(engine_instance, 'iq_format', e.control.value)
+    def on_fmt_change(e):
+        engine_instance.iq_format = e.control.value
+        engine_instance.save_config()
+    fmt_dd.on_change = on_fmt_change
 
     # --- Selector de Modo de Adquisición ---
+    def on_mode_change(e):
+        engine_instance.stream_mode = e.control.value
+        engine_instance.save_config()
     mode_rg = ft.RadioGroup(
         value=engine_instance.stream_mode,
-        on_change=lambda e: setattr(engine_instance, 'stream_mode', e.control.value),
+        on_change=on_mode_change,
         content=ft.Row([
-            ft.Radio(value="sdr", label="🛰️ SDR Físico (RTL/HackRF)", active_color=ACCENT_GREEN),
+            ft.Radio(value="sdr", label="🛠️ SDR Físico (RTL/HackRF)", active_color=ACCENT_GREEN),
             ft.Radio(value="file", label="📼 Archivo Local (.iq)", active_color=ACCENT_AMBER),
         ])
     )
@@ -52,6 +61,10 @@ def build_config(page: ft.Page) -> ft.Control:
     f_min_f = txt_field("Min Rango X (MHz)", str(engine_instance.f_min), "Ej: 1419.0")
     f_max_f = txt_field("Max Rango X (MHz)", str(engine_instance.f_max), "Ej: 1421.0")
     
+    # --- Ajuste de Rango Amplitud (Y) ---
+    amp_min_f = txt_field("Min Amplitud (V)", str(engine_instance.amp_min), "Ej: 0.0")
+    amp_max_f = txt_field("Max Amplitud (V)", str(engine_instance.amp_max), "Ej: 1.0")
+    
     # --- Ajuste de Historial Waterfall ---
     waterfall_sec_f = txt_field("Historial Cascada (Segundos)", str(engine_instance.waterfall_history_sec), "Ej: 60")
     
@@ -64,16 +77,22 @@ def build_config(page: ft.Page) -> ft.Control:
         except ValueError: pass
         try: engine_instance.f_max = float(f_max_f.value)
         except ValueError: pass
+        try: engine_instance.amp_min = float(amp_min_f.value)
+        except ValueError: pass
+        try: engine_instance.amp_max = float(amp_max_f.value)
+        except ValueError: pass
         try: engine_instance.waterfall_history_sec = float(waterfall_sec_f.value)
         except ValueError: pass
+        # Guardar configuración automáticamente al cambiar cualquier valor
+        engine_instance.save_config()
 
-    for field in [db_min_f, db_max_f, f_min_f, f_max_f, waterfall_sec_f]:
+    for field in [db_min_f, db_max_f, f_min_f, f_max_f, amp_min_f, amp_max_f, waterfall_sec_f]:
         field.on_change = update_bounds
         field.on_submit = update_bounds
 
     form = panel(
-        width=560,
-        padding_val=24,
+        expand=True,
+        padding_val=16,
         content=ft.Column([
             sec("⚙️ Fuente de Adquisición de Datos"),
             ft.Divider(color=BORDER_COL, height=14),
@@ -95,6 +114,9 @@ def build_config(page: ft.Page) -> ft.Control:
             ft.Row([ft.Text("Zoom Frecuencial (Rango X Central en MHz):", color=TEXT_MUTED, size=11)]),
             ft.Container(content=ft.Row([f_min_f, f_max_f], spacing=14), height=50),
             ft.Container(height=2),
+            ft.Row([ft.Text("Rango de Amplitud (Min/Max Voltaje en Onda):", color=TEXT_MUTED, size=11)]),
+            ft.Container(content=ft.Row([amp_min_f, amp_max_f], spacing=14), height=50),
+            ft.Container(height=2),
             ft.Row([ft.Text("Memoria del Espectrograma (Eje Y de Cascada):", color=TEXT_MUTED, size=11)]),
             ft.Container(content=ft.Row([waterfall_sec_f], spacing=14), height=50),
             ft.Container(height=20) # Espaciado inferior para que el scroll termine limpio
@@ -113,7 +135,7 @@ def build_config(page: ft.Page) -> ft.Control:
                  for k, v, c in dev_rows]
 
     status_p = panel(
-        expand=True,
+        padding_val=16,
         content=ft.Column([
             ft.Text("📊 Estado de Adquisición", color=ACCENT_CYAN, size=13,
                     weight=ft.FontWeight.BOLD),
@@ -129,11 +151,60 @@ def build_config(page: ft.Page) -> ft.Control:
                 "   se animarán procesando bloques sin saturar el disco duro.",
                 color=TEXT_MUTED, size=10, selectable=True,
             ),
-        ], spacing=8),
+        ], spacing=8, scroll=ft.ScrollMode.ADAPTIVE),
+    )
+
+    # animate_size offloads tweening to Flutter's GPU natively so python doesn't need to brute-force FPS
+    status_container = ft.Container(content=status_p, height=280, animate_size=50)
+
+    import time
+    drag_state = {"last_update": 0.0}
+
+    def handle_drag(e):
+        dy = 0.0
+        # Flet deprecó on_pan_update silenciosamente en favor de on_vertical_drag_update con 'primary_delta'
+        try: dy = float(getattr(e, 'primary_delta', getattr(e, 'delta_y', 0.0)))
+        except: pass
+        
+        if dy == 0.0 and getattr(e, 'data', None):
+            try:
+                import json
+                d = json.loads(e.data)
+                dy = float(d.get("primary_delta", d.get("delta_y", d.get("dy", 0.0))))
+            except: pass
+            
+        if dy != 0.0:
+            new_h = max(80, min(800, status_container.height + dy))
+            status_container.height = new_h
+            
+            # THROTTLE (Anti-Lag Extremo): Limitar a 20 FPS max (0.05s).
+            # Flutter GPU interpola el espacio intermedio gracias a animate_size
+            now = time.time()
+            if now - drag_state.get("last_update", 0.0) > 0.05:
+                if status_container.page:
+                    status_container.update()
+                drag_state["last_update"] = now
+
+    def handle_drag_end(e):
+        # Asegura la última actualización perfecta cuando suelta el click
+        if status_container.page:
+            status_container.update()
+
+    splitter = ft.GestureDetector(
+        mouse_cursor=ft.MouseCursor.RESIZE_UP_DOWN,
+        on_pan_update=handle_drag,
+        on_vertical_drag_update=handle_drag,
+        on_pan_end=handle_drag_end,
+        on_vertical_drag_end=handle_drag_end,
+        content=ft.Container(
+            height=12,
+            bgcolor="transparent",
+            content=ft.Divider(color=BORDER_COL, height=2)
+        )
     )
 
     return ft.Container(
-        content=ft.Row([form, status_p], spacing=12, expand=True),
+        content=ft.Column([status_container, splitter, form], spacing=2, expand=True),
         expand=True,
-        padding=ft.Padding(left=14, top=14, right=14, bottom=14),
+        padding=ft.Padding(left=10, top=14, right=14, bottom=14),
     )

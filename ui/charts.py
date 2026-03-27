@@ -8,22 +8,18 @@ import math
 import io
 import base64
 import numpy as np
-import matplotlib
-import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
-from constants import *
-from dsp_engine import engine_instance
-
-matplotlib.use("Agg")
+from core.constants import *
+from core.dsp_engine import engine_instance
 
 def fig_to_b64(fig: Figure) -> str:
-    """Retorna una data URI PNG lista para usar en ft.Image(src=...)."""
+    """Retorna Base64 crudo listo para usar en ft.Image(src=...)."""
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", bbox_inches="tight", dpi=96)
+    # Interpolacion nativa a 85 DPI + Eliminando bbox_inches='tight' baja de 500ms a 30ms el tiempo de render
+    fig.savefig(buf, format="png", dpi=85)
     buf.seek(0)
     enc = base64.b64encode(buf.read()).decode()
     buf.close()
-    plt.close(fig)
     return f"data:image/png;base64,{enc}"
 
 def style_ax(ax, title="", xlabel="", ylabel=""):
@@ -38,29 +34,35 @@ def style_ax(ax, title="", xlabel="", ylabel=""):
     ax.grid(True, color=MPL_GRID, linestyle="--", linewidth=0.5, alpha=0.6)
 
 def chart_amplitude() -> str:
-    fig, ax = plt.subplots(figsize=(7, 2.8))
+    fig = Figure(figsize=(7, 2.8))
+    ax = fig.subplots()
     fig.patch.set_facecolor(MPL_BG)
     
     # Leemos del DSP puro en tiempo real
     sig = engine_instance.amplitude_data
-    t = np.linspace(0, len(sig), len(sig))
+    # Convertimos muestras a tiempo real (segundos)
+    n = len(sig)
+    t_total = n / engine_instance.sample_rate  # segundos
+    t = np.linspace(0, t_total, n)
     
     ax.plot(t, sig, color=ACCENT_CYAN, linewidth=0.9, alpha=0.85)
     ax.fill_between(t, sig, alpha=0.15, color=ACCENT_CYAN)
     
     # Marcador decorativo de pico más alto actual
-    if len(sig) > 0:
+    if n > 0:
         max_idx = np.argmax(sig)
-        ax.axvline(max_idx, color=ACCENT_RED, linestyle="--", linewidth=0.9,
-                   alpha=0.85, label="Pico Señal")
+        ax.axvline(t[max_idx], color=ACCENT_RED, linestyle="--", linewidth=0.9,
+                   alpha=0.85, label=f"Pico: t={t[max_idx]:.4f} s")
         
     ax.legend(fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL, labelcolor=MPL_TEXT)
-    style_ax(ax, "Amplitud vs Tiempo (Streaming)", "Muestras", "Amplitud Baseband (Volt)")
+    ax.set_ylim([engine_instance.amp_min, engine_instance.amp_max])
+    style_ax(ax, "Amplitud vs Tiempo (Streaming)", "Tiempo (s)", "Amplitud Baseband (V)")
     fig.tight_layout(pad=0.6)
     return fig_to_b64(fig)
 
 def chart_spectrum() -> str:
-    fig, ax = plt.subplots(figsize=(7, 2.8))
+    fig = Figure(figsize=(7, 2.8))
+    ax = fig.subplots()
     fig.patch.set_facecolor(MPL_BG)
     
     spec = engine_instance.spectrum_data
@@ -89,7 +91,8 @@ def chart_spectrum() -> str:
     return fig_to_b64(fig)
 
 def chart_spectrogram() -> str:
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig = Figure(figsize=(10, 5))
+    ax = fig.subplots()
     fig.patch.set_facecolor(MPL_BG)
     
     data = engine_instance.waterfall_data
@@ -104,27 +107,31 @@ def chart_spectrogram() -> str:
     data_cr = data[:, mask]
     if data_cr.shape[1] == 0: data_cr = data
     
+    # Calcular el tiempo real por línea (cada línea = fft_size * batches / sample_rate segundos)
+    secs_per_line = (engine_instance.fft_size * 10) / engine_instance.sample_rate
+    total_secs = engine_instance.waterfall_steps * secs_per_line
+
     # El waterfall dibuja la historia recortada
     im = ax.imshow(data_cr, aspect="auto", origin="lower",
-                   extent=[fmin, fmax, 0, engine_instance.waterfall_steps], 
+                   extent=[fmin, fmax, 0, total_secs], 
                    cmap="inferno", interpolation="nearest", 
                    vmin=engine_instance.db_min, vmax=engine_instance.db_max)
                    
     cb = fig.colorbar(im, ax=ax, shrink=0.9, pad=0.02)
     cb.set_label("Potencia (dBFS)", color=MPL_TEXT, fontsize=9)
-    cb.ax.yaxis.set_tick_params(color=MPL_TEXT)
-    plt.setp(cb.ax.yaxis.get_ticklabels(), color=MPL_TEXT, fontsize=8)
+    cb.ax.yaxis.set_tick_params(color=MPL_TEXT, labelcolor=MPL_TEXT, labelsize=8)
     
     ax.axvline(1420.40, color=ACCENT_CYAN, linestyle="--", linewidth=1.2,
                alpha=0.85, label="HI 1420.40 MHz")
     ax.legend(fontsize=8, facecolor=MPL_AXBG, edgecolor=BORDER_COL,
               labelcolor=MPL_TEXT, loc="upper right")
-    style_ax(ax, "Cascada Espectral (Waterfall)", "Frecuencia (MHz)", "Líneas de Tiempo")
+    style_ax(ax, "Cascada Espectral (Waterfall)", "Frecuencia (MHz)", f"Tiempo (s)  [reso. {secs_per_line:.3f} s/línea]")
     fig.tight_layout(pad=0.6)
     return fig_to_b64(fig)
 
 def chart_histogram() -> str:
-    fig, ax = plt.subplots(figsize=(5.5, 4.0))
+    fig = Figure(figsize=(8.0, 4.5))  # Aspecto 16:9
+    ax = fig.subplots()
     fig.patch.set_facecolor(MPL_BG)
     
     samples = engine_instance.histogram_data

@@ -8,6 +8,7 @@ para que charts.py los renderice.
 import threading
 import time
 import numpy as np
+from core.constants import *
 
 class DSPEngine:
     def __init__(self):
@@ -35,18 +36,27 @@ class DSPEngine:
         self.worker_thread = None
         self.playback_speed = 1.0
 
+        import os
         # Configuraciones globales para que el Header pueda iniciar el stream
         self.stream_mode = "file"
-        self.iq_filename = "test_signal.iq"
+        self.active_tab = 0
+        self.current_file_time = 0.0
+        self.total_file_time = 0.0
+        self.iq_filename = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_signal.iq")
         self.iq_format = "uint8"
         
-        # Rangos de potencia customizables por el usuario
-        self.db_min = -100
-        self.db_max = -40
+        # Rangos de potencia customizables por el usuario (-105 a -85 dB)
+        self.db_min = -105
+        self.db_max = -85
         
-        # Rangos de frecuencia (Zoom / Crop visual)
-        self.f_min = 1419.0
-        self.f_max = 1421.8
+        # Rango de frecuencia dinámico relativo a la frecuencia central
+        # Iniciamos visualmente f_min desde center_freq para ocultar el espectro imagen negativo 
+        self.f_min = self.center_freq
+        self.f_max = self.center_freq + (self.sample_rate / 2_000_000)
+        
+        # Rango de amplitud de onda pura en la grafica
+        self.amp_min = 0.0
+        self.amp_max = 1.0
 
     @property
     def waterfall_history_sec(self): return self._waterfall_sec
@@ -97,6 +107,10 @@ class DSPEngine:
         
         for b in range(batches):
             block_iq = iq[b*self.fft_size : (b+1)*self.fft_size]
+            
+            # Eliminar la componente DC (VCO / Oscilador Local colándose) restando la media
+            block_iq = block_iq - np.mean(block_iq)
+            
             fft_complex = np.fft.fftshift(np.fft.fft(block_iq * window))
             pwr_avg += np.abs(fft_complex)**2 / self.fft_size
             
@@ -151,25 +165,36 @@ class DSPEngine:
         """Streaming virtual leyendo un fichero .iq grabado previamente"""
         try:
             with open(self.filename, 'rb') as f:
+                import os
+                if not os.path.exists(self.filename): return
+                file_size = os.path.getsize(self.filename)
+                
                 bytes_per_sample = 2 if self.data_format in ('uint8', 'int8') else 8 
                 batches = 10 
                 chunk_bytes = self.fft_size * bytes_per_sample * batches
                 base_sleep_time = (self.fft_size * batches) / self.sample_rate
                 
+                self.current_file_time = 0.0
+                self.total_file_time = (file_size / bytes_per_sample) / self.sample_rate
+                
+                import time
+                start_real_time = time.time()
+                
                 while self.is_playing:
                     raw_data = f.read(chunk_bytes)
                     if not raw_data or len(raw_data) < chunk_bytes:
-                        f.seek(0)
-                        raw_data = f.read(chunk_bytes)
-                        if not raw_data: break
+                        self.is_playing = False # Termina y se apaga
+                        break
                     
                     if self.data_format == "uint8":
                         samples = np.frombuffer(raw_data, dtype=np.uint8).astype(np.float32)
                         samples = (samples - 127.5) / 128.0
+                        # Lectura e intercalado COMPLEJO tal como lo pediste: I (pares) + j * Q (impares) -> x + yj
                         iq = samples[0::2] + 1j * samples[1::2]
                     elif self.data_format == "int8":
                         samples = np.frombuffer(raw_data, dtype=np.int8).astype(np.float32)
                         samples = samples / 128.0
+                        # Lectura e intercalado COMPLEJO real
                         iq = samples[0::2] + 1j * samples[1::2]
                     elif self.data_format == "complex64":
                         iq = np.frombuffer(raw_data, dtype=np.complex64)
@@ -178,12 +203,55 @@ class DSPEngine:
                         
                     self._process_dsp_core(iq, batches)
 
-                    actual_sleep = base_sleep_time / max(0.1, self.playback_speed)
-                    time.sleep(actual_sleep)
+                    self.current_file_time += (len(raw_data) / bytes_per_sample) / self.sample_rate
+                    
+                    # Sincronización perfecta con el reloj del sistema operativo (Real-Time real)
+                    target_elapsed = self.current_file_time / max(0.1, self.playback_speed)
+                    actual_elapsed = time.time() - start_real_time
+                    
+                    sleep_time = target_elapsed - actual_elapsed
+                    if sleep_time > 0:
+                        time.sleep(sleep_time)
 
         except Exception as e:
             print(f"File Stream Error: {e}")
             self.is_playing = False
 
+
+    def save_config(self):
+        conf = {
+            'db_min': self.db_min, 'db_max': self.db_max,
+            'f_min': self.f_min, 'f_max': self.f_max,
+            'amp_min': getattr(self, 'amp_min', 0.0), 'amp_max': getattr(self, 'amp_max', 1.0),
+            'waterfall': self._waterfall_sec,
+            'iq_filename': self.iq_filename, 'iq_format': self.iq_format,
+            'stream_mode': self.stream_mode
+        }
+        try:
+            import json, os
+            with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json'), 'w') as f:
+                json.dump(conf, f)
+        except Exception as e: print("Save Config Error:", e)
+
+    def load_config(self):
+        try:
+            import json, os
+            p = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
+            if os.path.exists(p):
+                with open(p, 'r') as f:
+                    conf = json.load(f)
+                self.db_min = conf.get('db_min', self.db_min)
+                self.db_max = conf.get('db_max', self.db_max)
+                self.f_min = conf.get('f_min', self.f_min)
+                self.f_max = conf.get('f_max', self.f_max)
+                self.amp_min = conf.get('amp_min', self.amp_min)
+                self.amp_max = conf.get('amp_max', self.amp_max)
+                self.waterfall_history_sec = conf.get('waterfall', self._waterfall_sec)
+                self.iq_filename = conf.get('iq_filename', self.iq_filename)
+                self.iq_format = conf.get('iq_format', self.iq_format)
+                self.stream_mode = conf.get('stream_mode', self.stream_mode)
+        except Exception as e: print("Load Config Error:", e)
+
 # Instancia global del DSP (Singleton pattern simple)
 engine_instance = DSPEngine()
+

@@ -5,14 +5,25 @@ Punto de entrada principal. Ensambla y configura el layout global agrupando todo
 
 import flet as ft
 
-from constants import *
-from components.layout import build_header, build_footer
-from tabs.monitoring import build_monitoring
-from tabs.spectrogram import build_spectrogram
-from tabs.statistics import build_statistics
-from tabs.sdr_config import build_config
+from core.constants import *
+from ui.components.layout import build_header, build_footer
+from ui.tabs.monitoring import build_monitoring
+from ui.tabs.spectrogram import build_spectrogram
+from ui.tabs.statistics import build_statistics
+from ui.tabs.sdr_config import build_config
 
 def main(page: ft.Page):
+    from core.dsp_engine import engine_instance
+    engine_instance.load_config()
+
+    # Diccionario simple para rastrear modificadores de teclado (Ctrl/Shift)
+    key_state = {'ctrl': False, 'shift': False}
+
+    def on_keyboard(e: ft.KeyboardEvent):
+        key_state['ctrl'] = e.ctrl
+        key_state['shift'] = e.shift
+    page.on_keyboard_event = on_keyboard
+
     # Configuración de Ventana
     page.title      = "Plataforma DSP — Radiotelescopio 1420.40 MHz"
     page.theme_mode = ft.ThemeMode.DARK
@@ -29,52 +40,103 @@ def main(page: ft.Page):
     header = build_header(page)
     footer = build_footer()
 
-    # ── Sistema de Pestañas (TabBar nativo de Flet 0.82) ──────────────
+    # ── Sistema de Pestañas PERSONALIZADO (sin scroll nativo de ft.Tabs) ──────
     tab_labels = [
         "📡  Monitoreo y RFI",
         "🌈  Espectrograma",
         "📊  Estadística & Smart Trigger",
-        "⚙️  Configuración SDR",
     ]
-    
+
     # Renderizamos los componentes visuales de cada módulo
     tab_contents = [
-        build_monitoring(page),
-        build_spectrogram(page),
+        build_monitoring(page, key_state),
+        build_spectrogram(page, key_state),
         build_statistics(page),
-        build_config(page),
     ]
 
-    tab_bar = ft.TabBar(
-        tabs=[ft.Tab(label=lbl) for lbl in tab_labels],
-        label_color=ACCENT_CYAN,
-        unselected_label_color=TEXT_MUTED,
-        indicator_color=ACCENT_CYAN,
-        divider_color=BORDER_COL,
-    )
-    
-    tab_view = ft.TabBarView(controls=tab_contents, expand=True)
+    selected = [0]  # índice activo
 
-    # El contenedor maestro de tabs engloba ambos componentes
-    tabs = ft.Tabs(
-        content=ft.Column([
-            tab_bar,
-            tab_view
-        ], expand=True, spacing=0),
-        length=len(tab_labels),
-        selected_index=0,
-        expand=True,
+    # Indicadores de subrayado activo
+    indicators = [
+        ft.Container(height=2, bgcolor=ACCENT_CYAN if i == 0 else "transparent", border_radius=1)
+        for i in range(len(tab_labels))
+    ]
+
+    tab_btns = []
+
+    def make_tab_btn(i, label):
+        lbl_text = ft.Text(label, color=ACCENT_CYAN if i == 0 else TEXT_MUTED)
+        btn = ft.Container(
+            content=lbl_text,
+            padding=ft.Padding(left=16, right=16, top=10, bottom=10),
+            ink=True,
+            border_radius=4,
+            bgcolor="transparent"
+        )
+        def on_click(e, idx):
+            tab_btns[selected[0]].content.color = TEXT_MUTED
+            indicators[selected[0]].bgcolor = "transparent"
+            
+            selected[0] = idx
+            from core.dsp_engine import engine_instance
+            engine_instance.active_tab = idx
+            
+            tab_body.content = tab_contents[idx]
+            
+            tab_btns[idx].content.color = ACCENT_CYAN
+            indicators[idx].bgcolor = ACCENT_CYAN
+            page.update()
+        btn.on_click = lambda e: on_click(e, i)
+        return btn
+
+    tab_btns = [make_tab_btn(i, lbl) for i, lbl in enumerate(tab_labels)]
+
+    custom_tab_bar = ft.Container(
+        bgcolor=PANEL_BG,
+        border=ft.Border(bottom=ft.BorderSide(1, BORDER_COL)),
+        content=ft.Row([
+            ft.Column([btn, ind], spacing=0)
+            for btn, ind in zip(tab_btns, indicators)
+        ], spacing=0),
+    )
+
+    tab_body = ft.AnimatedSwitcher(
+        content=tab_contents[0],
+        transition=ft.AnimatedSwitcherTransition.FADE,
+        duration=200,
+        switch_in_curve=ft.AnimationCurve.EASE_OUT,
+        expand=True
     )
 
     import asyncio
-    from dsp_engine import engine_instance
-    
+
+    # Panel Izquierdo: Sistema de Pestañas (72% del ancho)
+    left_panel = ft.Container(
+        content=ft.Column([custom_tab_bar, tab_body], expand=True, spacing=0),
+        expand=72
+    )
+
+    # Panel Derecho: Configuración Fija (28% del ancho)
+    right_panel = ft.Container(
+        content=build_config(page),
+        border=ft.Border(left=ft.BorderSide(1, BORDER_COL)),
+        bgcolor=DARK_BG,
+        expand=28
+    )
+
+    main_view = ft.Row([left_panel, right_panel], expand=True, spacing=0)
+
     # ── Tarea Asíncrona de Refresco de Interfaz ──────────────
     async def refresh_loop():
+        was_playing = False
         while True:
-            if engine_instance.is_playing:
+            is_p = engine_instance.is_playing
+            if is_p:
                 page.pubsub.send_all("refresh_charts")
-            # 0.016s equivale a ~60 FPS (1000ms / 60)
+            elif was_playing and not is_p:
+                page.pubsub.send_all("stream_stopped")
+                
+            was_playing = is_p
             await asyncio.sleep(0.016)
             
     page.run_task(refresh_loop)
@@ -82,7 +144,7 @@ def main(page: ft.Page):
     # ── Renderizado Final en Pantalla ──────────────
     page.add(ft.Column([
         header,
-        tabs,
+        main_view,
         footer,
     ], expand=True, spacing=0))
 
