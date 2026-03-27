@@ -29,7 +29,7 @@ def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.DARK
     page.bgcolor    = DARK_BG
     page.window.width     = 1280
-    page.window.height    = 820
+    page.window.height    = 720
     page.window.min_width = 900
     page.window.min_height= 620
     page.padding = 0
