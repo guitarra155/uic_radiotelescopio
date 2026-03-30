@@ -11,6 +11,9 @@ from ui.tabs.monitoring import build_monitoring
 from ui.tabs.spectrogram import build_spectrogram
 from ui.tabs.statistics import build_statistics
 from ui.tabs.sdr_config import build_config
+from ui.tabs.signal_analysis import build_signal_analysis
+from ui.tabs.freq_snr import build_freq_snr
+from ui.tabs.algo_result import build_algo_result
 
 def main(page: ft.Page):
     from core.dsp_engine import engine_instance
@@ -40,11 +43,13 @@ def main(page: ft.Page):
     header = build_header(page)
     footer = build_footer()
 
-    # ── Sistema de Pestañas PERSONALIZADO (sin scroll nativo de ft.Tabs) ──────
     tab_labels = [
         "📡  Monitoreo y RFI",
         "🌈  Espectrograma",
         "📊  Estadística & Smart Trigger",
+        "⚡  Potencia vs. Tiempo",
+        "📶  SNR vs. Frecuencia",
+        "🔬  Algoritmo DSP",
     ]
 
     # Renderizamos los componentes visuales de cada módulo
@@ -52,6 +57,9 @@ def main(page: ft.Page):
         build_monitoring(page, key_state),
         build_spectrogram(page, key_state),
         build_statistics(page),
+        build_signal_analysis(page, key_state),
+        build_freq_snr(page, key_state),
+        build_algo_result(page),
     ]
 
     selected = [0]  # índice activo
@@ -91,13 +99,18 @@ def main(page: ft.Page):
 
     tab_btns = [make_tab_btn(i, lbl) for i, lbl in enumerate(tab_labels)]
 
+    # Flutter desktop enruta la rueda del mouse a scrollables horizontales nativamente.
+    # No se necesita GestureDetector — el Row lo maneja sin código extra.
+    tab_row = ft.Row(
+        [ft.Column([btn, ind], spacing=0) for btn, ind in zip(tab_btns, indicators)],
+        spacing=0,
+        scroll=ft.ScrollMode.AUTO,
+    )
+
     custom_tab_bar = ft.Container(
         bgcolor=PANEL_BG,
         border=ft.Border(bottom=ft.BorderSide(1, BORDER_COL)),
-        content=ft.Row([
-            ft.Column([btn, ind], spacing=0)
-            for btn, ind in zip(tab_btns, indicators)
-        ], spacing=0),
+        content=tab_row,
     )
 
     tab_body = ft.AnimatedSwitcher(
@@ -131,10 +144,13 @@ def main(page: ft.Page):
         was_playing = False
         while True:
             is_p = engine_instance.is_playing
-            if is_p:
-                page.pubsub.send_all("refresh_charts")
-            elif was_playing and not is_p:
-                page.pubsub.send_all("stream_stopped")
+            try:
+                if is_p:
+                    page.pubsub.send_all("refresh_charts")
+                elif was_playing and not is_p:
+                    page.pubsub.send_all("stream_stopped")
+            except RuntimeError:
+                break
                 
             was_playing = is_p
             await asyncio.sleep(0.016)

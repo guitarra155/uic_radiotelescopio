@@ -33,6 +33,23 @@ class DSPEngine:
         # Histogram samples
         self.histogram_data = np.random.normal(0, 1, 1000)
 
+        # Power vs Time buffer (dBFS instantáneo, 2000 muestras)
+        self.power_time_data = np.full(2000, -100.0)
+        self.power_samples_written = 0
+        
+        # SNR por bin de frecuencia (misma longitud que spectrum_data)
+        self.snr_data = np.zeros(self.fft_size)
+        
+        # Señales de interés detectadas: lista de (freq_mhz, snr_db)
+        self.signals_of_interest: list = []
+
+        # Resultados de algoritmos DSP avanzados (b64 PNG strings)
+        # Se pueblan desde sdr_config y se leen en las pestañas individuales
+        self.algo_results: dict = {"ar": None, "cwt": None,
+                                   "music": None, "esprit": None}
+        self.algo_params: dict = {"ar_order": 64, "n_signals": 3,
+                                  "method": "AR/Burg"}
+
         self.worker_thread = None
         self.playback_speed = 1.0
 
@@ -45,10 +62,17 @@ class DSPEngine:
         self.iq_filename = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_signal.iq")
         self.iq_format = "uint8"
         
-        # Rangos de potencia customizables por el usuario (-105 a -85 dB)
+        # Rangos de potencia espectro (-105 a -85 dB)
         self.db_min = -105
         self.db_max = -85
         
+        # Rangos de gráfica Potencia vs Tiempo
+        self.power_db_min = -100
+        self.power_db_max = 0
+        
+        # Referencias de Y para SNR vs Frecuencia
+        self.snr_db_min = -10
+        self.snr_db_max = 40
         # Rango de frecuencia dinámico relativo a la frecuencia central
         # Iniciamos visualmente f_min desde center_freq para ocultar el espectro imagen negativo 
         self.f_min = self.center_freq
@@ -78,6 +102,8 @@ class DSPEngine:
         kwargs puede contener 'filename', 'format' o ajustes propios del SDR
         """
         self.is_playing = True
+        self.power_samples_written = 0  # reiniciar el contador al empezar
+        self.power_time_data.fill(-100.0) # limpiar buffer
         
         if self.worker_thread is not None and self.worker_thread.is_alive():
             return
@@ -126,6 +152,45 @@ class DSPEngine:
         
         # 4. Histograma
         self.histogram_data = np.random.choice(mag, size=2000, replace=True)
+        
+        # 5. Potencia instantánea vs Tiempo (dBFS promedio de este batch)
+        inst_pwr_db = float(np.mean(pwr))
+        self.power_time_data = np.roll(self.power_time_data, -1)
+        self.power_time_data[-1] = inst_pwr_db
+        if self.power_samples_written < len(self.power_time_data):
+            self.power_samples_written += 1
+        
+        # 6. SNR estimado por bin: potencia - piso de ruido local (mediana como estimador)
+        noise_floor = np.median(self.spectrum_data)
+        self.snr_data = self.spectrum_data - noise_floor
+        
+        # 7. Detectar señales de interés: bins con SNR > umbral_snr dB
+        SNR_THRESH = 6.0  # dB sobre el piso de ruido
+        fc = self.center_freq
+        fs_mhz = self.sample_rate / 1_000_000
+        freqs = np.linspace(fc - fs_mhz/2, fc + fs_mhz/2, self.fft_size)
+        hot_mask = self.snr_data > SNR_THRESH
+        if np.any(hot_mask):
+            hot_freqs = freqs[hot_mask]
+            hot_snrs  = self.snr_data[hot_mask]
+            # Agrupar picos cercanos: tomar el pico de cada cluster
+            clusters = []
+            prev_f = None
+            best_f = best_s = None
+            for f, s in sorted(zip(hot_freqs, hot_snrs), key=lambda x: x[0]):
+                if prev_f is None or f - prev_f > 0.01:  # 10 kHz gap mínimo
+                    if best_f is not None:
+                        clusters.append((float(best_f), float(best_s)))
+                    best_f, best_s = f, s
+                else:
+                    if s > best_s:
+                        best_f, best_s = f, s
+                prev_f = f
+            if best_f is not None:
+                clusters.append((float(best_f), float(best_s)))
+            self.signals_of_interest = clusters[:20]  # máximo 20
+        else:
+            self.signals_of_interest = []
 
 
     def _process_sdr_loop(self):
@@ -201,6 +266,8 @@ class DSPEngine:
                     else:
                         break 
                         
+                    # Sanitizar datos para evitar NaNs o Infs en caso de formato erróneo
+                    iq = np.nan_to_num(iq, nan=0.0, posinf=1.0, neginf=-1.0)
                     self._process_dsp_core(iq, batches)
 
                     self.current_file_time += (len(raw_data) / bytes_per_sample) / self.sample_rate
@@ -222,10 +289,15 @@ class DSPEngine:
         conf = {
             'db_min': self.db_min, 'db_max': self.db_max,
             'f_min': self.f_min, 'f_max': self.f_max,
+            'power_db_min': getattr(self, 'power_db_min', -100),
+            'power_db_max': getattr(self, 'power_db_max', 0),
+            'snr_db_min': getattr(self, 'snr_db_min', -10),
+            'snr_db_max': getattr(self, 'snr_db_max', 40),
             'amp_min': getattr(self, 'amp_min', 0.0), 'amp_max': getattr(self, 'amp_max', 1.0),
             'waterfall': self._waterfall_sec,
             'iq_filename': self.iq_filename, 'iq_format': self.iq_format,
-            'stream_mode': self.stream_mode
+            'stream_mode': self.stream_mode,
+            'algo_params': self.algo_params
         }
         try:
             import json, os
@@ -242,6 +314,8 @@ class DSPEngine:
                     conf = json.load(f)
                 self.db_min = conf.get('db_min', self.db_min)
                 self.db_max = conf.get('db_max', self.db_max)
+                self.power_db_min = conf.get('power_db_min', self.power_db_min)
+                self.power_db_max = conf.get('power_db_max', self.power_db_max)
                 self.f_min = conf.get('f_min', self.f_min)
                 self.f_max = conf.get('f_max', self.f_max)
                 self.amp_min = conf.get('amp_min', self.amp_min)
@@ -250,6 +324,13 @@ class DSPEngine:
                 self.iq_filename = conf.get('iq_filename', self.iq_filename)
                 self.iq_format = conf.get('iq_format', self.iq_format)
                 self.stream_mode = conf.get('stream_mode', self.stream_mode)
+                
+                self.snr_db_min = conf.get('snr_db_min', self.snr_db_min)
+                self.snr_db_max = conf.get('snr_db_max', self.snr_db_max)
+                
+                ap = conf.get('algo_params')
+                if ap and isinstance(ap, dict):
+                    self.algo_params.update(ap)
         except Exception as e: print("Load Config Error:", e)
 
 # Instancia global del DSP (Singleton pattern simple)

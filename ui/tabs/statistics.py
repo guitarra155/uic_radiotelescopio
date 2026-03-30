@@ -68,12 +68,16 @@ def build_statistics(page: ft.Page) -> ft.Control:
                     mu, std = np.mean(samples), np.std(samples)
                     val_media.value = f"{mu:.4f}"
                     val_std.value = f"{std:.4f}"
-                    if std > 0:
-                        dif = samples - mu
-                        sesgo = np.mean(dif**3) / (std**3)
-                        kurt = np.mean(dif**4) / (std**4)
+                    
+                    dif = samples - mu
+                    if std > 1e-6:
+                        sesgo = float(np.mean(dif**3) / (std**3))
+                        kurt = float(np.mean(dif**4) / (std**4))
                         val_sesgo.value = f"{sesgo:.2f}"
                         val_kur.value = f"{kurt:.2f}"
+                    else:
+                        val_sesgo.value = "0.00"
+                        val_kur.value = "0.00"
                     
                     # Actualizar los textos individualmente
                     val_media.update()
