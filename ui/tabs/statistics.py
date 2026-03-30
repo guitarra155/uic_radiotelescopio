@@ -58,10 +58,13 @@ def build_statistics(page: ft.Page) -> ft.Control:
     is_rendering = [False]
     async def on_refresh(msg):
         if msg == "refresh_charts":
+            from core.dsp_engine import engine_instance
+            if engine_instance.active_tab != 2: return # Solo renderizar si es la pestaña activa
+            
             if is_rendering[0]: return
             is_rendering[0] = True
             try:
-                from core.dsp_engine import engine_instance
+                from core.dsp_engine import engine_instance # redundante pero seguro
                 import numpy as np
                 samples = engine_instance.histogram_data
                 if len(samples) > 0:

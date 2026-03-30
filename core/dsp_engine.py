@@ -24,8 +24,8 @@ class DSPEngine:
         
         # Waterfall dinámico por tiempo
         self._waterfall_sec = 2.0
-        self.waterfall_steps = int(self._waterfall_sec * (self.sample_rate / (self.fft_size * 10)))
-        self.waterfall_data = np.zeros((self.waterfall_steps, self.fft_size))
+        self.waterfall_steps = int(self._waterfall_sec * (self.sample_rate / (self.fft_size * 40)))
+        self.waterfall_data = np.full((self.waterfall_steps, self.fft_size), -100.0)
         
         # Amplitude buffer
         self.amplitude_data = np.zeros(2000)
@@ -88,7 +88,7 @@ class DSPEngine:
     @waterfall_history_sec.setter
     def waterfall_history_sec(self, val):
         self._waterfall_sec = max(0.1, val)
-        batches_per_sec = self.sample_rate / (self.fft_size * 10)
+        batches_per_sec = self.sample_rate / (self.fft_size * 40)
         new_steps = int(self._waterfall_sec * batches_per_sec)
         new_steps = max(10, new_steps)
         if new_steps != self.waterfall_steps:
@@ -120,7 +120,7 @@ class DSPEngine:
     def stop_stream(self):
         self.is_playing = False
 
-    def _process_dsp_core(self, iq, batches=10):
+    def _process_dsp_core(self, iq, batches=40):
         """Bloque matemático en común para señales reales e irreales"""
         # 1. Amplitud pura (Magnitud del último fragmento)
         mag = np.abs(iq[-4096:])
@@ -203,7 +203,7 @@ class DSPEngine:
             # sdr.sample_rate = self.sample_rate
             # sdr.center_freq = self.center_freq * 1e6
             
-            batches = 10
+            batches = 40
             samples_to_read = self.fft_size * batches
             
             while self.is_playing:
@@ -235,7 +235,7 @@ class DSPEngine:
                 file_size = os.path.getsize(self.filename)
                 
                 bytes_per_sample = 2 if self.data_format in ('uint8', 'int8') else 8 
-                batches = 10 
+                batches = 40 
                 chunk_bytes = self.fft_size * bytes_per_sample * batches
                 base_sleep_time = (self.fft_size * batches) / self.sample_rate
                 

@@ -153,7 +153,7 @@ def main(page: ft.Page):
                 break
                 
             was_playing = is_p
-            await asyncio.sleep(0.016)
+            await asyncio.sleep(0.010)
             
     page.run_task(refresh_loop)
 

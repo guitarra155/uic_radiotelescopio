@@ -39,6 +39,9 @@ def build_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
     is_rendering = [False]
     async def on_refresh(msg):
         if msg == "refresh_charts":
+            from core.dsp_engine import engine_instance
+            if engine_instance.active_tab != 0: return # Solo renderizar si es la pestaña activa
+            
             if is_rendering[0]: return
             is_rendering[0] = True
             try:
