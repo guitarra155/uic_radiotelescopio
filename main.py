@@ -166,5 +166,5 @@ def main(page: ft.Page):
 
 
 if __name__ == "__main__":
-    # Inicia la aplicación usando la API recomendada para escritorio clásico
-    ft.app(target=main)
+    # Inicia la aplicación usando la API recomendada para flet > 0.8.0
+    ft.run(main)

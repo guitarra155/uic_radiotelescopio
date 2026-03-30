@@ -310,8 +310,13 @@ def build_config(page: ft.Page) -> ft.Control:
             engine_instance.algo_results["current_method"] = method
             page.pubsub.send_all("algo_results_ready")
             algo_status_txt.value = f"✓ {method}"
+        except RuntimeError:
+            pass # Ignorar si la ventana se cerró
         except Exception as ex:
-            algo_status_txt.value = f"⚠ ERROR: {str(ex)[:35]}"
+            try:
+                algo_status_txt.value = f"⚠ ERROR: {str(ex)[:35]}"
+                algo_status_txt.update()
+            except: pass
             print("CRITICAL ALGO ERROR:", ex)
         finally:
             # Solo liberar el lock si nosotros somos la generación actual
