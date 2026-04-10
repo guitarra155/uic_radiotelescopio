@@ -28,7 +28,7 @@ def main(page: ft.Page):
     page.on_keyboard_event = on_keyboard
 
     # Configuración de Ventana
-    page.title      = "Plataforma DSP — Radiotelescopio 1420.40 MHz"
+    page.title      = "Plataforma DSP"
     page.theme_mode = ft.ThemeMode.DARK
     page.bgcolor    = DARK_BG
     page.window.width     = 1280
@@ -76,7 +76,7 @@ def main(page: ft.Page):
         lbl_text = ft.Text(label, color=ACCENT_CYAN if i == 0 else TEXT_MUTED)
         btn = ft.Container(
             content=lbl_text,
-            padding=ft.Padding(left=16, right=16, top=10, bottom=10),
+            padding=ft.Padding(left=16, right=16, top=5, bottom=5),
             ink=True,
             border_radius=4,
             bgcolor="transparent"
@@ -99,11 +99,9 @@ def main(page: ft.Page):
 
     tab_btns = [make_tab_btn(i, lbl) for i, lbl in enumerate(tab_labels)]
 
-    # Flutter desktop enruta la rueda del mouse a scrollables horizontales nativamente.
-    # No se necesita GestureDetector — el Row lo maneja sin código extra.
     tab_row = ft.Row(
         [ft.Column([btn, ind], spacing=0) for btn, ind in zip(tab_btns, indicators)],
-        spacing=0,
+        spacing=20,
         scroll=ft.ScrollMode.AUTO,
     )
 
@@ -111,6 +109,7 @@ def main(page: ft.Page):
         bgcolor=PANEL_BG,
         border=ft.Border(bottom=ft.BorderSide(1, BORDER_COL)),
         content=tab_row,
+        height=40,
     )
 
     tab_body = ft.AnimatedSwitcher(
@@ -126,7 +125,7 @@ def main(page: ft.Page):
     # Panel Izquierdo: Sistema de Pestañas (72% del ancho)
     left_panel = ft.Container(
         content=ft.Column([custom_tab_bar, tab_body], expand=True, spacing=0),
-        expand=72
+        expand=100
     )
 
     # Panel Derecho: Configuración Fija (28% del ancho)
@@ -134,7 +133,7 @@ def main(page: ft.Page):
         content=build_config(page),
         border=ft.Border(left=ft.BorderSide(1, BORDER_COL)),
         bgcolor=DARK_BG,
-        expand=28
+        expand=25
     )
 
     main_view = ft.Row([left_panel, right_panel], expand=True, spacing=0)
