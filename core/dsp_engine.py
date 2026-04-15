@@ -146,6 +146,9 @@ class DSPEngine:
             "snr_freq":     {"xmin": 1419.0, "xmax": 1421.0, "ymin": -5.0, "ymax": 40.0, "auto_x": True, "auto_y": True},
         }
 
+        # Acumulador para que la cascada (waterfall) no avance demasiado rápido
+        self._wf_accum_count = 0
+
     @property
     def waterfall_history_sec(self):
         return self._waterfall_sec
@@ -290,8 +293,12 @@ class DSPEngine:
         self.spectrum_data = (1 - alpha) * self.spectrum_data + alpha * pwr
 
         # ── 5. Waterfall (Espectrograma) sobre señal filtrada ───────────────
-        self.waterfall_data = np.roll(self.waterfall_data, 1, axis=0)
-        self.waterfall_data[0, :] = self.spectrum_data
+        # Solo añadimos una línea cada 40 bloques para sincronizar con el eje de tiempo
+        self._wf_accum_count += 1
+        if self._wf_accum_count >= 40:
+            self.waterfall_data = np.roll(self.waterfall_data, 1, axis=0)
+            self.waterfall_data[0, :] = self.spectrum_data
+            self._wf_accum_count = 0
 
         # ── 6. Histograma (magnitud de señal filtrada) ─────────────────────
         self.histogram_data = np.random.choice(mag_f, size=2000, replace=True)
