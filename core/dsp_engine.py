@@ -10,6 +10,12 @@ import time
 import numpy as np
 from core.constants import *
 
+try:
+    from core.bbdevice.bb_api import *
+    HAS_BB_API = True
+except ImportError:
+    HAS_BB_API = False
+
 
 class DSPEngine:
     def __init__(self):
@@ -19,6 +25,13 @@ class DSPEngine:
         self.center_freq = 1420.40
         self.data_format = "uint8"  # RTL-SDR por defecto
         self.fft_size = 4096
+
+        # Estado del hardware BB60C
+        self.sdr_handle = -1
+        self.bb60c_ref_level = -30.0
+        self.bb60c_gain = BB_AUTO_GAIN
+        self.bb60c_atten = BB_AUTO_ATTEN
+        self.bb60c_decimation = 1  # 40 MS/s por defecto
 
         # Buffers circulares
         self.spectrum_data = np.zeros(self.fft_size)  # FFT sobre señal FILTRADA
@@ -162,6 +175,14 @@ class DSPEngine:
 
     def stop_stream(self):
         self.is_playing = False
+        if self.sdr_handle != -1:
+            try:
+                bb_abort(self.sdr_handle)
+                bb_close_device(self.sdr_handle)
+                self.sdr_handle = -1
+                print("SDR BB60C desconectado correctamente.")
+            except:
+                pass
 
     def _process_dsp_core(self, iq, batches=None):
         """Bloque matemático en común para señales reales e irreales.
@@ -386,36 +407,62 @@ class DSPEngine:
 
     def _process_sdr_loop(self):
         """
-        Streaming físico usando PyRTLSDR (o un dummy si el hardware no está conectado).
+        Streaming físico usando BB60C de Signal Hound.
         """
-        try:
-            # Aquí iría: from rtlsdr import RtlSdr
-            # sdr = RtlSdr()
-            # sdr.sample_rate = self.sample_rate
-            # sdr.center_freq = self.center_freq * 1e6
+        if not HAS_BB_API:
+            print("Error: API de Signal Hound no encontrada.")
+            self.is_playing = False
+            return
 
-            # Leer exactamente fft_size muestras por iteración
-            samples_to_read = self.fft_size
+        try:
+            print("Iniciando conexión con BB60C...")
+            # 1. Abrir dispositivo
+            res_open = bb_open_device()
+            if res_open["status"] != 0:
+                print(f"No se pudo abrir el BB60C: {res_open['status']}")
+                self.is_playing = False
+                return
+            
+            self.sdr_handle = res_open["handle"]
+            h = self.sdr_handle
+
+            # 2. Configurar hardware
+            bb_configure_ref_level(h, self.bb60c_ref_level)
+            bb_configure_gain_atten(h, self.bb60c_gain, self.bb60c_atten)
+            # Frecuencia central en Hz
+            bb_configure_IQ_center(h, self.center_freq * 1e6)
+            
+            # Ancho de banda y decimación
+            # Nota: sample_rate real = 40e6 / decimation
+            bw = 20.0e6 / self.bb60c_decimation
+            bb_configure_IQ(h, self.bb60c_decimation, bw)
+            
+            # Actualizar sample_rate interno para que el DSP sea correcto
+            self.sample_rate = 40_000_000 // self.bb60c_decimation
+
+            # 3. Iniciar modo streaming
+            bb_initiate(h, BB_STREAMING, BB_STREAM_IQ)
+            print(f"BB60C iniciado @ {self.sample_rate/1e6} MHz bandwidth")
+
+            samples_per_read = self.fft_size # Leer un bloque FFT por vez
 
             while self.is_playing:
-                # Simulación temporal de la lectura del SDR de Hardware si libreria falla:
-                # iq_samples = sdr.read_samples(samples_to_read)
-
-                # Para la maqueta, simulamos el SDR leyendo ruido estático en vivo
-                iq = np.random.normal(0, 0.1, samples_to_read) + 1j * np.random.normal(
-                    0, 0.1, samples_to_read
-                )
-
+                # 4. Capturar bloque IQ
+                # purge=BB_FALSE para mantener continuidad si procesado es rápido
+                res_iq = bb_get_IQ_unpacked(h, samples_per_read, BB_FALSE)
+                if res_iq["status"] != 0:
+                    print(f"Error de lectura IQ: {res_iq['status']}")
+                    break
+                
+                iq = res_iq["iq"]
+                
+                # Procesar en el núcleo DSP
                 self._process_dsp_core(iq, batches=1)
-
-                # El hardware dicta el ritmo. El sdr.read_samples() es una operación BLOQUEANTE,
-                # así que físicamente ya te entrega exacto los cuadros de tiempo real.
-                # Por consistencia térmica del dummy, esperamos el tiempo correspondiente:
-                time.sleep(samples_to_read / self.sample_rate)
 
         except Exception as e:
             print(f"SDR Hardware Error: {e}")
-            self.is_playing = False
+        finally:
+            self.stop_stream()
 
     def _process_file_loop(self):
         """Streaming virtual leyendo un fichero .iq grabado previamente"""
