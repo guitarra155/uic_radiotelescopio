@@ -13,6 +13,8 @@ import time
 from core.constants import *
 from ui.components.shared import panel, txt_field
 from core.dsp_engine import engine_instance
+import tkinter as tk
+from tkinter import filedialog
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -92,31 +94,26 @@ def build_config(page: ft.Page) -> ft.Control:
         "Ruta del Archivo .iq", engine_instance.iq_filename, "Ej: C:\\Datos\\señal.iq"
     )
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # ── Selector de Archivos (Implementación Robusta) ──────────────────────────
-    # ─────────────────────────────────────────────────────────────────────────
-    def on_file_result(e):
-        if e.files:
-            selected_path = e.files[0].path
+    # USAMOS FORMA ALTERNATIVA: Cuadro de diálogo nativo de Windows (Tkinter)
+    # Esto evita el error "Unknown control: FilePicker" de Flet en Windows local.
+    async def on_pick_file(e):
+        def _pick():
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes("-topmost", True)
+            path = filedialog.askopenfilename(
+                title="Seleccionar archivo .iq",
+                filetypes=[("Archivos IQ", "*.iq"), ("Todos", "*.*")]
+            )
+            root.destroy()
+            return path
+
+        selected_path = await asyncio.to_thread(_pick)
+        if selected_path:
             filepath_input.value = selected_path
             engine_instance.iq_filename = selected_path
             engine_instance.save_config()
             page.update()
-
-    # Usamos un botón simple si FilePicker falla en esta versión de Flet
-    # file_picker = ft.FilePicker()
-    # file_picker.on_result = on_file_result
-    # page.overlay.append(file_picker)
-    file_picker = None
-
-    def on_pick_file(e):
-        if file_picker:
-            file_picker.pick_files(
-                allow_multiple=False,
-                allowed_extensions=["iq"],
-            )
-        else:
-            print("FilePicker no disponible en esta versión de Flet")
 
     pick_btn = ft.ElevatedButton(
         content=ft.Text("📁 Abrir", size=11),
@@ -169,134 +166,38 @@ def build_config(page: ft.Page) -> ft.Control:
         ),
     )
 
-    freq_f = txt_field("Frecuencia (MHz)", "1420.40", "e.g. 1420.40")
-    rate_f = txt_field("Sample Rate (MSps)", "2.4", "")
+    freq_f = txt_field("Frecuencia (MHz)", str(engine_instance.center_freq), "e.g. 1420.40")
+    rate_f = txt_field("Sample Rate (MSps)", str(engine_instance.sample_rate / 1e6), "")
+    
+    ma_win_f = txt_field("Filtro MA (ms)", str(engine_instance.moving_avg_window_ms), "0.1-10.0")
+    wf_sec_f = txt_field("Historial (s)", str(engine_instance.waterfall_history_sec), "10-300")
 
-    db_min_f = txt_field("Min Y (dBFS) Espectro", str(engine_instance.db_min), "-100")
-    db_max_f = txt_field("Max Y (dBFS) Espectro", str(engine_instance.db_max), "-40")
+    def on_global_change(e, attr, factor=1.0):
+        try:
+            val = float(e.control.value) * factor
+            setattr(engine_instance, attr, val)
+            engine_instance.save_config()
+        except ValueError: pass
 
-    pwr_db_min_f = txt_field(
-        "Min Potencia (dBFS)", str(engine_instance.power_db_min), "-100"
-    )
-    pwr_db_max_f = txt_field(
-        "Max Potencia (dBFS)", str(engine_instance.power_db_max), "0"
-    )
+    freq_f.on_change = lambda e: on_global_change(e, "center_freq")
+    rate_f.on_change = lambda e: on_global_change(e, "sample_rate", factor=1e6)
+    ma_win_f.on_change = lambda e: on_global_change(e, "moving_avg_window_ms")
+    wf_sec_f.on_change = lambda e: on_global_change(e, "waterfall_history_sec")
 
-    snr_db_min_f = txt_field(
-        "Min Magnitud (dB)", str(engine_instance.snr_db_min), "-10"
-    )
-    snr_db_max_f = txt_field("Max Magnitud (dB)", str(engine_instance.snr_db_max), "40")
+    # NUEVO: Los controles de rango ahora son dinámicos vía _axis_control
 
-    f_min_f = txt_field("Min X (MHz)", str(engine_instance.f_min), "1419.0")
-    f_max_f = txt_field("Max X (MHz)", str(engine_instance.f_max), "1421.0")
-    amp_min_f = txt_field("Min Amp (V)", str(engine_instance.amp_min), "0.0")
-    amp_max_f = txt_field("Max Amp (V)", str(engine_instance.amp_max), "1.0")
-    wf_sec_f = txt_field(
-        "Cascada (s)", str(engine_instance.waterfall_history_sec), "60"
-    )
-    analysis_win_f = txt_field(
-        "Ventana Análisis (s)", str(engine_instance.analysis_window_sec), "0.1–5.0"
-    )
-    ma_win_f = txt_field(
-        "Moving Average (ms)", str(engine_instance.moving_avg_window_ms), "0.1–10.0"
-    )
-
-    def update_bounds(e, auto_off_attrs=None):
-        # Desactivar auto-escala cuando se modifican valores manualmente
-        if auto_off_attrs:
-            for attr in auto_off_attrs:
-                if hasattr(engine_instance, attr):
-                    setattr(engine_instance, attr, False)
-
-        for attr, field in [
-            ("db_min", db_min_f),
-            ("db_max", db_max_f),
-            ("power_db_min", pwr_db_min_f),
-            ("power_db_max", pwr_db_max_f),
-            ("snr_db_min", snr_db_min_f),
-            ("snr_db_max", snr_db_max_f),
-            ("f_min", f_min_f),
-            ("f_max", f_max_f),
-            ("amp_min", amp_min_f),
-            ("amp_max", amp_max_f),
-            ("waterfall_history_sec", wf_sec_f),
-            ("analysis_window_sec", analysis_win_f),
-            ("moving_avg_window_ms", ma_win_f),
-        ]:
-            try:
-                setattr(engine_instance, attr, float(field.value))
-            except ValueError:
-                pass
-        engine_instance.save_config()
-
-    def update_current_labels():
-        # Actualizar los labels que muestran los valores actuales
-        pass  # Se actualizan dinámicamente desde las gráficas
-
-    # Conectar campos con auto-desactivación de escala
-    db_min_f.on_change = lambda e: update_bounds(
-        e, ["auto_scale_spectrum", "auto_scale_waterfall"]
-    )
-    db_max_f.on_change = lambda e: update_bounds(
-        e, ["auto_scale_spectrum", "auto_scale_waterfall"]
-    )
-    db_min_f.on_submit = lambda e: update_bounds(
-        e, ["auto_scale_spectrum", "auto_scale_waterfall"]
-    )
-    db_max_f.on_submit = lambda e: update_bounds(
-        e, ["auto_scale_spectrum", "auto_scale_waterfall"]
-    )
-
-    pwr_db_min_f.on_change = lambda e: update_bounds(e, ["auto_scale_power"])
-    pwr_db_max_f.on_change = lambda e: update_bounds(e, ["auto_scale_power"])
-    pwr_db_min_f.on_submit = lambda e: update_bounds(e, ["auto_scale_power"])
-    pwr_db_max_f.on_submit = lambda e: update_bounds(e, ["auto_scale_power"])
-
-    snr_db_min_f.on_change = lambda e: update_bounds(e, ["auto_scale_snr"])
-    snr_db_max_f.on_change = lambda e: update_bounds(e, ["auto_scale_snr"])
-    snr_db_min_f.on_submit = lambda e: update_bounds(e, ["auto_scale_snr"])
-    snr_db_max_f.on_submit = lambda e: update_bounds(e, ["auto_scale_snr"])
-
-    # Los demás campos sin auto-off
-    for field in [
-        f_min_f,
-        f_max_f,
-        amp_min_f,
-        amp_max_f,
-        wf_sec_f,
-        analysis_win_f,
-        ma_win_f,
-    ]:
-        field.on_change = update_bounds
-        field.on_submit = update_bounds
+    # Lógica de actualización ahora centralizada en _axis_control.on_manual_change
 
     def on_welch_toggle(e):
         engine_instance.use_welch = e.control.value == "welch"
         engine_instance.save_config()
 
     def on_reset_defaults(e):
+        """Restablece los valores y fuerza un refresco de la configuración."""
         engine_instance.reset_to_defaults()
-        engine_instance.save_config()
-        # Sincronizar los campos de texto de la UI con los nuevos valores del engine
-        db_min_f.value = str(engine_instance.db_min)
-        db_max_f.value = str(engine_instance.db_max)
-        pwr_db_min_f.value = str(engine_instance.power_db_min)
-        pwr_db_max_f.value = str(engine_instance.power_db_max)
-        snr_db_min_f.value = str(engine_instance.snr_db_min)
-        snr_db_max_f.value = str(engine_instance.snr_db_max)
-        f_min_f.value = str(engine_instance.f_min)
-        f_max_f.value = str(engine_instance.f_max)
-        amp_min_f.value = str(engine_instance.amp_min)
-        amp_max_f.value = str(engine_instance.amp_max)
-        wf_sec_f.value = str(engine_instance.waterfall_history_sec)
-
-        # Sincronizar switches de auto-escala
-        auto_scale_spectrum.value = True
-        auto_scale_power.value = True
-        auto_scale_snr.value = True
-        auto_scale_waterfall.value = True
-
-        page.update()
+        # En lugar de actualizar controles individuales (que pueden no existir),
+        # notificamos para un refresco total de la UI de configuración.
+        page.pubsub.send_all("config_reset")
 
     reset_btn = ft.ElevatedButton(
         content=ft.Text(
@@ -350,205 +251,114 @@ def build_config(page: ft.Page) -> ft.Control:
     def divider():
         return ft.Divider(color=BORDER_COL, height=12)
 
-    # ── Toggle de Auto-Escala por pestaña ──────────────────────────────
-    auto_scale_spectrum = ft.Switch(
-        label="Auto-escala Espectro",
-        value=True,
-        active_color=ACCENT_GREEN,
-        label_text_style=ft.TextStyle(color=TEXT_MUTED, size=10),
-    )
-    auto_scale_power = ft.Switch(
-        label="Auto-escala Potencia",
-        value=True,
-        active_color=ACCENT_GREEN,
-        label_text_style=ft.TextStyle(color=TEXT_MUTED, size=10),
-    )
-    auto_scale_snr = ft.Switch(
-        label="Auto-escala SNR",
-        value=True,
-        active_color=ACCENT_GREEN,
-        label_text_style=ft.TextStyle(color=TEXT_MUTED, size=10),
-    )
-    auto_scale_waterfall = ft.Switch(
-        label="Auto-escala Waterfall",
-        value=True,
-        active_color=ACCENT_GREEN,
-        label_text_style=ft.TextStyle(color=TEXT_MUTED, size=10),
-    )
+    # Flags de auto-escala antiguos (deprecados en favor de charts_config)
 
-    def on_auto_scale_toggle(e, attr):
-        setattr(engine_instance, attr, e.control.value)
-        engine_instance.save_config()
+    def _axis_control(title_text, chart_id):
+        """Helper para crear controles de rango X/Y para una gráfica específica."""
+        cfg = engine_instance.charts_config.get(chart_id)
+        if not cfg:
+            return ft.Text(f"Config error for {chart_id}", color="red")
 
-    auto_scale_spectrum.on_change = lambda e: on_auto_scale_toggle(
-        e, "auto_scale_spectrum"
-    )
-    auto_scale_power.on_change = lambda e: on_auto_scale_toggle(e, "auto_scale_power")
-    auto_scale_snr.on_change = lambda e: on_auto_scale_toggle(e, "auto_scale_snr")
-    auto_scale_waterfall.on_change = lambda e: on_auto_scale_toggle(
-        e, "auto_scale_waterfall"
-    )
+        # Texto de ayuda
+        help_txt = ft.Text(title_text, color=ACCENT_CYAN, size=11, weight=ft.FontWeight.BOLD)
+        
+        # Filtros para inputs manuales (para desactivar auto-scale)
+        def on_manual_change(e, axis, attr):
+            try:
+                val = float(e.control.value)
+                engine_instance.charts_config[chart_id][attr] = val
+                # Desactivar auto-escala al cambiar manualmente
+                engine_instance.charts_config[chart_id][f"auto_{axis}"] = False
+                # Sincronizar switch
+                if axis == "x": sw_x.value = False
+                else: sw_y.value = False
+                engine_instance.save_config()
+                page.pubsub.send_all("refresh_charts") # Notificar para redibujado inmediato
+                page.update()
+            except ValueError:
+                pass
 
-    # Sincronizar con estado actual del engine
-    auto_scale_spectrum.value = getattr(engine_instance, "auto_scale_spectrum", True)
-    auto_scale_power.value = getattr(engine_instance, "auto_scale_power", True)
-    auto_scale_snr.value = getattr(engine_instance, "auto_scale_snr", True)
-    auto_scale_waterfall.value = getattr(engine_instance, "auto_scale_waterfall", True)
+        # Inputs X
+        xi_min = txt_field("X Min", str(cfg["xmin"]))
+        xi_max = txt_field("X Max", str(cfg["xmax"]))
+        xi_min.on_change = lambda e: on_manual_change(e, "x", "xmin")
+        xi_max.on_change = lambda e: on_manual_change(e, "x", "xmax")
 
-    sdr_content = ft.Column(
-        [
-            section_title("📡", "Pestaña 1: Monitoreo y RFI", ACCENT_CYAN),
-            ft.Row(
-                [lbl("Rango Y del Espectro (dBFS)"), auto_scale_spectrum], spacing=8
-            ),
-            ft.Row([db_min_f, db_max_f], spacing=8),
-            lbl(
-                f"Actual: {engine_instance.db_min:.1f} a {engine_instance.db_max:.1f} dBFS",
-                ACCENT_CYAN,
-                9,
-            ),
-            divider(),
-            section_title("🔍", "Pestaña 2: Monitoreo Filtrado", ACCENT_GREEN),
-            lbl("Moving Average (ms)"),
-            ma_win_f,
-            lbl("Rango Y Amplitud (V)"),
-            ft.Row([amp_min_f, amp_max_f], spacing=8),
-            lbl("Rango X (MHz)"),
-            ft.Row([f_min_f, f_max_f], spacing=8),
-            lbl(
-                f"Actual: {engine_instance.amp_min:.3f} a {engine_instance.amp_max:.3f} V",
-                ACCENT_CYAN,
-                9,
-            ),
-            divider(),
-            section_title("🌈", "Pestaña 3: Espectrograma", "#FF6B9D"),
-            lbl("Historial Cascada (segundos)"),
-            wf_sec_f,
-            ft.Row([lbl("Rango Y (dBFS)"), auto_scale_waterfall], spacing=8),
-            ft.Row([db_min_f, db_max_f], spacing=8),
-            lbl("Rango X (MHz)"),
-            ft.Row([f_min_f, f_max_f], spacing=8),
-            lbl(
-                f"Actual: {engine_instance.db_min:.1f} a {engine_instance.db_max:.1f} dBFS",
-                ACCENT_CYAN,
-                9,
-            ),
-            divider(),
-            section_title("📊", "Pestaña 4: Estadística", ACCENT_AMBER),
-            lbl("Sin parámetros específicos de rango"),
-            divider(),
-            section_title("⚡", "Pestaña 5: Potencia vs Tiempo", "#FFB347"),
-            ft.Row([lbl("Rango Y (dBFS)"), auto_scale_power], spacing=8),
-            ft.Row([pwr_db_min_f, pwr_db_max_f], spacing=8),
-            lbl(
-                f"Actual: {engine_instance.power_db_min:.1f} a {engine_instance.power_db_max:.1f} dBFS",
-                ACCENT_CYAN,
-                9,
-            ),
-            divider(),
-            section_title("📶", "Pestaña 6: SNR vs Frecuencia", "#00CED1"),
-            ft.Row([lbl("Rango Y (SNR dB)"), auto_scale_snr], spacing=8),
-            ft.Row([snr_db_min_f, snr_db_max_f], spacing=8),
-            lbl("Rango X (MHz)"),
-            ft.Row([f_min_f, f_max_f], spacing=8),
-            lbl(
-                f"Actual: {engine_instance.snr_db_min:.1f} a {engine_instance.snr_db_max:.1f} dB",
-                ACCENT_CYAN,
-                9,
-            ),
-            divider(),
-            section_title("🔬", "Algoritmo DSP", "#B380FF"),
-            lbl("Método espectral base:"),
-            welch_rg,
-            lbl("Ventana Análisis (s)"),
-            analysis_win_f,
-            divider(),
-            section_title("🌍", "Parámetros Globales", TEXT_MAIN),
-            lbl("Frecuencia Central (MHz)"),
-            freq_f,
-            lbl("Sample Rate (MSps)"),
-            rate_f,
-            lbl("Rango X (Frecuencia MHz)"),
-            ft.Row([f_min_f, f_max_f], spacing=8),
-            lbl(
-                f"Actual: {engine_instance.f_min:.3f} a {engine_instance.f_max:.3f} MHz",
-                ACCENT_CYAN,
-                9,
-            ),
-            divider(),
-            section_title("📁", "Archivo y Formato", TEXT_MAIN),
-            ft.Row([filepath_input, pick_btn], spacing=5),
-            fmt_dd,
-            lbl("Modo de Adquisición"),
-            mode_rg,
-        ],
-        spacing=6,
-        scroll=ft.ScrollMode.AUTO,
-    )
+        # Inputs Y
+        yi_min = txt_field("Y Min", str(cfg["ymin"]))
+        yi_max = txt_field("Y Max", str(cfg["ymax"]))
+        yi_min.on_change = lambda e: on_manual_change(e, "y", "ymin")
+        yi_max.on_change = lambda e: on_manual_change(e, "y", "ymax")
 
-    def divider():
-        return ft.Divider(color=BORDER_COL, height=12)
+        # Switches Auto
+        def on_auto_toggle(e, axis):
+            engine_instance.charts_config[chart_id][f"auto_{axis}"] = e.control.value
+            engine_instance.save_config()
+            page.pubsub.send_all("refresh_charts") # Notificar para redibujado inmediato
+
+        sw_x = ft.Switch(label="Auto X", value=cfg["auto_x"], active_color=ACCENT_GREEN, 
+                         label_text_style=ft.TextStyle(size=9), on_change=lambda e: on_auto_toggle(e, "x"))
+        sw_y = ft.Switch(label="Auto Y", value=cfg["auto_y"], active_color=ACCENT_GREEN, 
+                         label_text_style=ft.TextStyle(size=9), on_change=lambda e: on_auto_toggle(e, "y"))
+
+        return ft.Container(
+            content=ft.Column([
+                help_txt,
+                ft.Row([sw_x, sw_y], spacing=10),
+                ft.Row([xi_min, xi_max], spacing=5),
+                ft.Row([yi_min, yi_max], spacing=5),
+            ], spacing=5),
+            padding=ft.Padding(5, 8, 5, 8),
+            border=ft.Border(bottom=ft.BorderSide(0.5, BORDER_COL))
+        )
 
     sdr_content = ft.Column(
         [
-            section_title("📡", "Pestaña 1: Monitoreo y RFI", ACCENT_CYAN),
-            lbl("Rango Y del Espectro (dBFS)"),
-            ft.Row([db_min_f, db_max_f], spacing=8),
-            lbl("Rango X (MHz)"),
-            ft.Row([f_min_f, f_max_f], spacing=8),
+            section_title("🎯", "Modo de Escala Inteligente", ACCENT_AMBER),
+            ft.Text("Las gráficas se centran automáticamente al nivel de referencia y señal "
+                    "a menos que cambies un valor manualmente.", color=TEXT_MUTED, size=9, italic=True),
+            reset_btn,
             divider(),
+
+            section_title("📡", "Pestaña 1: Monitoreo RAW", ACCENT_CYAN),
+            _axis_control("Gráfica 1: Espectro RAW", "mon_raw_spec"),
+            _axis_control("Gráfica 2: Amplitud RAW", "mon_raw_amp"),
+            
             section_title("🔍", "Pestaña 2: Monitoreo Filtrado", ACCENT_GREEN),
-            lbl("Moving Average (ms)"),
+            lbl("Filtro Moving Average (ms)"),
             ma_win_f,
-            lbl("Rango Y Amplitud (V)"),
-            ft.Row([amp_min_f, amp_max_f], spacing=8),
-            lbl("Rango X (MHz)"),
-            ft.Row([f_min_f, f_max_f], spacing=8),
-            divider(),
+            _axis_control("Gráfica 1: Espectro Filtrado", "mon_filt_spec"),
+            _axis_control("Gráfica 2: Amplitud Filtrada", "mon_filt_amp"),
+
             section_title("🌈", "Pestaña 3: Espectrograma", "#FF6B9D"),
             lbl("Historial Cascada (segundos)"),
             wf_sec_f,
-            lbl("Rango Y (dBFS)"),
-            ft.Row([db_min_f, db_max_f], spacing=8),
-            lbl("Rango X (MHz)"),
-            ft.Row([f_min_f, f_max_f], spacing=8),
-            divider(),
+            _axis_control("Cascada (Waterfall)", "spec_wf"),
+
             section_title("📊", "Pestaña 4: Estadística", ACCENT_AMBER),
-            lbl("Sin parámetros específicos de rango"),
-            divider(),
+            _axis_control("Histograma de Amplitud", "stat_hist"),
+
             section_title("⚡", "Pestaña 5: Potencia vs Tiempo", "#FFB347"),
-            lbl("Rango Y (dBFS)"),
-            ft.Row([pwr_db_min_f, pwr_db_max_f], spacing=8),
-            divider(),
+            _axis_control("Potencia Instantánea", "pow_time"),
+
             section_title("📶", "Pestaña 6: SNR vs Frecuencia", "#00CED1"),
-            lbl("Rango Y (SNR dB)"),
-            ft.Row([snr_db_min_f, snr_db_max_f], spacing=8),
-            lbl("Rango X (MHz)"),
-            ft.Row([f_min_f, f_max_f], spacing=8),
+            _axis_control("SNR por Bin de Freq", "snr_freq"),
+
+            section_title("🌍", "SDR & Frecuencia", TEXT_MAIN),
+            lbl("Freq Central (MHz)"), freq_f,
+            lbl("Sample Rate (MSps)"), rate_f,
             divider(),
-            section_title("🔬", "Algoritmo DSP", "#B380FF"),
-            lbl("Método espectral base:"),
-            welch_rg,
-            lbl("Ventana Análisis (s)"),
-            analysis_win_f,
-            divider(),
-            section_title("🌍", "Parámetros Globales", TEXT_MAIN),
-            lbl("Frecuencia Central (MHz)"),
-            freq_f,
-            lbl("Sample Rate (MSps)"),
-            rate_f,
-            lbl("Rango X (Frecuencia MHz)"),
-            ft.Row([f_min_f, f_max_f], spacing=8),
-            divider(),
-            section_title("📁", "Archivo y Formato", TEXT_MAIN),
+            
+            section_title("📁", "Origen de Datos", TEXT_MAIN),
             ft.Row([filepath_input, pick_btn], spacing=5),
             fmt_dd,
-            lbl("Modo de Adquisición"),
             mode_rg,
         ],
-        spacing=6,
+        spacing=8,
         scroll=ft.ScrollMode.AUTO,
     )
+
+    # Fin de sdr_content avanzado
 
     # ─────────────────────────────────────────────────────────────────────────
     # ── Controles de la sección Estado ───────────────────────────────────────

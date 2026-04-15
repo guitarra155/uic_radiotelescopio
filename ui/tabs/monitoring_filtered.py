@@ -54,6 +54,8 @@ def build_monitoring_filtered(page: ft.Page, key_state: dict) -> ft.Control:
         finally:
             is_rendering[0] = False
 
+    page.pubsub.subscribe(on_refresh)
+
     from core.dsp_engine import engine_instance
 
     def reset_defaults(e):

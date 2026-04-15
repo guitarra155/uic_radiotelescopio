@@ -41,7 +41,10 @@ def get_cached_fig(name, figsize=(9.5, 3.0), is_3d=False):
 
 def fig_to_b64(fig: Figure) -> str:
     """Retorna Base64 crudo con mejor uso del espacio."""
-    fig.tight_layout(pad=1.0)
+    try:
+        fig.tight_layout(pad=1.0)
+    except:
+        pass
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=100, bbox_inches="tight", pad_inches=0.1)
     buf.seek(0)
@@ -72,28 +75,24 @@ def chart_amplitude() -> str:
     fig, ax, is_new = get_cached_fig("amplitude", figsize=(9.5, 2.8))
     sig = engine_instance.amplitude_data
     n = len(sig)
-    t = np.linspace(0, n / engine_instance.sample_rate, n)
+    # Volvemos a milisegundos (ms) para cumplir con la petición de "Tiempo"
+    t = np.linspace(0, (n / engine_instance.sample_rate) * 1000, n)
 
     if is_new or "line" not in cache.artists["amplitude"]:
         ax.clear()
         style_ax(
-            ax, "Amplitud vs Tiempo (Streaming)", "Tiempo (s)", "Amplitud Baseband (V)"
+            ax, "Amplitud vs Tiempo (Streaming)", "Tiempo (ms)", "Amplitud Baseband (V)"
         )
         (line,) = ax.plot(t, sig, color=ACCENT_CYAN, linewidth=0.9, alpha=0.85)
         cache.artists["amplitude"]["line"] = line
     else:
         line = cache.artists["amplitude"]["line"]
         line.set_data(t, sig)
-        # Centrar la imagen basándose en el piso de ruido/promedio si es necesario,
-        # pero respetar los límites del engine
-        ax.set_ylim([engine_instance.amp_min, engine_instance.amp_max])
-        # Si los límites son muy amplios, podemos centrar el eje Y en la media de la señal
-        if (
-            engine_instance.auto_scale_spectrum
-        ):  # Usando el switch de auto-escala como trigger
-            avg = np.mean(sig)
-            span = (engine_instance.amp_max - engine_instance.amp_min) / 2
-            ax.set_ylim([avg - span, avg + span])
+        
+    # Aplicar límites siempre (fuera del else)
+    cfg = engine_instance.charts_config["mon_raw_amp"]
+    ax.set_ylim([cfg["ymin"], cfg["ymax"]])
+    ax.set_xlim([cfg["xmin"], cfg["xmax"]])
 
     return fig_to_b64(fig)
 
@@ -105,13 +104,7 @@ def chart_spectrum() -> str:
     fs = engine_instance.sample_rate / 1_000_000
 
     full_freq = np.linspace(fc - fs / 2, fc + fs / 2, len(spec))
-    fmin, fmax = engine_instance.f_min, engine_instance.f_max
-
-    mask = (full_freq >= fmin) & (full_freq <= fmax)
-    freq_cr = full_freq[mask]
-    spec_cr = spec[mask]
-    if len(freq_cr) == 0:
-        freq_cr, spec_cr = full_freq, spec
+    full_freq = np.linspace(fc - fs / 2, fc + fs / 2, len(spec))
 
     if is_new or "line" not in cache.artists["spectrum"]:
         ax.clear()
@@ -121,7 +114,7 @@ def chart_spectrum() -> str:
             "Frecuencia (MHz)",
             "Potencia (dBFS)",
         )
-        (line,) = ax.plot(freq_cr, spec_cr, color=ACCENT_GREEN, linewidth=1.0)
+        (line,) = ax.plot(full_freq, spec, color=ACCENT_GREEN, linewidth=1.0)
         ax.axhline(
             y=engine_instance.db_noise_floor,
             color=ACCENT_AMBER,
@@ -136,16 +129,11 @@ def chart_spectrum() -> str:
         cache.artists["spectrum"]["line"] = line
     else:
         line = cache.artists["spectrum"]["line"]
-        line.set_data(freq_cr, spec_cr)
-        # Para la pestaña 2, usamos el rango de espectro configurado
-        ax.set_ylim([engine_instance.db_min, engine_instance.db_max])
-        # Actualizar la línea del piso de ruido si cambia la configuración
-        if "noise_line" in cache.artists["spectrum"]:
-            cache.artists["spectrum"]["noise_line"].set_ydata(
-                [engine_instance.db_noise_floor]
-            )
+        line.set_data(full_freq, spec)
 
-    ax.set_xlim([fmin, fmax])
+    cfg = engine_instance.charts_config["mon_filt_spec"]
+    ax.set_ylim([cfg["ymin"], cfg["ymax"]])
+    ax.set_xlim([cfg["xmin"], cfg["xmax"]])
     return fig_to_b64(fig)
 
 
@@ -157,13 +145,7 @@ def chart_spectrum_raw() -> str:
     fs = engine_instance.sample_rate / 1_000_000
 
     full_freq = np.linspace(fc - fs / 2, fc + fs / 2, len(spec))
-    fmin, fmax = engine_instance.f_min, engine_instance.f_max
-
-    mask = (full_freq >= fmin) & (full_freq <= fmax)
-    freq_cr = full_freq[mask]
-    spec_cr = spec[mask]
-    if len(freq_cr) == 0:
-        freq_cr, spec_cr = full_freq, spec
+    full_freq = np.linspace(fc - fs / 2, fc + fs / 2, len(spec))
 
     if is_new or "line" not in cache.artists["spectrum_raw"]:
         ax.clear()
@@ -173,8 +155,8 @@ def chart_spectrum_raw() -> str:
             "Frecuencia (MHz)",
             "Potencia (dBFS)",
         )
-        (line,) = ax.plot(freq_cr, spec_cr, color=ACCENT_CYAN, linewidth=1.0)
-        noise_raw = np.median(spec_cr)
+        (line,) = ax.plot(full_freq, spec, color=ACCENT_CYAN, linewidth=1.0)
+        noise_raw = np.median(spec)
         ax.axhline(
             y=noise_raw,
             color=ACCENT_AMBER,
@@ -189,11 +171,11 @@ def chart_spectrum_raw() -> str:
         cache.artists["spectrum_raw"]["line"] = line
     else:
         line = cache.artists["spectrum_raw"]["line"]
-        line.set_data(freq_cr, spec_cr)
-        # Reparación: Vincular al rango de potencia configurado si es la gráfica de abajo de Tab 1
-        ax.set_ylim([engine_instance.power_db_min, engine_instance.power_db_max])
+        line.set_data(full_freq, spec)
 
-    ax.set_xlim([fmin, fmax])
+    cfg = engine_instance.charts_config["mon_raw_spec"]
+    ax.set_ylim([cfg["ymin"], cfg["ymax"]])
+    ax.set_xlim([cfg["xmin"], cfg["xmax"]])
     return fig_to_b64(fig)
 
 
@@ -203,16 +185,8 @@ def chart_spectrogram() -> str:
     data = engine_instance.waterfall_data
     fc = engine_instance.center_freq
     fs = engine_instance.sample_rate / 1_000_000
-    fmin, fmax = engine_instance.f_min, engine_instance.f_max
-
-    full_freq = np.linspace(fc - fs / 2, fc + fs / 2, data.shape[1])
-    mask = (full_freq >= fmin) & (full_freq <= fmax)
-    data_cr = data[:, mask]
-    if data_cr.shape[1] == 0:
-        data_cr = data
-
     # Safety check for empty buffer
-    if data_cr.size == 0:
+    if data.size == 0:
         return fig_to_b64(fig)
 
     secs_per_line = (engine_instance.fft_size * 40) / engine_instance.sample_rate
@@ -222,10 +196,10 @@ def chart_spectrogram() -> str:
         ax.clear()
         style_ax(ax, "Cascada Espectral (Waterfall)", "Frecuencia (MHz)", f"Tiempo (s)")
         im = ax.imshow(
-            data_cr,
+            data,
             aspect="auto",
             origin="lower",
-            extent=[fmin, fmax, 0, total_secs],
+            extent=[fc - fs / 2, fc + fs / 2, 0, total_secs],
             cmap="inferno",
             interpolation="nearest",
             vmin=engine_instance.db_min,
@@ -244,48 +218,13 @@ def chart_spectrogram() -> str:
         cache.artists["waterfall"]["cbar"] = cbar
     else:
         im = cache.artists["waterfall"]["im"]
-        im.set_data(data_cr)
-        im.set_extent([fmin, fmax, 0, total_secs])
-        im.set_clim(engine_instance.db_min, engine_instance.db_max)
-        if cache.artists["waterfall"].get("cbar"):
-            cache.artists["waterfall"]["cbar"].set_clim(
-                engine_instance.db_min, engine_instance.db_max
-            )
+        im.set_data(data)
+        
+    cfg = engine_instance.charts_config["spec_wf"]
+    im.set_extent([cfg["xmin"], cfg["xmax"], 0, total_secs])
+    im.set_clim(cfg["ymin"], cfg["ymax"])
 
-    return fig_to_b64(fig)
-
-    secs_per_line = (engine_instance.fft_size * 40) / engine_instance.sample_rate
-    total_secs = engine_instance.waterfall_steps * secs_per_line
-
-    if is_new or "im" not in cache.artists["waterfall"]:
-        ax.clear()
-        style_ax(ax, "Cascada Espectral (Waterfall)", "Frecuencia (MHz)", f"Tiempo (s)")
-        # Usamos percentiles para el contraste inicial para que se vea SIEMPRE aunque el config sea malo
-        v_min, v_max = np.percentile(data_cr, 5), np.percentile(data_cr, 99.9)
-        im = ax.imshow(
-            data_cr,
-            aspect="auto",
-            origin="lower",
-            extent=[fmin, fmax, 0, total_secs],
-            cmap="inferno",
-            interpolation="nearest",
-            vmin=v_min,
-            vmax=v_max,
-        )
-        cache.artists["waterfall"]["im"] = im
-    else:
-        im = cache.artists["waterfall"]["im"]
-        im.set_data(data_cr)
-        im.set_extent([fmin, fmax, 0, total_secs])
-        # Auto-contraste dinámico con seguridad si el buffer está vacío o fuera de rango
-        if data_cr.size > 0:
-            v_min, v_max = np.percentile(data_cr, 2), np.percentile(data_cr, 99.8)
-            if v_min == v_max:
-                v_max += 0.1
-            im.set_clim(v_min, v_max)
-        else:
-            im.set_clim(-110, -20)
-
+    ax.set_xlim([cfg["xmin"], cfg["xmax"]])
     return fig_to_b64(fig)
 
 
@@ -306,6 +245,8 @@ def chart_histogram() -> str:
         )
         ax.plot(x, gauss, color=ACCENT_GREEN, linewidth=1.5)
 
+    cfg = engine_instance.charts_config["stat_hist"]
+    ax.set_xlim([cfg["xmin"], cfg["xmax"]])
     return fig_to_b64(fig)
 
 
@@ -328,7 +269,10 @@ def chart_signal_time() -> str:
         cache.artists["signal_time"]["line_i"].set_data(t, raw)
         cache.artists["signal_time"]["line_q"].set_data(t, np.roll(raw, n // 4))
 
-    ax.set_ylim([engine_instance.amp_min, engine_instance.amp_max])
+    # Sincronizar con charts_config igual que los demás
+    cfg = engine_instance.charts_config["mon_raw_amp"]
+    ax.set_ylim([cfg["ymin"], cfg["ymax"]])
+    ax.set_xlim([cfg["xmin"], cfg["xmax"]])
     return fig_to_b64(fig)
 
 
@@ -365,8 +309,10 @@ def chart_power_time() -> str:
     else:
         line = cache.artists["power_time"]["line"]
         line.set_data(t, pwr)
-        ax.set_xlim([0, max(1, t[-1])])
-        ax.set_ylim([engine_instance.power_db_min, engine_instance.power_db_max])
+        
+    cfg = engine_instance.charts_config["pow_time"]
+    ax.set_xlim([0, max(1, t[-1])])
+    ax.set_ylim([cfg["ymin"], cfg["ymax"]])
 
     return fig_to_b64(fig)
 
@@ -375,16 +321,12 @@ def chart_freq_snr() -> str:
     fig, ax, is_new = get_cached_fig("freq_snr", figsize=(9.5, 4.5))
     snr = engine_instance.snr_data
     fc, fs = engine_instance.center_freq, engine_instance.sample_rate / 1e6
-    fmin, fmax = engine_instance.f_min, engine_instance.f_max
-
-    full_f = np.linspace(fc - fs / 2, fc + fs / 2, len(snr))
-    mask = (full_f >= fmin) & (full_f <= fmax)
-    f_cr, s_cr = full_f[mask], snr[mask]
+    full_freq = np.linspace(fc - fs / 2, fc + fs / 2, len(snr))
 
     if is_new or "line" not in cache.artists["freq_snr"]:
         ax.clear()
         style_ax(ax, "SNR vs. Frecuencia", "Frecuencia (MHz)", "SNR (dB)")
-        (line,) = ax.plot(f_cr, s_cr, color="#1f77b4", linewidth=1.0)
+        (line,) = ax.plot(full_freq, snr, color="#1f77b4", linewidth=1.0)
         ax.axhline(
             y=6,
             color=ACCENT_RED,
@@ -399,10 +341,11 @@ def chart_freq_snr() -> str:
         cache.artists["freq_snr"]["line"] = line
     else:
         line = cache.artists["freq_snr"]["line"]
-        line.set_data(f_cr, s_cr)
-        ax.set_ylim([engine_instance.snr_db_min, engine_instance.snr_db_max])
-
-    ax.set_xlim([fmin, fmax])
+        line.set_data(full_freq, snr)
+        
+    cfg = engine_instance.charts_config["snr_freq"]
+    ax.set_ylim([cfg["ymin"], cfg["ymax"]])
+    ax.set_xlim([cfg["xmin"], cfg["xmax"]])
     return fig_to_b64(fig)
 
 
@@ -499,7 +442,8 @@ def chart_amplitude_ma() -> str:
     fig, ax, is_new = get_cached_fig("amplitude_ma", figsize=(9.5, 2.8))
     sig = engine_instance.amplitude_ma_data
     n = len(sig)
-    t = np.linspace(0, n / engine_instance.sample_rate, n)
+    # Volvemos a milisegundos (ms) para cumplir con la petición de "Tiempo"
+    t = np.linspace(0, (n / engine_instance.sample_rate) * 1000, n)
 
     # Auto-detectar rango de amplitud filtrada
     sig_min, sig_max = np.min(sig), np.max(sig)
@@ -510,7 +454,7 @@ def chart_amplitude_ma() -> str:
         style_ax(
             ax,
             f"Amplitud Filtrada — MA ({engine_instance.moving_avg_window_ms:.2f} ms)",
-            "Tiempo (s)",
+            "Tiempo (ms)",
             "Amplitud (V)",
         )
         (line,) = ax.plot(t, sig, color=ACCENT_AMBER, linewidth=0.9, alpha=0.9)
@@ -524,8 +468,10 @@ def chart_amplitude_ma() -> str:
             fontsize=9,
             pad=6,
         )
-        # Reparación: Forzar el uso de los límites configurados en el engine
-        ax.set_ylim([engine_instance.amp_min, engine_instance.amp_max])
+    # Forzar el uso de los límites configurados en el engine (FUERA del else)
+    cfg = engine_instance.charts_config["mon_filt_amp"]
+    ax.set_ylim([cfg["ymin"], cfg["ymax"]])
+    ax.set_xlim([cfg["xmin"], cfg["xmax"]])
 
     return fig_to_b64(fig)
 

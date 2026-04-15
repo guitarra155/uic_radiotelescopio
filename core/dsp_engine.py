@@ -123,15 +123,28 @@ class DSPEngine:
         self.moving_avg_window_ms = 0.1  # 0.1ms = ~240 muestras, filtro suave
         self.use_welch = False
 
-        # Contador para auto-detección de rangos
-        self._frames_since_autoscale = 0
-        self._autoscale_enabled = True
-
-        # Flags de auto-escala por pestaña (GUI)
+        # Flags de auto-escala globales (compatibilidad parcial)
         self.auto_scale_spectrum = True
         self.auto_scale_power = True
         self.auto_scale_snr = True
         self.auto_scale_waterfall = True
+
+        # Contador para auto-detección de rangos
+        self._frames_since_autoscale = 0
+        self._autoscale_enabled = True
+
+        # NUEVO: Configuración granular por gráfica
+        # Estructura: xmin, xmax, ymin, ymax, auto_x, auto_y
+        self.charts_config = {
+            "mon_raw_spec": {"xmin": 1419.0, "xmax": 1421.0, "ymin": -100.0, "ymax": -20.0, "auto_x": True, "auto_y": True},
+            "mon_raw_amp":  {"xmin": 0.0, "xmax": 1.0, "ymin": 0.0, "ymax": 1.0, "auto_x": True, "auto_y": True},
+            "mon_filt_spec": {"xmin": 1419.0, "xmax": 1421.0, "ymin": -100.0, "ymax": -20.0, "auto_x": True, "auto_y": True},
+            "mon_filt_amp": {"xmin": 0.0, "xmax": 1.0, "ymin": 0.0, "ymax": 1.0, "auto_x": True, "auto_y": True},
+            "spec_wf":      {"xmin": 1419.0, "xmax": 1421.0, "ymin": -100.0, "ymax": -20.0, "auto_x": True, "auto_y": True},
+            "stat_hist":    {"xmin": 0.0, "xmax": 1.5, "ymin": 0.0, "ymax": 100.0, "auto_x": True, "auto_y": True},
+            "pow_time":     {"xmin": 0.0, "xmax": 20.0, "ymin": -100.0, "ymax": -20.0, "auto_x": False, "auto_y": True},
+            "snr_freq":     {"xmin": 1419.0, "xmax": 1421.0, "ymin": -5.0, "ymax": 40.0, "auto_x": True, "auto_y": True},
+        }
 
     @property
     def waterfall_history_sec(self):
@@ -337,71 +350,85 @@ class DSPEngine:
             self._auto_detect_ranges()
 
     def _auto_detect_ranges(self):
-        """Auto-detecta los rangos óptimos basándose en los datos actuales.
-        Calcula el piso de ruido y centra el rango para cada gráfica.
-        """
-        # ── 1. Espectro y Waterfall (Sincronizados) ─────────────────────────────────
-        if getattr(self, "auto_scale_spectrum", True) or getattr(self, "auto_scale_waterfall", True):
-            if np.any(self.spectrum_data != 0):
-                # El piso de ruido es la mediana (robusto contra picos de señal)
-                noise_floor = np.median(self.spectrum_data)
-                self.db_noise_floor = float(noise_floor)
+        """Auto-detecta los rangos óptimos basándose en los datos actuales."""
+        if not self.is_playing:
+            return
 
-                # Calculamos el rango dinámico actual (pico vs ruido)
-                spec_max = np.percentile(self.spectrum_data, 99)
-                dynamic_range = spec_max - noise_floor
+        # --- 1. Calcular indicadores clave ---
+        noise_floor = np.median(self.spectrum_data)
+        self.db_noise_floor = float(noise_floor)
+        peak_idx = np.argmax(self.spectrum_data)
+        fs_mhz = self.sample_rate / 1e6
+        peak_freq = self.center_freq + (peak_idx / self.fft_size - 0.5) * fs_mhz
 
-                # Centro el rango: el ruido queda en el tercio inferior,
-                # dejando espacio para la señal arriba y margen abajo
-                margin_below = 20 # dB debajo del ruido
-                margin_above = max(10, dynamic_range * 0.2) # Margen proporcional al pico
+        # --- 2. Aplicar lógica a cada gráfica configurada ---
+        
+        # 2.1 Especros (RAW y Filtered) y Waterfall
+        for spec_id in ["mon_raw_spec", "mon_filt_spec", "spec_wf"]:
+            cfg = self.charts_config.get(spec_id)
+            if not cfg: continue
+            
+            # Eje Y: Centrado en nivel de referencia con margen generoso
+            if cfg["auto_y"]:
+                spec_max = np.percentile(self.spectrum_data, 99.8)
+                cfg["ymin"] = noise_floor - 30.0
+                cfg["ymax"] = spec_max + 20.0
+                
+            # Eje X: Centrado en la señal más fuerte con un span de 2MHz
+            if cfg["auto_x"]:
+                cfg["xmin"] = peak_freq - 1.0 
+                cfg["xmax"] = peak_freq + 1.0
 
-                self.db_min = noise_floor - margin_below
-                self.db_max = spec_max + margin_above
+        # 2.2 Amplitud (Time Domain)
+        for amp_id in ["mon_raw_amp", "mon_filt_amp"]:
+            cfg = self.charts_config.get(amp_id)
+            if cfg:
+                if cfg["auto_y"]:
+                    data = self.amplitude_ma_data if "filt" in amp_id else self.amplitude_data
+                    mag_max = np.percentile(data, 99)
+                    cfg["ymin"] = 0.0
+                    cfg["ymax"] = max(0.1, float(mag_max * 1.5))
+                    if cfg["ymax"] <= cfg["ymin"] + 0.001:
+                        cfg["ymax"] = cfg["ymin"] + 1.0
+                if cfg["auto_x"]:
+                    duration_ms = (self.fft_size / self.sample_rate) * 1000
+                    cfg["xmin"] = 0
+                    cfg["xmax"] = max(0.1, float(duration_ms))
 
-                # Si auto_scale_waterfall está activo, usa estos mismos rangos
-                if getattr(self, "auto_scale_waterfall", True):
-                    # Waterfall usa los mismos db_min/db_max que el espectro
-                    pass
+        # 2.3 Potencia vs Tiempo
+        cfg = self.charts_config.get("pow_time")
+        if cfg and cfg["auto_y"]:
+            pwr_valid = self.power_time_data[self.power_time_data > -120]
+            if len(pwr_valid) > 5:
+                p_max = np.percentile(pwr_valid, 98)
+                p_min = np.percentile(pwr_valid, 2)
+                cfg["ymin"] = p_min - 10
+                cfg["ymax"] = p_max + 10
 
-        # ── 2. Potencia vs Tiempo ──────────────────────────────────────────────────
-        if getattr(self, "auto_scale_power", True):
-            if self.power_samples_written > 10:
-                pwr_valid = self.power_time_data[: self.power_samples_written]
-                valid_pwr = pwr_valid[pwr_valid > -120]
-                if len(valid_pwr) > 5:
-                    pwr_median = np.median(valid_pwr)
-                    pwr_max = np.max(valid_pwr)
+        # 2.4 SNR vs Frecuencia
+        cfg = self.charts_config.get("snr_freq")
+        if cfg:
+            if cfg["auto_y"]:
+                snr_max = np.percentile(self.snr_data, 99)
+                cfg["ymin"] = -5
+                cfg["ymax"] = snr_max + 10
+            if cfg["auto_x"]:
+                cfg["xmin"] = peak_freq - 1.0
+                cfg["xmax"] = peak_freq + 1.0
 
-                    # Centramos basándonos en el nivel promedio de potencia
-                    range_width = pwr_max - pwr_median
-                    margin = max(10, range_width * 0.3)
-
-                    self.power_db_min = pwr_median - margin
-                    self.power_db_max = pwr_max + margin
-
-        # ── 3. SNR vs Frecuencia ────────────────────────────────────────────────────
-        if getattr(self, "auto_scale_snr", True):
-            if np.any(self.snr_data != 0):
-                # El SNR es relativo al ruido, así que el "piso" es 0 dB
-                snr_valid = self.snr_data[np.abs(self.snr_data) < 100]
-                if len(snr_valid) > 100:
-                    snr_max = np.percentile(snr_valid, 99)
-
-                    # Centramos el eje Y para que el 0 (ruido) sea visible
-                    # y el pico de señal esté bien encuadrado
-                    self.snr_db_min = -5.0 # Margen constante bajo el ruido
-                    self.snr_db_max = snr_max + 5.0
+        # 2.5 Histograma
+        cfg = self.charts_config.get("stat_hist")
+        if cfg and cfg["auto_x"]:
+            cfg["xmin"] = 0
+            cfg["xmax"] = np.percentile(self.histogram_data, 99) * 1.2
 
     def reset_to_defaults(self):
-        """Restaura los rangos de visualización a los óptimos detectados por el sistema,
-        desactivando la configuración manual (reactiva auto_scale)."""
-        self.auto_scale_spectrum = True
-        self.auto_scale_power = True
-        self.auto_scale_snr = True
-        self.auto_scale_waterfall = True
+        """Restaura los rangos de visualización a los óptimos detectados por el sistema."""
+        for cfg in self.charts_config.values():
+            cfg["auto_x"] = True
+            cfg["auto_y"] = True
 
-        # Forzar re-detección inmediata en el siguiente ciclo
+        # Forzar re-detección inmediata
         self._frames_since_autoscale = 30
         self.save_config()
 
@@ -549,10 +576,7 @@ class DSPEngine:
             "analysis_window_sec": self.analysis_window_sec,
             "moving_avg_window_ms": self.moving_avg_window_ms,
             "use_welch": self.use_welch,
-            "auto_scale_spectrum": getattr(self, "auto_scale_spectrum", True),
-            "auto_scale_power": getattr(self, "auto_scale_power", True),
-            "auto_scale_snr": getattr(self, "auto_scale_snr", True),
-            "auto_scale_waterfall": getattr(self, "auto_scale_waterfall", True),
+            "charts_config": self.charts_config,
         }
         try:
             import json, os
@@ -601,11 +625,13 @@ class DSPEngine:
                 )
                 self.use_welch = conf.get("use_welch", self.use_welch)
 
-                # Auto-scale flags
-                self.auto_scale_spectrum = conf.get("auto_scale_spectrum", True)
-                self.auto_scale_power = conf.get("auto_scale_power", True)
-                self.auto_scale_snr = conf.get("auto_scale_snr", True)
-                self.auto_scale_waterfall = conf.get("auto_scale_waterfall", True)
+                # Cargar configuración granular si existe
+                cc = conf.get("charts_config")
+                if cc and isinstance(cc, dict):
+                    # Actualizar con cuidado para no perder keys nuevas si el config es viejo
+                    for k, v in cc.items():
+                        if k in self.charts_config:
+                            self.charts_config[k].update(v)
         except Exception as e:
             print("Load Config Error:", e)
 

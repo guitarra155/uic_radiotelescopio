@@ -141,6 +141,13 @@ def main(page: ft.Page):
 
     main_view = ft.Row([left_panel, right_panel], expand=True, spacing=0)
 
+    # ── Manejo de Reset de Configuración ───────────────────────
+    def on_config_reset(msg):
+        if msg == "config_reset":
+            right_panel.content = build_config(page)
+            page.update()
+    page.pubsub.subscribe(on_config_reset)
+
     # ── Tarea Asíncrona de Refresco de Interfaz ──────────────
     async def refresh_loop():
         was_playing = False
