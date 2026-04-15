@@ -61,6 +61,41 @@ _ALGO_INFO = {
         "params": "# Señales: configurable en el panel derecho.",
         "color": "#FF80AB",
     },
+    "welch": {
+        "full_name": "Estimación Espectral de Welch (Método Directo)",
+        "desc": (
+            "Divide la señal en segmentos solapados, aplica ventana "
+            "Hanning a cada uno y promedia los periodogramas.\n\n"
+            "Reduce la varianza espectral vs la FFT simple. "
+            "Más suave pero ligeramente menor resolución."
+        ),
+        "params": "FFT size y overlap configurables en el engine.",
+        "color": "#FFD700",
+    },
+    "correlogram": {
+        "full_name": "Correlograma — Método Indirecto (Wiener-Khinchin)",
+        "desc": (
+            "Calcula la autocorrelación de la señal hasta un lag "
+            "máximo, aplica ventana de Bartlett y obtiene el PSD "
+            "por FFT del resultado.\n\n"
+            "Implementa el teorema de Wiener-Khinchin. "
+            "Útil para analizar la estructura de correlación."
+        ),
+        "params": "Lag máximo configurable (corr_max_lag).",
+        "color": "#40E0D0",
+    },
+    "aslt": {
+        "full_name": "ASLT — Advanced Sparse Local Transform (Pendiente)",
+        "desc": (
+            "Algoritmo de análisis tiempo-frecuencia disperso "
+            "avanzado.\n\n"
+            "⚠ PENDIENTE: Los archivos de implementación aún no "
+            "están integrados. Al agregarlos, reemplaza el cuerpo "
+            "de run_aslt() en core/advanced_dsp.py."
+        ),
+        "params": "Sin parámetros hasta integración de archivos externos.",
+        "color": "#808080",
+    },
 }
 
 

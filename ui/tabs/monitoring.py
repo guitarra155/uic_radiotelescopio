@@ -1,11 +1,12 @@
 """
 tabs/monitoring.py
-Lógica y UI para la pestaña de "Monitoreo y RFI"
+Pestaña 1 — Señal ORIGINAL (sin ningún filtro).
+Muestra espectro RAW + amplitud RAW para referencia pre-filtrado.
 """
 
 import flet as ft
 from core.constants import *
-from ui.charts import chart_amplitude, chart_spectrum
+from ui.charts import chart_amplitude, chart_spectrum_raw
 from ui.components.shared import panel, border_all
 
 def build_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
@@ -26,56 +27,47 @@ def build_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
 
     rfi_switch.on_change = on_rfi
 
-    img_amp  = ft.Image(src=chart_amplitude(),  fit=ft.BoxFit.CONTAIN,
+    img_spec = ft.Image(src=chart_spectrum_raw(), fit=ft.BoxFit.CONTAIN,
                         gapless_playback=True, border_radius=8, expand=True)
-    img_spec = ft.Image(src=chart_spectrum(),   fit=ft.BoxFit.CONTAIN,
+    img_amp  = ft.Image(src=chart_amplitude(),   fit=ft.BoxFit.CONTAIN,
                         gapless_playback=True, border_radius=8, expand=True)
-
-    main_container = ft.Container(
-        expand=True,
-        padding=ft.Padding(left=14, top=14, right=14, bottom=14),
-    )
 
     is_rendering = [False]
+
     async def on_refresh(msg):
-        if msg == "refresh_charts":
-            from core.dsp_engine import engine_instance
-            if engine_instance.active_tab != 0: return # Solo renderizar si es la pestaña activa
-            
-            if is_rendering[0]: return
-            is_rendering[0] = True
-            try:
-                import asyncio
-                # Ejecutar dibujo de las dos gráficas de forma paralela en hilos de C separados (Multinúcleo)
-                amp_b64, spec_b64 = await asyncio.gather(
-                    asyncio.to_thread(chart_amplitude),
-                    asyncio.to_thread(chart_spectrum)
-                )
-                img_amp.src  = amp_b64
-                img_spec.src = spec_b64
-                img_amp.update()
-                img_spec.update()
-            finally:
-                is_rendering[0] = False
-            
+        if msg != "refresh_charts":
+            return
+        from core.dsp_engine import engine_instance
+        if engine_instance.active_tab != 0:
+            return
+        if is_rendering[0]:
+            return
+        is_rendering[0] = True
+        try:
+            import asyncio
+            spec_b64, amp_b64 = await asyncio.gather(
+                asyncio.to_thread(chart_spectrum_raw),
+                asyncio.to_thread(chart_amplitude),
+            )
+            img_spec.src = spec_b64
+            img_amp.src  = amp_b64
+            img_spec.update()
+            img_amp.update()
+        finally:
+            is_rendering[0] = False
+
     page.pubsub.subscribe(on_refresh)
 
     from core.dsp_engine import engine_instance
 
     def on_zoom_scroll(e: ft.ScrollEvent):
-        ctrl = key_state.get('ctrl', False)
+        ctrl  = key_state.get('ctrl', False)
         shift = key_state.get('shift', False)
-        
-        # Si no pulsa ni ctrl ni shift, no hacemos zoom
-        if not ctrl and not shift: return
-            
-        # e.scroll_delta_y > 0 -> Hacia abajo (Alejar / Zoom Out)
-        # e.scroll_delta_y < 0 -> Hacia arriba (Acercar / Zoom In)
-        dir = 1 if e.scroll_delta_y > 0 else -1
+        if not ctrl and not shift:
+            return
+        dir    = 1 if e.scroll_delta_y > 0 else -1
         factor = 0.25 * dir
-        
         if ctrl:
-            # Zoom Vertical: Eje Y (Potencia y Amplitud)
             s_amp = engine_instance.amp_max - engine_instance.amp_min
             engine_instance.amp_min -= s_amp * factor
             engine_instance.amp_max += s_amp * factor
@@ -84,26 +76,35 @@ def build_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
             engine_instance.db_max += s_db * factor
             engine_instance.save_config()
         elif shift:
-            # Zoom Horizontal: Eje X (Frecuencia)
             s_f = engine_instance.f_max - engine_instance.f_min
             engine_instance.f_min -= s_f * factor
             engine_instance.f_max += s_f * factor
             engine_instance.save_config()
 
+    def _chart_box(img, accent=BORDER_COL):
+        return ft.Container(
+            content=ft.GestureDetector(
+                mouse_cursor=ft.MouseCursor.ZOOM_IN,
+                on_scroll=on_zoom_scroll,
+                drag_interval=0,
+                content=img,
+            ),
+            expand=True,
+            bgcolor=PANEL_BG,
+            border_radius=8,
+            border=ft.Border(
+                top=ft.BorderSide(2, accent),
+                right=ft.BorderSide(1, BORDER_COL),
+                bottom=ft.BorderSide(1, BORDER_COL),
+                left=ft.BorderSide(1, BORDER_COL),
+            ),
+            padding=4,
+        )
+
     graphs = ft.Column([
-        ft.Container(content=ft.GestureDetector(
-            mouse_cursor=ft.MouseCursor.ZOOM_IN,
-            on_scroll=on_zoom_scroll,
-            drag_interval=0,
-            content=img_amp),
-            expand=1, bgcolor=PANEL_BG, border_radius=8, border=border_all(), padding=4),
-        ft.Container(content=ft.GestureDetector(
-            mouse_cursor=ft.MouseCursor.ZOOM_IN,
-            on_scroll=on_zoom_scroll,
-            drag_interval=0,
-            content=img_spec),
-            expand=1, bgcolor=PANEL_BG, border_radius=8, border=border_all(), padding=4),
-    ], expand=True, spacing=10)
+        ft.Container(content=_chart_box(img_spec, ACCENT_CYAN), expand=1),
+        ft.Container(content=_chart_box(img_amp,  ACCENT_CYAN), expand=1),
+    ], expand=True, spacing=10, scroll=ft.ScrollMode.AUTO)
 
     side = panel(
         width=230,
@@ -121,10 +122,19 @@ def build_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
             ft.Text("7 interferencias",  color=ACCENT_AMBER, size=11,
                     weight=ft.FontWeight.W_600),
             ft.Divider(color=BORDER_COL, height=10),
-            ft.Text("Rango activo:",      color=TEXT_MUTED, size=11),
+            ft.Text("Rango activo:",     color=TEXT_MUTED, size=11),
             ft.Text("1419.8–1421.0 MHz", color=TEXT_MAIN,  size=10),
+            ft.Divider(color=BORDER_COL, height=10),
+            ft.Text("⚠ Señal ORIGINAL", color=ACCENT_CYAN,
+                    size=10, weight=ft.FontWeight.W_600),
+            ft.Text("Sin ningún filtro aplicado.\n"
+                    "Usar como referencia pre-MA.",
+                    color=TEXT_MUTED, size=9, italic=True),
         ], spacing=8),
     )
 
-    main_container.content = ft.Row([graphs, side], spacing=12, expand=True)
-    return main_container
+    return ft.Container(
+        content=ft.Row([graphs, side], spacing=12, expand=True),
+        expand=True,
+        padding=ft.Padding(left=14, top=14, right=14, bottom=14),
+    )

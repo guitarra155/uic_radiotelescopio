@@ -8,6 +8,7 @@ import flet as ft
 from core.constants import *
 from ui.components.layout import build_header, build_footer
 from ui.tabs.monitoring import build_monitoring
+from ui.tabs.monitoring_filtered import build_monitoring_filtered
 from ui.tabs.spectrogram import build_spectrogram
 from ui.tabs.statistics import build_statistics
 from ui.tabs.sdr_config import build_config
@@ -44,22 +45,24 @@ def main(page: ft.Page):
     footer = build_footer()
 
     tab_labels = [
-        "📡  Monitoreo y RFI",
-        "🌈  Espectrograma",
-        "📊  Estadística & Smart Trigger",
-        "⚡  Potencia vs. Tiempo",
-        "📶  SNR vs. Frecuencia",
-        "🔬  Algoritmo DSP",
+        "📡  Monitoreo y RFI",          # 0 — señal ORIGINAL
+        "🔍  Monitoreo Filtrado",        # 1 — señal POST-MA
+        "🌈  Espectrograma",             # 2
+        "📊  Estadística & Smart Trigger",# 3
+        "⚡  Potencia vs. Tiempo",        # 4
+        "📶  SNR vs. Frecuencia",        # 5
+        "🔬  Algoritmo DSP",             # 6
     ]
 
     # Renderizamos los componentes visuales de cada módulo
     tab_contents = [
-        build_monitoring(page, key_state),
-        build_spectrogram(page, key_state),
-        build_statistics(page),
-        build_signal_analysis(page, key_state),
-        build_freq_snr(page, key_state),
-        build_algo_result(page),
+        build_monitoring(page, key_state),           # 0 — RAW
+        build_monitoring_filtered(page, key_state),  # 1 — Filtrada
+        build_spectrogram(page, key_state),          # 2
+        build_statistics(page),                       # 3
+        build_signal_analysis(page, key_state),      # 4 — Potencia vs Tiempo
+        build_freq_snr(page, key_state),             # 5 — SNR
+        build_algo_result(page),                     # 6
     ]
 
     selected = [0]  # índice activo
@@ -133,7 +136,7 @@ def main(page: ft.Page):
         content=build_config(page),
         border=ft.Border(left=ft.BorderSide(1, BORDER_COL)),
         bgcolor=DARK_BG,
-        expand=25
+        expand=35
     )
 
     main_view = ft.Row([left_panel, right_panel], expand=True, spacing=0)

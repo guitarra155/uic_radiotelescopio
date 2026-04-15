@@ -7,6 +7,9 @@ Algoritmos implementados:
   - CWT / Morlet   : Transformada Wavelet Continua (análisis tiempo-frecuencia)
   - Pseudo-MUSIC   : Estimación de frecuencias con sub-espacio de ruido
   - ESPRIT         : Estimación por rotación invariante de sub-espacio (bonus)
+  - Welch          : Estimación espectral directa por promediado de periodogramas
+  - Correlograma   : Estimación espectral indirecta vía FFT de autocorrelación
+  - ASLT           : (stub) pendiente de archivos externos; async-ready
 
 Cada función retorna un diccionario con los datos necesarios para chart.py.
 """
@@ -321,3 +324,162 @@ def run_esprit(iq: np.ndarray, n_signals: int = 3,
         "n_signals": n_signals,
         "method": "ESPRIT"
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 5. Welch — Estimación espectral directa (periodograma promediado)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def run_welch(iq: np.ndarray, fft_size: int = 1024, overlap: float = 0.5,
+             sample_rate: float = 2_400_000,
+             center_freq: float = 1420.40) -> dict:
+    """
+    Estima el PSD por método de Welch (periodograma promediado con solapamiento).
+
+    Args:
+        iq          : Muestras IQ (señal compleja o real).
+        fft_size    : Tamaño de cada segmento (potencia de 2 recomendada).
+        overlap     : Fracción de solapamiento entre segmentos [0, 0.9].
+        sample_rate : Tasa de muestreo en Hz.
+        center_freq : Frecuencia central en MHz.
+
+    Returns:
+        dict con 'freqs' (MHz), 'psd' (dB), 'peaks', 'noise_floor', 'method'.
+        Schema idéntico a run_ar_burg para compatibilidad con chart_ar_spectrum().
+    """
+    sig = _to_complex(iq)
+    N = len(sig)
+    step = max(1, int(fft_size * (1.0 - overlap)))
+    window = np.hanning(fft_size)
+    win_power = np.sum(window ** 2)  # Normalización de potencia de ventana
+
+    psd_accum = np.zeros(fft_size)
+    n_segments = 0
+
+    start = 0
+    while start + fft_size <= N:
+        seg = sig[start:start + fft_size] - np.mean(sig[start:start + fft_size])  # DC removal
+        fft_block = np.fft.fftshift(np.fft.fft(seg * window))
+        psd_accum += np.abs(fft_block) ** 2
+        n_segments += 1
+        start += step
+
+    if n_segments == 0:
+        # Señal demasiado corta: usar toda como un solo segmento con padding
+        seg = np.zeros(fft_size, dtype=np.complex128)
+        seg[:min(N, fft_size)] = sig[:min(N, fft_size)]
+        fft_block = np.fft.fftshift(np.fft.fft(seg * window))
+        psd_accum = np.abs(fft_block) ** 2
+        n_segments = 1
+
+    psd = psd_accum / (n_segments * win_power + 1e-30)
+    psd_db = 10 * np.log10(psd + 1e-30)
+
+    fs_mhz = sample_rate / 1_000_000
+    freqs_mhz = np.linspace(center_freq - fs_mhz / 2,
+                             center_freq + fs_mhz / 2, fft_size)
+
+    thresh = np.median(psd_db) + 10.0
+    from scipy.signal import find_peaks
+    peak_idx, _ = find_peaks(psd_db, height=thresh, distance=fft_size // 100)
+    peaks = [(float(freqs_mhz[i]), float(psd_db[i])) for i in peak_idx]
+
+    return {
+        "freqs": freqs_mhz,
+        "psd": psd_db,
+        "peaks": peaks,
+        "noise_floor": float(np.median(psd_db)),
+        "n_segments": n_segments,
+        "method": "Welch"
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 6. Correlograma — Estimación espectral indirecta (Wiener-Khinchin)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def run_correlogram(iq: np.ndarray, max_lag: int = 512, fft_size: int = 2048,
+                   sample_rate: float = 2_400_000,
+                   center_freq: float = 1420.40) -> dict:
+    """
+    Estima el PSD mediante el Correlograma (método indirecto):
+    PSD = FFT(autocorrelación truncada con ventana de Bartlett).
+    Implementa el teorema de Wiener-Khinchin.
+
+    Args:
+        iq          : Muestras IQ.
+        max_lag     : Máximo retardo para truncar la autocorrelación.
+        fft_size    : Puntos de la FFT final (> 2*max_lag recomendado para zero-pad).
+        sample_rate : Tasa de muestreo en Hz.
+        center_freq : Frecuencia central en MHz.
+
+    Returns:
+        dict con 'freqs' (MHz), 'psd' (dB), 'peaks', 'noise_floor', 'method'.
+    """
+    sig = _normalize(_to_complex(iq))
+    N = len(sig)
+    max_lag = min(max_lag, N // 2)
+
+    # Autocorrelación directa para lags 0..max_lag
+    acf = np.zeros(2 * max_lag + 1, dtype=np.complex128)
+    for k in range(max_lag + 1):
+        acf[max_lag + k] = np.dot(sig[:N - k], sig[k:].conj()) / N
+        acf[max_lag - k] = acf[max_lag + k].conj()
+
+    # Ventana de Bartlett para suavizado espectral
+    bartlett = np.bartlett(2 * max_lag + 1)
+    acf_windowed = acf * bartlett
+
+    # FFT con zero-padding + fftshift para centrar en DC
+    fft_size_eff = max(fft_size, 2 * (2 * max_lag + 1))
+    psd_raw = np.abs(np.fft.fftshift(np.fft.fft(acf_windowed, n=fft_size_eff)))
+    psd_db = 10 * np.log10(psd_raw + 1e-30)
+
+    # Recortar/interpolar al tamaño solicitado
+    if len(psd_db) != fft_size:
+        idx = np.round(np.linspace(0, len(psd_db) - 1, fft_size)).astype(int)
+        psd_db = psd_db[idx]
+
+    fs_mhz = sample_rate / 1_000_000
+    freqs_mhz = np.linspace(center_freq - fs_mhz / 2,
+                             center_freq + fs_mhz / 2, fft_size)
+
+    thresh = np.median(psd_db) + 8.0
+    from scipy.signal import find_peaks
+    peak_idx, _ = find_peaks(psd_db, height=thresh, distance=fft_size // 100)
+    peaks = [(float(freqs_mhz[i]), float(psd_db[i])) for i in peak_idx]
+
+    return {
+        "freqs": freqs_mhz,
+        "psd": psd_db,
+        "peaks": peaks,
+        "noise_floor": float(np.median(psd_db)),
+        "max_lag": max_lag,
+        "method": "Correlograma"
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 7. ASLT — Stub async-ready (pendiente de archivos externos)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def run_aslt(iq: np.ndarray, sample_rate: float = 2_400_000,
+            center_freq: float = 1420.40, **kwargs) -> dict:
+    """
+    ASLT: Advanced Sparse Local Transform (placeholder).
+    Diseñado para ejecutarse con asyncio.to_thread desde sdr_config.py.
+
+    IMPORTANTE: Esta función es un stub. Los archivos de implementación
+    aún no están disponibles. Al integrarlos, reemplaza el cuerpo de
+    esta función manteniendo la firma y el schema de retorno.
+
+    Returns:
+        dict vacío compatible con chart_ar_spectrum() marcado como 'ASLT'.
+
+    Raises:
+        NotImplementedError: siempre, hasta que se integren los archivos externos.
+    """
+    raise NotImplementedError(
+        "ASLT: archivos externos pendientes de integración. "
+        "Reemplaza el cuerpo de run_aslt() cuando estén disponibles."
+    )
