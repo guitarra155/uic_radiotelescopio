@@ -82,15 +82,13 @@ def build_statistics(page: ft.Page) -> ft.Control:
                         val_sesgo.value = "0.00"
                         val_kur.value = "0.00"
                     
-                    # Actualizar los textos individualmente
-                    val_media.update()
-                    val_std.update()
-                    val_sesgo.update()
-                    val_kur.update()
+                    # Actualizar los textos individualmente con validación
+                    for w in [val_media, val_std, val_sesgo, val_kur]:
+                        if w.page: w.update()
 
                 import asyncio
                 img.src = await asyncio.to_thread(chart_histogram)
-                img.update()
+                if img.page: img.update()
             finally:
                 is_rendering[0] = False
             

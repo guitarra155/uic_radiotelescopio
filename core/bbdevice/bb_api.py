@@ -658,14 +658,14 @@ def bb_fetch_trace(device, array_size):
 @error_check
 def bb_fetch_real_time_frame(device):
     ret = bb_query_trace_info(device)
-    if ret["status"] is not 0:
+    if ret["status"] != 0:
         return {
             "status": ret["status"]
         }
     trace_len = ret["trace_len"]
 
     ret = bb_query_real_time_info(device)
-    if ret["status"] is not 0:
+    if ret["status"] != 0:
         return {
             "status": ret["status"]
         }

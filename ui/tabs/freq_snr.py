@@ -151,7 +151,6 @@ def build_freq_snr(page: ft.Page, key_state: dict) -> ft.Control:
 
             snr_b64 = await asyncio.to_thread(chart_freq_snr)
             img.src = snr_b64
-            img.update()
 
             _rebuild_signals_table()
 
@@ -168,11 +167,8 @@ def build_freq_snr(page: ft.Page, key_state: dict) -> ft.Control:
                 f"{engine_instance.f_min:.3f} – {engine_instance.f_max:.3f} MHz"
             )
 
-            signals_count.update()
-            signals_col.update()
-            val_noise.update()
-            val_pico.update()
-            val_rango.update()
+            for w in [img, signals_count, signals_col, val_noise, val_pico, val_rango]:
+                if w.page: w.update()
         finally:
             is_rendering[0] = False
 

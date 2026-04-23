@@ -53,6 +53,20 @@ def fig_to_b64(fig: Figure) -> str:
     return f"data:image/png;base64,{enc}"
 
 
+def safe_set_ylim(ax, ymin, ymax, fallback_span=10.0):
+    """Evita que Matplotlib se queje si ymin == ymax."""
+    if abs(float(ymax) - float(ymin)) < 1e-6:
+        ax.set_ylim([float(ymin) - 5, float(ymax) + 5])
+    else:
+        ax.set_ylim([float(ymin), float(ymax)])
+
+def safe_set_xlim(ax, xmin, xmax, fallback_span=1.0):
+    """Evita que Matplotlib se queje si xmin == xmax."""
+    if abs(float(xmax) - float(xmin)) < 1e-6:
+        ax.set_xlim([float(xmin) - 0.5, float(xmax) + 0.5])
+    else:
+        ax.set_xlim([float(xmin), float(xmax)])
+
 def style_ax(ax, title="", xlabel="", ylabel=""):
     """Aplica formato Dark Theme nativo a un eje de Matplotlib."""
     ax.set_facecolor(MPL_AXBG)
@@ -75,13 +89,16 @@ def chart_amplitude() -> str:
     fig, ax, is_new = get_cached_fig("amplitude", figsize=(9.5, 2.8))
     sig = engine_instance.amplitude_data
     n = len(sig)
-    # Volvemos a milisegundos (ms) para cumplir con la petición de "Tiempo"
-    t = np.linspace(0, (n / engine_instance.sample_rate) * 1000, n)
+    # Tiempo absoluto en segundos
+    elapsed_sec = engine_instance.elapsed_samples / engine_instance.sample_rate
+    # Ventana de tiempo mostrada (en segundos)
+    duration_sec = n / engine_instance.sample_rate
+    t = np.linspace(elapsed_sec - duration_sec, elapsed_sec, n)
 
     if is_new or "line" not in cache.artists["amplitude"]:
         ax.clear()
         style_ax(
-            ax, "Amplitud vs Tiempo (Streaming)", "Tiempo (ms)", "Amplitud Baseband (V)"
+            ax, "Amplitud vs Tiempo (Streaming)", "Tiempo (s)", "Amplitud Baseband (V)"
         )
         (line,) = ax.plot(t, sig, color=ACCENT_CYAN, linewidth=0.9, alpha=0.85)
         cache.artists["amplitude"]["line"] = line
@@ -132,8 +149,8 @@ def chart_spectrum() -> str:
         line.set_data(full_freq, spec)
 
     cfg = engine_instance.charts_config["mon_filt_spec"]
-    ax.set_ylim([cfg["ymin"], cfg["ymax"]])
-    ax.set_xlim([cfg["xmin"], cfg["xmax"]])
+    safe_set_ylim(ax, cfg["ymin"], cfg["ymax"])
+    safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
     return fig_to_b64(fig)
 
 
@@ -174,8 +191,8 @@ def chart_spectrum_raw() -> str:
         line.set_data(full_freq, spec)
 
     cfg = engine_instance.charts_config["mon_raw_spec"]
-    ax.set_ylim([cfg["ymin"], cfg["ymax"]])
-    ax.set_xlim([cfg["xmin"], cfg["xmax"]])
+    safe_set_ylim(ax, cfg["ymin"], cfg["ymax"])
+    safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
     return fig_to_b64(fig)
 
 
@@ -254,11 +271,15 @@ def chart_signal_time() -> str:
     fig, ax, is_new = get_cached_fig("signal_time", figsize=(9.5, 2.6))
     raw = engine_instance.amplitude_data.astype(np.float32)
     n = len(raw)
-    t = np.linspace(0, (n / engine_instance.sample_rate) * 1000, n)
+    # Tiempo absoluto en segundos
+    elapsed_sec = engine_instance.elapsed_samples / engine_instance.sample_rate
+    # Ventana de tiempo mostrada (en segundos)
+    duration_sec = n / engine_instance.sample_rate
+    t = np.linspace(elapsed_sec - duration_sec, elapsed_sec, n)
 
     if is_new or "line_i" not in cache.artists["signal_time"]:
         ax.clear()
-        style_ax(ax, "Señal en el Tiempo (I / Q)", "Tiempo (ms)", "Amplitud (V)")
+        style_ax(ax, "Señal en el Tiempo (I / Q)", "Tiempo (s)", "Amplitud (V)")
         (li,) = ax.plot(t, raw, color=ACCENT_CYAN, linewidth=0.8, label="I")
         (lq,) = ax.plot(
             t, np.roll(raw, n // 4), color=ACCENT_GREEN, linewidth=0.8, label="Q"
@@ -271,19 +292,26 @@ def chart_signal_time() -> str:
 
     # Sincronizar con charts_config igual que los demás
     cfg = engine_instance.charts_config["mon_raw_amp"]
-    ax.set_ylim([cfg["ymin"], cfg["ymax"]])
-    ax.set_xlim([cfg["xmin"], cfg["xmax"]])
+    safe_set_ylim(ax, cfg["ymin"], cfg["ymax"])
+    safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
     return fig_to_b64(fig)
 
 
 def chart_power_time() -> str:
     fig, ax, is_new = get_cached_fig("power_time", figsize=(9.5, 4.5))
     written = engine_instance.power_samples_written
-    pwr = (
-        engine_instance.power_time_data[-written:]
-        if written > 0
-        else np.array([-100.0])
-    )
+    data_len = len(engine_instance.power_time_data)
+    
+    if written == 0:
+        pwr = np.array([-100.0])
+    elif written < data_len:
+        # Aún no se ha llenado el buffer una vez: los datos van de 0 a written
+        pwr = engine_instance.power_time_data[:written]
+    else:
+        # Buffer circular lleno: rotar para que el dato más antiguo esté en t=0
+        idx = written % data_len
+        pwr = np.roll(engine_instance.power_time_data, -idx)
+    
     n = len(pwr)
     # Cálculo corregido del tiempo: basado en la tasa de refresco real del buffer
     batch_dur = (engine_instance.fft_size * 40) / engine_instance.sample_rate
@@ -311,8 +339,12 @@ def chart_power_time() -> str:
         line.set_data(t, pwr)
         
     cfg = engine_instance.charts_config["pow_time"]
-    ax.set_xlim([0, max(1, t[-1])])
-    ax.set_ylim([cfg["ymin"], cfg["ymax"]])
+    # Eje X: Mostrar el historial acumulado (crece hasta el máximo del buffer)
+    x_max = max(1.0, float(t[-1]))
+    ax.set_xlim([0, x_max])
+    
+    # Eje Y: Auto-ajuste dinámico o manual
+    safe_set_ylim(ax, cfg["ymin"], cfg["ymax"])
 
     return fig_to_b64(fig)
 
@@ -344,8 +376,8 @@ def chart_freq_snr() -> str:
         line.set_data(full_freq, snr)
         
     cfg = engine_instance.charts_config["snr_freq"]
-    ax.set_ylim([cfg["ymin"], cfg["ymax"]])
-    ax.set_xlim([cfg["xmin"], cfg["xmax"]])
+    safe_set_ylim(ax, cfg["ymin"], cfg["ymax"])
+    safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
     return fig_to_b64(fig)
 
 
@@ -470,8 +502,8 @@ def chart_amplitude_ma() -> str:
         )
     # Forzar el uso de los límites configurados en el engine (FUERA del else)
     cfg = engine_instance.charts_config["mon_filt_amp"]
-    ax.set_ylim([cfg["ymin"], cfg["ymax"]])
-    ax.set_xlim([cfg["xmin"], cfg["xmax"]])
+    safe_set_ylim(ax, cfg["ymin"], cfg["ymax"])
+    safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
 
     return fig_to_b64(fig)
 

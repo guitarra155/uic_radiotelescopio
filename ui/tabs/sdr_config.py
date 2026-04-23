@@ -168,25 +168,104 @@ def build_config(page: ft.Page) -> ft.Control:
 
     freq_f = txt_field("Frecuencia (MHz)", str(engine_instance.center_freq), "e.g. 1420.40")
     rate_f = txt_field("Sample Rate (MSps)", str(engine_instance.sample_rate / 1e6), "")
+    span_visual_f = txt_field("Span Visual (Zoom MHz)", str(engine_instance.visual_span_mhz), "e.g. 1.0")
     
     ma_win_f = txt_field("Filtro MA (ms)", str(engine_instance.moving_avg_window_ms), "0.1-10.0")
+    ma_switch = ft.Switch(label="Activar Filtro Moving Average", value=engine_instance.ma_enabled, active_color=ACCENT_GREEN)
     wf_sec_f = txt_field("Historial (s)", str(engine_instance.waterfall_history_sec), "10-300")
-
+    
+    # NUEVOS: Controles sugeridos por el profesor
+    ref_level_f = txt_field("Nivel Ref. (dBm)", str(engine_instance.bb60c_ref_level), "-100 a +20")
+    rbw_f = txt_field("RBW / IQ BW (MHz)", str(engine_instance.bb60c_iq_bw), "0.1 a 20.0")
+    vbw_alpha_f = txt_field("VBW Smoothing", str(engine_instance.vbw_alpha), "0.1-1.0")
+    raw_switch = ft.Switch(label="Modo 100% RAW (Física)", value=engine_instance.raw_mode, active_color=ACCENT_CYAN)
+    
     def on_global_change(e, attr, factor=1.0):
         try:
             val = float(e.control.value) * factor
+            # Validaciones de seguridad
+            if attr == "bb60c_iq_bw": val = max(0.1, min(40.0, val))
+            if attr == "bb60c_ref_level": val = max(-100.0, min(20.0, val))
+            
             setattr(engine_instance, attr, val)
             engine_instance.save_config()
         except ValueError: pass
 
+    def on_raw_toggle(e):
+        engine_instance.raw_mode = e.control.value
+        engine_instance.save_config()
+        page.pubsub.send_all("refresh_charts")
+
     freq_f.on_change = lambda e: on_global_change(e, "center_freq")
     rate_f.on_change = lambda e: on_global_change(e, "sample_rate", factor=1e6)
+    def on_ma_toggle(e):
+        engine_instance.ma_enabled = e.control.value
+        engine_instance.save_config()
+        page.pubsub.send_all("refresh_charts")
+
+    ma_switch.on_change = on_ma_toggle
     ma_win_f.on_change = lambda e: on_global_change(e, "moving_avg_window_ms")
+
+    raw_switch.on_change = on_raw_toggle
     wf_sec_f.on_change = lambda e: on_global_change(e, "waterfall_history_sec")
+
+    def on_span_change(e):
+        try:
+            val = float(e.control.value)
+            engine_instance.update_visual_span(val)
+        except: pass
+    
+    span_visual_f.on_change = on_span_change
+
+    def on_sync_toggle(e):
+        val = e.control.value
+        engine_instance.apply_sync_mode(val)
+        
+        # Sincronizar visualmente y deshabilitar controles individuales
+        ma_switch.disabled = val
+        welch_rg.disabled = val
+        raw_switch.disabled = val
+        ma_win_f.disabled = val
+        
+        if val:
+            # Modo Espejo: Todo a RAW y FFT básica
+            ma_switch.value = False
+            welch_rg.value = "fft"
+            raw_switch.value = True
+        else:
+            # Restaurar: Regresar a los valores guardados
+            ma_switch.value = engine_instance.ma_enabled
+            welch_rg.value = "welch" if engine_instance.use_welch else "fft"
+            raw_switch.value = engine_instance.raw_mode
+        
+        page.pubsub.send_all("refresh_charts")
+        if page: page.update()
+
+    sync_switch = ft.Switch(
+        label="Sincronización Total (Modo Espejo)",
+        value=engine_instance.sync_active,
+        active_color=ft.Colors.ORANGE_800,
+        on_change=on_sync_toggle
+    )
+    
+    ref_level_f.on_change = lambda e: on_global_change(e, "bb60c_ref_level")
+    rbw_f.on_change       = lambda e: on_global_change(e, "bb60c_iq_bw")
+    vbw_alpha_f.on_change = lambda e: on_global_change(e, "vbw_alpha")
 
     # NUEVO: Los controles de rango ahora son dinámicos vía _axis_control
 
     # Lógica de actualización ahora centralizada en _axis_control.on_manual_change
+
+    # Indicador de Overflow
+    overflow_txt = ft.Text("⚠️ ADC OVERFLOW", color=ft.Colors.AMBER_ACCENT, 
+                          size=12, weight=ft.FontWeight.BOLD, visible=False)
+
+    async def on_ui_refresh(msg):
+        if msg == "refresh_charts":
+            overflow_txt.visible = engine_instance.sdr_overflow
+            if overflow_txt.page: overflow_txt.update()
+            
+    page.pubsub.subscribe(on_ui_refresh)
 
     def on_welch_toggle(e):
         engine_instance.use_welch = e.control.value == "welch"
@@ -256,8 +335,8 @@ def build_config(page: ft.Page) -> ft.Control:
     def _axis_control(title_text, chart_id):
         """Helper para crear controles de rango X/Y para una gráfica específica."""
         cfg = engine_instance.charts_config.get(chart_id)
-        if not cfg:
-            return ft.Text(f"Config error for {chart_id}", color="red")
+        if not cfg or not isinstance(cfg, dict):
+            return ft.Text(f"Configuración no disponible para: {chart_id}", color=ACCENT_AMBER, size=10)
 
         # Texto de ayuda
         help_txt = ft.Text(title_text, color=ACCENT_CYAN, size=11, weight=ft.FontWeight.BOLD)
@@ -301,15 +380,22 @@ def build_config(page: ft.Page) -> ft.Control:
         sw_y = ft.Switch(label="Auto Y", value=cfg["auto_y"], active_color=ACCENT_GREEN, 
                          label_text_style=ft.TextStyle(size=9), on_change=lambda e: on_auto_toggle(e, "y"))
 
-        return ft.Container(
-            content=ft.Column([
-                help_txt,
-                ft.Row([sw_x, sw_y], spacing=10),
-                ft.Row([xi_min, xi_max], spacing=5),
-                ft.Row([yi_min, yi_max], spacing=5),
-            ], spacing=5),
-            padding=ft.Padding(5, 8, 5, 8),
-            border=ft.Border(bottom=ft.BorderSide(0.5, BORDER_COL))
+        return ft.ExpansionTile(
+            title=help_txt,
+            maintain_state=True,
+            collapsed_text_color=TEXT_MUTED,
+            text_color=ACCENT_CYAN,
+            controls=[
+                ft.Container(
+                    content=ft.Column([
+                        ft.Row([sw_x, sw_y], spacing=10),
+                        ft.Row([xi_min, xi_max], spacing=5),
+                        ft.Row([yi_min, yi_max], spacing=5),
+                    ], spacing=5),
+                    padding=ft.Padding(15, 5, 15, 10),
+                    border=ft.Border(bottom=ft.BorderSide(0.5, BORDER_COL))
+                )
+            ]
         )
 
     sdr_content = ft.Column(
@@ -317,14 +403,21 @@ def build_config(page: ft.Page) -> ft.Control:
             section_title("🎯", "Modo de Escala Inteligente", ACCENT_AMBER),
             ft.Text("Las gráficas se centran automáticamente al nivel de referencia y señal "
                     "a menos que cambies un valor manualmente.", color=TEXT_MUTED, size=9, italic=True),
+            lbl("Control de Sincronización:"),
+            sync_switch,
+            overflow_txt,
             reset_btn,
             divider(),
 
-            section_title("📡", "Pestaña 1: Monitoreo RAW", ACCENT_CYAN),
+            section_title("🎯", "Pestaña 1: Monitoreo y RFI", ACCENT_CYAN),
+            lbl("Fuerza bruta:"),
+            raw_switch,
             _axis_control("Gráfica 1: Espectro RAW", "mon_raw_spec"),
             _axis_control("Gráfica 2: Amplitud RAW", "mon_raw_amp"),
             
             section_title("🔍", "Pestaña 2: Monitoreo Filtrado", ACCENT_GREEN),
+            lbl("Interruptor de Filtro"),
+            ma_switch,
             lbl("Filtro Moving Average (ms)"),
             ma_win_f,
             _axis_control("Gráfica 1: Espectro Filtrado", "mon_filt_spec"),
@@ -346,7 +439,22 @@ def build_config(page: ft.Page) -> ft.Control:
 
             section_title("🌍", "SDR & Frecuencia", TEXT_MAIN),
             lbl("Freq Central (MHz)"), freq_f,
+            lbl("Span Visual (Zoom MHz)"), span_visual_f,
             lbl("Sample Rate (MSps)"), rate_f,
+            divider(),
+
+            section_title("🔧", "Hardware (BB60C)", ACCENT_CYAN),
+            lbl("Nivel de Referencia (dBm)"),
+            ref_level_f,
+            lbl("Ajusta el techo de entrada para no saturar.", size=8),
+            
+            lbl("RBW / Ancho Banda IQ (MHz)"),
+            rbw_f,
+            lbl("Filtro físico del SDR. Valores bajos = menos ruido.", size=8),
+            
+            lbl("Suavizado VBW (Digital)"),
+            vbw_alpha_f,
+            lbl("0.1 = Muy filtrado, 1.0 = Tiempo Real/Puro.", size=8),
             divider(),
             
             section_title("📁", "Origen de Datos", TEXT_MAIN),
@@ -727,5 +835,6 @@ def build_config(page: ft.Page) -> ft.Control:
     return ft.Container(
         content=accordion,
         expand=True,
-        padding=ft.Padding(left=8, top=10, right=10, bottom=10),
+        width=300, # Aumentar un poco el ancho para que no se vea apretado
+        padding=ft.Padding(left=10, top=10, right=15, bottom=10),
     )

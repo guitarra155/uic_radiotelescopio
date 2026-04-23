@@ -18,9 +18,15 @@ def build_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
     )
     rfi_status = ft.Text("Estado: INACTIVO", color=ACCENT_RED, size=11,
                          weight=ft.FontWeight.W_600)
+    
+    rfi_last_label = ft.Text("--:--:-- UTC", color=TEXT_MAIN, size=11)
+    rfi_count_label = ft.Text("0 interferencias", color=ACCENT_AMBER, size=11,
+                              weight=ft.FontWeight.W_600)
 
     def on_rfi(e):
         on = rfi_switch.value
+        from core.dsp_engine import engine_instance
+        engine_instance.rfi_mitigation_on = on
         rfi_status.value = "Estado: ACTIVO" if on else "Estado: INACTIVO"
         rfi_status.color = ACCENT_GREEN if on else ACCENT_RED
         page.update()
@@ -51,8 +57,13 @@ def build_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
             )
             img_spec.src = spec_b64
             img_amp.src  = amp_b64
-            img_spec.update()
-            img_amp.update()
+            
+            # Actualizar labels de RFI
+            rfi_last_label.value = engine_instance.rfi_last_time
+            rfi_count_label.value = f"{engine_instance.rfi_event_count} interferencias"
+            
+            for w in [img_spec, img_amp, rfi_last_label, rfi_count_label]:
+                if w.page: w.update()
         finally:
             is_rendering[0] = False
 
@@ -115,15 +126,20 @@ def build_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
             rfi_switch,
             rfi_status,
             ft.Divider(color=BORDER_COL, height=14),
+            ft.Text("🛡️ ¿Qué es el Escudo RFI?", color=ACCENT_CYAN, size=10, weight=ft.FontWeight.BOLD),
+            ft.Text("Detecta señales artificiales (Satélites, LTE, Wi-Fi) "
+                    "que contaminan la observación astronómica y las registra como eventos.",
+                    color=TEXT_MUTED, size=9),
+            ft.Divider(color=BORDER_COL, height=8),
+            
             ft.Text("Última detección:", color=TEXT_MUTED, size=11),
-            ft.Text("12:43:07 UTC",      color=TEXT_MAIN,  size=11),
+            rfi_last_label,
             ft.Divider(color=BORDER_COL, height=10),
             ft.Text("Eventos hoy:",      color=TEXT_MUTED, size=11),
-            ft.Text("7 interferencias",  color=ACCENT_AMBER, size=11,
-                    weight=ft.FontWeight.W_600),
+            rfi_count_label,
             ft.Divider(color=BORDER_COL, height=10),
             ft.Text("Rango activo:",     color=TEXT_MUTED, size=11),
-            ft.Text("1419.8–1421.0 MHz", color=TEXT_MAIN,  size=10),
+            ft.Text(f"{engine_instance.center_freq - 1:.1f}–{engine_instance.center_freq + 1:.1f} MHz", color=TEXT_MAIN,  size=10),
             ft.Divider(color=BORDER_COL, height=10),
             ft.Text("⚠ Señal ORIGINAL", color=ACCENT_CYAN,
                     size=10, weight=ft.FontWeight.W_600),

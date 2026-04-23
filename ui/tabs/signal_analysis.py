@@ -39,21 +39,38 @@ def build_signal_analysis(page: ft.Page, key_state: dict) -> ft.Control:
         try:
             pwr_b64 = await asyncio.to_thread(chart_power_time)
             img.src = pwr_b64
-            img.update()
-
-            pwr = engine_instance.power_time_data
-            noise_fl = float(np.median(pwr))
-            val_pwr_now.value   = f"{pwr[-1]:.2f} dBFS"
-            val_pwr_max.value   = f"{float(np.max(pwr)):.2f} dBFS"
-            val_pwr_min.value   = f"{float(np.min(pwr)):.2f} dBFS"
-            val_pwr_avg.value   = f"{float(np.mean(pwr)):.2f} dBFS"
-            val_noise_fl.value  = f"{noise_fl:.2f} dBFS"
-            val_pwr_range.value = (f"{engine_instance.db_min:.0f} → "
-                                   f"{engine_instance.db_max:.0f} dBFS")
-
-            for w in [val_pwr_now, val_pwr_max, val_pwr_min,
+            
+            # Actualizar todo junto con validación de seguridad
+            for w in [img, val_pwr_now, val_pwr_max, val_pwr_min,
                       val_pwr_avg, val_noise_fl, val_pwr_range]:
                 if w.page: w.update()
+
+            written = engine_instance.power_samples_written
+            data_pwr = engine_instance.power_time_data
+            d_len = len(data_pwr)
+
+            if written == 0:
+                p_active = np.array([-100.0])
+                current_pwr = -100.0
+            elif written < d_len:
+                p_active = data_pwr[:written]
+                current_pwr = float(p_active[-1])
+            else:
+                p_active = data_pwr
+                current_pwr = float(data_pwr[(written - 1) % d_len])
+
+            noise_fl = float(np.median(p_active))
+            val_pwr_now.value   = f"{current_pwr:.2f} dBFS"
+            val_pwr_max.value   = f"{float(np.max(p_active)):.2f} dBFS"
+            val_pwr_min.value   = f"{float(np.min(p_active)):.2f} dBFS"
+            val_pwr_avg.value   = f"{float(np.mean(p_active)):.2f} dBFS"
+            val_noise_fl.value  = f"{noise_fl:.2f} dBFS"
+
+            cfg = engine_instance.charts_config.get("pow_time", {})
+            val_pwr_range.value = (f"{cfg.get('ymin', 0):.0f} → "
+                                   f"{cfg.get('ymax', 0):.0f} dBFS")
+
+            # (Combinado en el bloque anterior)
         finally:
             is_rendering[0] = False
 

@@ -49,8 +49,8 @@ def build_monitoring_filtered(page: ft.Page, key_state: dict) -> ft.Control:
             )
             img_spec.src = spec_b64
             img_amp.src = amp_b64
-            img_spec.update()
-            img_amp.update()
+            if img_spec.page: img_spec.update()
+            if img_amp.page: img_amp.update()
         finally:
             is_rendering[0] = False
 

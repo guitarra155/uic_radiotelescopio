@@ -32,6 +32,16 @@ class DSPEngine:
         self.bb60c_gain = BB_AUTO_GAIN
         self.bb60c_atten = BB_AUTO_ATTEN
         self.bb60c_decimation = 1  # 40 MS/s por defecto
+        self.bb60c_iq_bw = 20.0    # Ancho de banda digital (MHz)
+        self.vbw_alpha = 0.3       # Factor de suavizado (0.1 a 1.0)
+        self.ma_enabled = True      # Interruptor del filtro Moving Average
+        self.raw_mode = False       # Modo 100% RAW (sin suavizado VBW)
+        
+        # 🔗 Sincronización (Modo Espejo)
+        self.sync_active = False
+        self._pre_sync_state = {}
+        self.sdr_overflow = False   # Indica si hay saturación ADC
+        self.elapsed_samples = 0    # Contador global para eje de tiempo absoluto
 
         # Buffers circulares
         self.spectrum_data = np.zeros(self.fft_size)  # FFT sobre señal FILTRADA
@@ -58,6 +68,12 @@ class DSPEngine:
 
         # SNR por bin de frecuencia (misma longitud que spectrum_data)
         self.snr_data = np.zeros(self.fft_size)
+
+        # 🛸 Estado RFI (Interferencias)
+        self.rfi_mitigation_on = False
+        self.rfi_event_count = 0
+        self.rfi_last_time = "--:--:--"
+        self._rfi_cooldown = 0 # Evitar contar el mismo evento mil veces
 
         # Señales de interés detectadas: lista de (freq_mhz, snr_db)
         self.signals_of_interest: list = []
@@ -111,8 +127,9 @@ class DSPEngine:
         self.snr_db_max = 30
 
         # Rango de frecuencia dinámico relativo a la frecuencia central
-        self.f_min = self.center_freq
-        self.f_max = self.center_freq + (self.sample_rate / 2_000_000)
+        span = self.sample_rate / 2_000_000
+        self.f_min = self.center_freq - span
+        self.f_max = self.center_freq + span
 
         # Rango de amplitud de onda pura en la grafica
         self.amp_min = 0.0
@@ -121,7 +138,8 @@ class DSPEngine:
         # ── Parámetros de adquisición y filtrado ──────────────────────────────────────
         self.analysis_window_sec = 0.5
         self.moving_avg_window_ms = 0.1  # 0.1ms = ~240 muestras, filtro suave
-        self.use_welch = False
+        self.use_welch = True           # Iniciar con Welch (el modo 'bonito' / smooth)
+        self.visual_span_mhz = 2.4      # Span visual por defecto (MHz)
 
         # Flags de auto-escala globales (compatibilidad parcial)
         self.auto_scale_spectrum = True
@@ -145,9 +163,6 @@ class DSPEngine:
             "pow_time":     {"xmin": 0.0, "xmax": 20.0, "ymin": -100.0, "ymax": -20.0, "auto_x": False, "auto_y": True},
             "snr_freq":     {"xmin": 1419.0, "xmax": 1421.0, "ymin": -5.0, "ymax": 40.0, "auto_x": True, "auto_y": True},
         }
-
-        # Acumulador para que la cascada (waterfall) no avance demasiado rápido
-        self._wf_accum_count = 0
 
     @property
     def waterfall_history_sec(self):
@@ -218,25 +233,34 @@ class DSPEngine:
         if batches is None:
             max_batches = len(iq) // self.fft_size
             batches = max(
-                1, min(max_batches, 4)
-            )  # Máximo 4 batches por llamada para tiempo real
+                1, min(max_batches, 100) 
+            ) # Permitir promediar ráfagas grandes (ej. 40 bloques)
+
+        # Actualizar contador de tiempo global
+        self.elapsed_samples += len(iq)
 
         # ── 2. Buffer RAW: solo la magnitud del último fragmento ───────────────
         mag_raw = np.abs(iq[-self.fft_size :])
         self.amplitude_data = np.roll(self.amplitude_data, -len(mag_raw))
         self.amplitude_data[-len(mag_raw) :] = mag_raw[-len(self.amplitude_data) :]
 
-        # ── 3. Moving Average Filter ───────────────────────────────────────
+        # ── 3. Moving Average Filter (IMPLEMENTACIÓN ULTRA-RÁPIDA) ────────
         win_len = max(1, int(self.moving_avg_window_ms * 1e-3 * self.sample_rate))
-        if win_len > 1:
-            kernel = np.ones(win_len, dtype=np.float64) / win_len
-            # Aplicar a parte real e imaginaria por separado para preservar
-            # la fase de la señal compleja
-            iq_f = np.convolve(iq.real, kernel, mode="same") + 1j * np.convolve(
-                iq.imag, kernel, mode="same"
-            )
+        
+        if self.ma_enabled and win_len > 1:
+            # Optimizamos usando Suma Acumulada para que sea O(N) independientemente de la ventana
+            # Esto es lo mismo que np.convolve pero instantáneo.
+            def fast_ma(x, w):
+                # Padding para mantener modo "same"
+                pad = w // 2
+                x_padded = np.pad(x, (pad, pad), mode='edge')
+                cs = np.cumsum(x_padded, dtype=np.float64)
+                res = (cs[w:] - cs[:-w]) / w
+                return res[:len(x)]
+
+            iq_f = fast_ma(iq.real, win_len) + 1j * fast_ma(iq.imag, win_len)
         else:
-            iq_f = iq  # Sin filtrado si la ventana es 1 muestra
+            iq_f = iq  # Sin filtrado
 
         # Buffer de amplitud filtrada
         mag_f = np.abs(iq_f[-self.fft_size :])
@@ -252,10 +276,12 @@ class DSPEngine:
                 break
             blk = blk - np.mean(blk)
             fft_c = np.fft.fftshift(np.fft.fft(blk * window_raw))
-            pwr_raw_avg += np.abs(fft_c) ** 2 / self.fft_size
-        pwr_raw = 10 * np.log10(pwr_raw_avg / max(1, batches) + 1e-12)
-        alpha = 0.3
-        self.spectrum_raw_data = (1 - alpha) * self.spectrum_raw_data + alpha * pwr_raw
+            pwr_raw_avg += np.abs(fft_c) ** 2
+        pwr_raw = 10 * np.log10(pwr_raw_avg / (max(1, batches) * np.sum(window_raw**2)) + 1e-12)
+        # 🛸 Alpha efectivo: 1.0 en modo RAW (sin suavizado)
+        alpha_eff = 1.0 if self.raw_mode else self.vbw_alpha
+        
+        self.spectrum_raw_data = (1 - alpha_eff) * self.spectrum_raw_data + alpha_eff * pwr_raw
 
         # ── 4. Espectro de Potencia (FFT) sobre señal FILTRADA ───────────────
         if self.use_welch:
@@ -278,27 +304,25 @@ class DSPEngine:
                 pwr = welch_res["psd"]
         else:
             window = np.hanning(self.fft_size)
+            win_pwr = np.sum(window**2)
             pwr_avg = np.zeros(self.fft_size)
             for b in range(batches):
                 block_iq = iq_f[b * self.fft_size : (b + 1) * self.fft_size]
                 if len(block_iq) < self.fft_size:
-                    break  # Ignorar bloque incompleto al final
-                block_iq = block_iq - np.mean(block_iq)  # DC removal
+                    break
+                block_iq = block_iq - np.mean(block_iq)
                 fft_complex = np.fft.fftshift(np.fft.fft(block_iq * window))
-                pwr_avg += np.abs(fft_complex) ** 2 / self.fft_size
-            pwr = 10 * np.log10(pwr_avg / max(1, batches) + 1e-12)
+                pwr_avg += np.abs(fft_complex) ** 2
+            pwr = 10 * np.log10(pwr_avg / (max(1, batches) * win_pwr) + 1e-12)
 
-        # IIR simple sobre el tiempo
-        alpha = 0.3
-        self.spectrum_data = (1 - alpha) * self.spectrum_data + alpha * pwr
+        # IIR simple sobre el tiempo (suavizado VBW)
+        self.spectrum_data = (1 - alpha_eff) * self.spectrum_data + alpha_eff * pwr
 
         # ── 5. Waterfall (Espectrograma) sobre señal filtrada ───────────────
-        # Solo añadimos una línea cada 40 bloques para sincronizar con el eje de tiempo
-        self._wf_accum_count += 1
-        if self._wf_accum_count >= 40:
-            self.waterfall_data = np.roll(self.waterfall_data, 1, axis=0)
-            self.waterfall_data[0, :] = self.spectrum_data
-            self._wf_accum_count = 0
+        # Cada llamada a _process_dsp_core ahora representa una ráfaga (aprox 34ms)
+        # por lo que añadimos una línea directamente para mantener el cronómetro real.
+        self.waterfall_data = np.roll(self.waterfall_data, 1, axis=0)
+        self.waterfall_data[0, :] = self.spectrum_data
 
         # ── 6. Histograma (magnitud de señal filtrada) ─────────────────────
         self.histogram_data = np.random.choice(mag_f, size=2000, replace=True)
@@ -328,6 +352,19 @@ class DSPEngine:
         fs_mhz = self.sample_rate / 1_000_000
         freqs = np.linspace(fc - fs_mhz / 2, fc + fs_mhz / 2, self.fft_size)
         hot_mask = self.snr_data > SNR_THRESH
+        
+        # 🛸 Lógica RFI: Si una señal es MUY fuerte (>15dB), es interferencia
+        if self.rfi_mitigation_on:
+            rfi_mask = self.snr_data > 15.0
+            if np.any(rfi_mask) and self._rfi_cooldown == 0:
+                self.rfi_event_count += 1
+                from datetime import datetime
+                self.rfi_last_time = datetime.now().strftime("%H:%M:%S") + " UTC"
+                self._rfi_cooldown = 30 # Bloquear detección por ~1 segundo (30 frames)
+            
+            if self._rfi_cooldown > 0:
+                self._rfi_cooldown -= 1
+
         if np.any(hot_mask):
             hot_freqs = freqs[hot_mask]
             hot_snrs = self.snr_data[hot_mask]
@@ -381,10 +418,16 @@ class DSPEngine:
                 cfg["ymin"] = noise_floor - 30.0
                 cfg["ymax"] = spec_max + 20.0
                 
-            # Eje X: Centrado en la señal más fuerte con un span de 2MHz
+            # Eje X: Centrado en la frecuencia central con el ancho de banda real
             if cfg["auto_x"]:
-                cfg["xmin"] = peak_freq - 1.0 
-                cfg["xmax"] = peak_freq + 1.0
+                span = self.sample_rate / 2_000_000 # MHz
+                cfg["xmin"] = self.center_freq - span
+                cfg["xmax"] = self.center_freq + span
+                
+            # Evitar rangos absurdos (como los 100MHz vistos en el screenshot)
+            if (cfg["xmax"] - cfg["xmin"]) > 50.0:
+                cfg["xmin"] = self.center_freq - 1.2
+                cfg["xmax"] = self.center_freq + 1.2
 
         # 2.2 Amplitud (Time Domain)
         for amp_id in ["mon_raw_amp", "mon_filt_amp"]:
@@ -398,19 +441,28 @@ class DSPEngine:
                     if cfg["ymax"] <= cfg["ymin"] + 0.001:
                         cfg["ymax"] = cfg["ymin"] + 1.0
                 if cfg["auto_x"]:
-                    duration_ms = (self.fft_size / self.sample_rate) * 1000
+                    duration_ms = (len(self.amplitude_data) / self.sample_rate) * 1000
                     cfg["xmin"] = 0
                     cfg["xmax"] = max(0.1, float(duration_ms))
 
         # 2.3 Potencia vs Tiempo
         cfg = self.charts_config.get("pow_time")
         if cfg and cfg["auto_y"]:
-            pwr_valid = self.power_time_data[self.power_time_data > -120]
+            # Solo usar los datos que ya han sido escritos para no promediar el vacío (-100)
+            written = self.power_samples_written
+            d_len = len(self.power_time_data)
+            p_subset = self.power_time_data[:written] if written < d_len else self.power_time_data
+            
+            pwr_valid = p_subset[p_subset > -110] # Ignorar valores de inicialización
             if len(pwr_valid) > 5:
                 p_max = np.percentile(pwr_valid, 98)
                 p_min = np.percentile(pwr_valid, 2)
-                cfg["ymin"] = p_min - 10
-                cfg["ymax"] = p_max + 10
+                cfg["ymin"] = float(p_min - 5)
+                cfg["ymax"] = float(p_max + 10)
+            
+            # Garantizar que no sean idénticos
+            if cfg["ymax"] <= cfg["ymin"] + 0.1:
+                cfg["ymax"] = cfg["ymin"] + 10.0
 
         # 2.4 SNR vs Frecuencia
         cfg = self.charts_config.get("snr_freq")
@@ -460,16 +512,17 @@ class DSPEngine:
             self.sdr_handle = res_open["handle"]
             h = self.sdr_handle
 
-            # 2. Configurar hardware
-            bb_configure_ref_level(h, self.bb60c_ref_level)
+            # Límites de seguridad para evitar errores de hardware (Clamping)
+            ref_safe = max(-100.0, min(20.0, float(self.bb60c_ref_level)))
+            bw_safe  = max(0.1, min(40.0, float(self.bb60c_iq_bw)))
+            
+            bb_configure_ref_level(h, ref_safe)
             bb_configure_gain_atten(h, self.bb60c_gain, self.bb60c_atten)
             # Frecuencia central en Hz
             bb_configure_IQ_center(h, self.center_freq * 1e6)
             
             # Ancho de banda y decimación
-            # Nota: sample_rate real = 40e6 / decimation
-            bw = 20.0e6 / self.bb60c_decimation
-            bb_configure_IQ(h, self.bb60c_decimation, bw)
+            bb_configure_IQ(h, self.bb60c_decimation, bw_safe * 1e6)
             
             # Actualizar sample_rate interno para que el DSP sea correcto
             self.sample_rate = 40_000_000 // self.bb60c_decimation
@@ -478,13 +531,16 @@ class DSPEngine:
             bb_initiate(h, BB_STREAMING, BB_STREAM_IQ)
             print(f"BB60C iniciado @ {self.sample_rate/1e6} MHz bandwidth")
 
-            samples_per_read = self.fft_size # Leer un bloque FFT por vez
+            # Leer ráfagas de 40 bloques para optimizar CPU y fluidez
+            samples_per_read = self.fft_size * 40 
 
             while self.is_playing:
                 # 4. Capturar bloque IQ
                 # purge=BB_FALSE para mantener continuidad si procesado es rápido
                 res_iq = bb_get_IQ_unpacked(h, samples_per_read, BB_FALSE)
-                if res_iq["status"] != 0:
+                self.sdr_overflow = (res_iq["status"] == 2) # ADC Overflow Detection
+
+                if res_iq["status"] < 0:
                     print(f"Error de lectura IQ: {res_iq['status']}")
                     break
                 
@@ -492,6 +548,7 @@ class DSPEngine:
                 
                 # Procesar en el núcleo DSP
                 self._process_dsp_core(iq, batches=1)
+                self.elapsed_samples += len(iq)
 
         except Exception as e:
             print(f"SDR Hardware Error: {e}")
@@ -509,8 +566,8 @@ class DSPEngine:
                 file_size = os.path.getsize(self.filename)
 
                 bytes_per_sample = 2 if self.data_format in ("uint8", "int8") else 8
-                # Leer exactamente fft_size muestras por iteración para tiempo real
-                chunk_bytes = self.fft_size * bytes_per_sample
+                # Leer ráfagas de 40 bloques por iteración para tiempo real
+                chunk_bytes = self.fft_size * 40 * bytes_per_sample
 
                 self.current_file_time = 0.0
                 self.total_file_time = (file_size / bytes_per_sample) / self.sample_rate
@@ -548,8 +605,8 @@ class DSPEngine:
                     iq = np.nan_to_num(iq, nan=0.0, posinf=1.0, neginf=-1.0)
                     self._process_dsp_core(iq, batches=1)
 
-                    # Tiempo simulado: fft_size / sample_rate = tiempo de 1 bloque
-                    block_time = self.fft_size / self.sample_rate
+                    # Tiempo simulado: 40 bloques por cada iteración
+                    block_time = (self.fft_size * 40) / self.sample_rate
                     self.current_file_time += block_time
 
                     # Sincronización con playback_speed
@@ -562,6 +619,82 @@ class DSPEngine:
         except Exception as e:
             print(f"File Stream Error: {e}")
             self.is_playing = False
+
+    def update_visual_span(self, span_mhz: float):
+        """Ajusta el zoom visual de las gráficas de espectro."""
+        self.visual_span_mhz = max(0.001, min(100.0, float(span_mhz)))
+        
+        half_span = self.visual_span_mhz / 2.0
+        new_xmin = self.center_freq - half_span
+        new_xmax = self.center_freq + half_span
+        
+        for spec_id in ["mon_raw_spec", "mon_filt_spec"]:
+            if spec_id in self.charts_config:
+                self.charts_config[spec_id].update({
+                    "xmin": new_xmin,
+                    "xmax": new_xmax,
+                    "auto_x": False # Desactivar auto-x para respetar el zoom manual
+                })
+        self.save_config()
+
+    def apply_sync_mode(self, active: bool):
+        """Alterna el modo espejo donde la Pestaña 2 imita a la Pestaña 1."""
+        self.sync_active = active
+        if active:
+            # 1. Guardar estado actual
+            self._pre_sync_state = {
+                "ma_enabled": self.ma_enabled,
+                "use_welch": self.use_welch,
+                "raw_mode": self.raw_mode,
+                "filt_spec": self.charts_config["mon_filt_spec"].copy(),
+                "filt_amp": self.charts_config["mon_filt_amp"].copy()
+            }
+            # 2. Forzar modo RAW total
+            self.ma_enabled = False
+            self.use_welch = False
+            self.raw_mode = True
+            
+            # 3. Clonar ejes de Pestaña 1 a Pestaña 2
+            self.charts_config["mon_filt_spec"].update({
+                "xmin": self.charts_config["mon_raw_spec"]["xmin"],
+                "xmax": self.charts_config["mon_raw_spec"]["xmax"],
+                "ymin": self.charts_config["mon_raw_spec"]["ymin"],
+                "ymax": self.charts_config["mon_raw_spec"]["ymax"],
+                "auto_x": self.charts_config["mon_raw_spec"]["auto_x"],
+                "auto_y": self.charts_config["mon_raw_spec"]["auto_y"],
+            })
+            self.charts_config["mon_filt_amp"].update({
+                "xmin": self.charts_config["mon_raw_amp"]["xmin"],
+                "xmax": self.charts_config["mon_raw_amp"]["xmax"],
+                "ymin": self.charts_config["mon_raw_amp"]["ymin"],
+                "ymax": self.charts_config["mon_raw_amp"]["ymax"],
+                "auto_x": self.charts_config["mon_raw_amp"]["auto_x"],
+                "auto_y": self.charts_config["mon_raw_amp"]["auto_y"],
+            })
+        else:
+            # Restaurar estado previo
+            if self._pre_sync_state:
+                self.ma_enabled = self._pre_sync_state["ma_enabled"]
+                self.use_welch = self._pre_sync_state["use_welch"]
+                self.raw_mode = self._pre_sync_state["raw_mode"]
+                self.charts_config["mon_filt_spec"].update(self._pre_sync_state["filt_spec"])
+                self.charts_config["mon_filt_amp"].update(self._pre_sync_state["filt_amp"])
+
+        self.save_config()
+
+    def _sanitize(self, obj):
+        """Convierte tipos de NumPy a tipos nativos recursivamente para JSON."""
+        if isinstance(obj, dict):
+            return {str(k): self._sanitize(v) for k, v in obj.items()}
+        elif isinstance(obj, (list, tuple, np.ndarray)):
+            return [self._sanitize(v) for v in obj]
+        elif isinstance(obj, (np.generic, np.ndarray)):
+            return obj.item() if hasattr(obj, 'item') else obj.tolist()
+        elif isinstance(obj, (float, np.float32, np.float64)):
+            return float(obj)
+        elif isinstance(obj, (int, np.int32, np.int64)):
+            return int(obj)
+        return obj
 
     def save_config(self):
         conf = {
@@ -582,17 +715,23 @@ class DSPEngine:
             "algo_params": self.algo_params,
             "analysis_window_sec": self.analysis_window_sec,
             "moving_avg_window_ms": self.moving_avg_window_ms,
+            "bb60c_ref_level": self.bb60c_ref_level,
+            "bb60c_iq_bw": self.bb60c_iq_bw,
+            "vbw_alpha": self.vbw_alpha,
+            "ma_enabled": self.ma_enabled,
+            "raw_mode": self.raw_mode,
             "use_welch": self.use_welch,
             "charts_config": self.charts_config,
         }
         try:
             import json, os
+            sanitized = self._sanitize(conf)
 
             with open(
                 os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json"),
                 "w",
             ) as f:
-                json.dump(conf, f)
+                json.dump(sanitized, f, indent=4)
         except Exception as e:
             print("Save Config Error:", e)
 

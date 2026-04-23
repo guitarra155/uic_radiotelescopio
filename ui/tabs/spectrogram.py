@@ -40,7 +40,7 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
 
                 # Ejecutar gráfica intensiva en hilo de CPU secundario
                 img.src = await asyncio.to_thread(chart_spectrogram)
-                img.update()
+                if img.page: img.update()
             finally:
                 is_rendering[0] = False
 
