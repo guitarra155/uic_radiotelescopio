@@ -118,6 +118,8 @@ def build_header(page: ft.Page) -> ft.Control:
     )
 
 def build_footer() -> ft.Control:
+    from datetime import datetime
+    now_str = datetime.now().strftime("%Y-%m-%d  %H:%M %Z").strip()
     return ft.Container(
         bgcolor=PANEL_BG,
         border=ft.Border(top=ft.BorderSide(1, BORDER_COL)),
@@ -127,8 +129,8 @@ def build_footer() -> ft.Control:
             ft.Text("•",                                        color=BORDER_COL, size=10),
             ft.Text("HI 1420.405751 MHz",                      color=TEXT_MUTED, size=10),
             ft.Text("•",                                        color=BORDER_COL, size=10),
-            ft.Text("Backend: RTL-SDR / GNU Radio",            color=TEXT_MUTED, size=10),
+            ft.Text("Backend: RTL-SDR / Signal Hound BB60C",   color=TEXT_MUTED, size=10),
             ft.Container(expand=True),
-            ft.Text("2026-03-22  13:05 CST",                   color=TEXT_MUTED, size=10),
+            ft.Text(now_str,                                    color=TEXT_MUTED, size=10),
         ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER),
     )

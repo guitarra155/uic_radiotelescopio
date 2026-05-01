@@ -121,7 +121,6 @@ def chart_spectrum() -> str:
     fs = engine_instance.sample_rate / 1_000_000
 
     full_freq = np.linspace(fc - fs / 2, fc + fs / 2, len(spec))
-    full_freq = np.linspace(fc - fs / 2, fc + fs / 2, len(spec))
 
     if is_new or "line" not in cache.artists["spectrum"]:
         ax.clear()
@@ -161,7 +160,6 @@ def chart_spectrum_raw() -> str:
     fc = engine_instance.center_freq
     fs = engine_instance.sample_rate / 1_000_000
 
-    full_freq = np.linspace(fc - fs / 2, fc + fs / 2, len(spec))
     full_freq = np.linspace(fc - fs / 2, fc + fs / 2, len(spec))
 
     if is_new or "line" not in cache.artists["spectrum_raw"]:

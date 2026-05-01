@@ -548,7 +548,6 @@ class DSPEngine:
                 
                 # Procesar en el núcleo DSP
                 self._process_dsp_core(iq, batches=1)
-                self.elapsed_samples += len(iq)
 
         except Exception as e:
             print(f"SDR Hardware Error: {e}")
