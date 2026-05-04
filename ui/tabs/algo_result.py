@@ -46,6 +46,8 @@ _ALGO_META = {
 def build_algo_result(page: ft.Page) -> ft.Control:
     from core.dsp_engine import engine_instance
     from ui.charts import chart_algo_placeholder
+    from ui.components.shared import txt_field
+    import asyncio
 
     # Imagen del resultado — inicia con placeholder válido
     img = ft.Image(
@@ -65,6 +67,50 @@ def build_algo_result(page: ft.Page) -> ft.Control:
     status_txt    = ft.Text("Esperando stream...", color=TEXT_MUTED,
                             size=11, italic=True)
 
+    # ─────────────────────────────────────────────────────────────────────────
+    # ── Controles de la sección Algoritmo DSP ────────────────────────────────
+    # ─────────────────────────────────────────────────────────────────────────
+
+    algo_status_txt = ft.Text("Esperando stream...", color=TEXT_MUTED, size=9, italic=True)
+    algo_running = [False]
+    algo_counter = [0]
+    algo_gen = [0]  # epoch: se incrementa al cambiar método
+    ALGO_EVERY_N = 30
+
+    method_rg = ft.RadioGroup(
+        value=engine_instance.algo_params.get("method", "AR/Burg"),
+        content=ft.Column(
+            [
+                ft.Radio(value="AR/Burg", label="AR/Burg", active_color=ACCENT_CYAN),
+                ft.Radio(value="CWT/Morlet", label="CWT/Morlet", active_color=ACCENT_CYAN),
+                ft.Radio(value="Pseudo-MUSIC", label="Pseudo-MUSIC", active_color=ACCENT_CYAN),
+                ft.Radio(value="ESPRIT", label="ESPRIT", active_color=ACCENT_CYAN),
+                ft.Divider(color=BORDER_COL, height=4),
+                ft.Radio(value="Welch", label="Welch PSD", active_color="#FFD700"),
+                ft.Radio(value="Correlograma", label="Correlograma", active_color="#40E0D0"),
+                ft.Divider(color=BORDER_COL, height=4),
+                ft.Radio(value="ASLT", label="ASLT ⚠ (pendiente)", active_color=TEXT_MUTED),
+            ],
+            spacing=2,
+        ),
+    )
+
+    ar_order_f = txt_field("Orden AR / Burg", "64", "16–256")
+    music_ns_f = txt_field("# Señales MUSIC/ESPRIT", "3", "1–10")
+
+    ar_order_row = ft.Container(content=ar_order_f, visible=True)
+    music_ns_row = ft.Container(content=music_ns_f, visible=False)
+
+    def _update_param_visibility():
+        m = engine_instance.algo_params.get("method", "AR/Burg")
+        ar_order_row.visible = m == "AR/Burg"
+        music_ns_row.visible = m in ("Pseudo-MUSIC", "ESPRIT")
+        try:
+            if ar_order_row.page: ar_order_row.update()
+            if music_ns_row.page: music_ns_row.update()
+        except Exception:
+            pass
+
     def _update_meta(do_update: bool = True):
         m = engine_instance.algo_params.get("method", "AR/Burg")
         meta = _ALGO_META.get(m, {})
@@ -78,47 +124,165 @@ def build_algo_result(page: ft.Page) -> ft.Control:
                 if method_color_dot.page: method_color_dot.update()
                 if method_desc.page: method_desc.update()
             except Exception as e:
-                print(f"Update Meta Error: {e}")
+                pass
 
-    _update_meta(do_update=False)  # Sólo asigna valores, no llama update()
+    _update_meta(do_update=False)
 
-    # Recibir resultado cuando el runner termina
-    async def on_algo_ready(msg):
-        if msg == "algo_method_changed":
-            _update_meta()
-            # Mostrar placeholder mientras se espera el próximo cálculo
-            from ui.charts import chart_algo_placeholder as _ph
-            img.src = _ph()
+    def on_method_change(e):
+        try:
+            val = e.control.value
+            if val is None or val == "":
+                return
+
+            engine_instance.algo_params["method"] = val
+            engine_instance.save_config()  # Persistencia!
+            algo_gen[0] += 1
+            algo_running[0] = False
+
+            algo_status_txt.value = f"⚠ Clicked: {val}"
             status_txt.value = "Método cambiado — esperando recálculo..."
             status_txt.color = ACCENT_AMBER
-            if img.page: img.update()
-            if status_txt.page: status_txt.update()
-            return
 
-        if msg != "algo_results_ready":
+            # Mostrar placeholder
+            from ui.charts import chart_algo_placeholder as _ph
+            img.src = _ph()
+
+            try:
+                if img.page: img.update()
+                if status_txt.page: status_txt.update()
+                if algo_status_txt.page: algo_status_txt.update()
+            except: pass
+
+            _update_meta()
+            _update_param_visibility()
+
+            if engine_instance.is_playing:
+                page.run_task(_run_selected_algo)
+        except Exception as ex:
+            print(f"Error on on_method_change: {ex}")
+
+    method_rg.on_change = on_method_change
+
+    def _save_params(e=None):
+        try:
+            engine_instance.algo_params["ar_order"] = int(ar_order_f.value or 64)
+        except: pass
+        try:
+            engine_instance.algo_params["n_signals"] = int(music_ns_f.value or 3)
+        except: pass
+        engine_instance.save_config()
+
+    ar_order_f.on_change = _save_params
+    ar_order_f.on_submit = _save_params
+    music_ns_f.on_change = _save_params
+    music_ns_f.on_submit = _save_params
+
+    async def _run_selected_algo():
+        if algo_running[0]:
+            return
+        algo_running[0] = True
+        my_gen = algo_gen[0]
+        method = engine_instance.algo_params.get("method", "AR/Burg")
+        algo_status_txt.value = f"⏳ {method}..."
+
+        try:
+            if algo_status_txt.page: algo_status_txt.update()
+        except: pass
+
+        try:
+            iq = engine_instance.amplitude_ma_data
+            sr = engine_instance.sample_rate
+            fc = engine_instance.center_freq
+            order_val = engine_instance.algo_params.get("ar_order", 64)
+            ns_val = engine_instance.algo_params.get("n_signals", 3)
+            wfft_val = engine_instance.algo_params.get("welch_fft", 1024)
+            wovl_val = engine_instance.algo_params.get("welch_overlap", 0.5)
+            corr_lag = engine_instance.algo_params.get("corr_max_lag", 512)
+
+            from core.advanced_dsp import (
+                run_ar_burg, run_cwt, run_pseudo_music, run_esprit,
+                run_welch, run_correlogram, run_aslt,
+            )
+            from ui.charts import (
+                chart_ar_spectrum, chart_cwt_map, chart_music_spectrum,
+                chart_welch_spectrum, chart_correlogram_spectrum,
+            )
+
+            def _compute():
+                if method == "AR/Burg":
+                    return "ar", chart_ar_spectrum(run_ar_burg(iq, order=order_val, sample_rate=sr, center_freq=fc))
+                elif method == "CWT/Morlet":
+                    return "cwt", chart_cwt_map(run_cwt(iq, sample_rate=sr))
+                elif method == "Pseudo-MUSIC":
+                    return "music", chart_music_spectrum(run_pseudo_music(iq, n_signals=ns_val, sample_rate=sr, center_freq=fc))
+                elif method == "ESPRIT":
+                    return "esprit", chart_music_spectrum(run_esprit(iq, n_signals=ns_val, sample_rate=sr, center_freq=fc))
+                elif method == "Welch":
+                    return "welch", chart_welch_spectrum(run_welch(iq, fft_size=wfft_val, overlap=wovl_val, sample_rate=sr, center_freq=fc))
+                elif method == "Correlograma":
+                    return "correlogram", chart_correlogram_spectrum(run_correlogram(iq, max_lag=corr_lag, sample_rate=sr, center_freq=fc))
+                else:
+                    return "aslt", chart_ar_spectrum(run_aslt(iq, sample_rate=sr, center_freq=fc))
+
+            algo_key, b64 = await asyncio.to_thread(_compute)
+
+            if algo_gen[0] != my_gen:
+                return
+
+            engine_instance.algo_results[algo_key] = b64
+            engine_instance.algo_results["current"] = b64
+            engine_instance.algo_results["current_method"] = method
+            
+            # Update visual components
+            img.src = b64
+            status_txt.value = f"✓ {method} actualizado"
+            status_txt.color = ACCENT_GREEN
+            algo_status_txt.value = f"✓ {method}"
+
+            try:
+                if img.page: img.update()
+                if status_txt.page: status_txt.update()
+                if algo_status_txt.page: algo_status_txt.update()
+            except: pass
+        except NotImplementedError:
+            try:
+                algo_status_txt.value = "⚠ ASLT: archivos pendientes"
+                if algo_status_txt.page: algo_status_txt.update()
+            except: pass
+        except RuntimeError:
+            pass
+        except Exception as ex:
+            try:
+                algo_status_txt.value = f"⚠ ERROR: {str(ex)[:35]}"
+                if algo_status_txt.page: algo_status_txt.update()
+            except: pass
+            print("CRITICAL ALGO ERROR:", ex)
+        finally:
+            if algo_gen[0] == my_gen:
+                algo_running[0] = False
+            try:
+                if algo_status_txt.page: algo_status_txt.update()
+            except: pass
+
+    async def on_algo_refresh(msg):
+        if msg != "refresh_charts":
+            return
+        if not engine_instance.is_playing:
             return
             
+        # OPTIMIZACIÓN: Solo ejecutar algoritmos pesados si la pestaña 6 está activa
         if engine_instance.active_tab != 6:
             return
 
-        b64 = engine_instance.algo_results.get("current")
-        if b64 is None:
-            return
+        algo_counter[0] += 1
+        if algo_counter[0] % ALGO_EVERY_N == 0:
+            await _run_selected_algo()
 
-        img.src = b64
-        mth = engine_instance.algo_results.get("current_method", engine_instance.algo_params.get("method", "?"))
-        status_txt.value = f"✓ {mth} actualizado"
-        status_txt.color = ACCENT_GREEN
+    page.pubsub.subscribe(on_algo_refresh)
 
-        try:
-            if img.page: img.update()
-            if status_txt.page: status_txt.update()
-        except:
-            pass
+    # Inicializar visibilidad de parámetros
+    _update_param_visibility()
 
-    page.pubsub.subscribe(on_algo_ready)
-
-    # Borde superior del color del método actual (se actualiza vía on_algo_ready)
     chart_border = ft.Border(
         top=ft.BorderSide(2, "#B380FF"),
         right=ft.BorderSide(1, BORDER_COL),
@@ -144,18 +308,15 @@ def build_algo_result(page: ft.Page) -> ft.Control:
             ft.Text("Descripción:", color=TEXT_MUTED, size=10),
             method_desc,
             ft.Divider(color=BORDER_COL, height=10),
+            ft.Text("Método Avanzado:", color=TEXT_MAIN, size=12),
+            method_rg,
+            ar_order_row,
+            music_ns_row,
+            ft.Divider(color=BORDER_COL, height=10),
             ft.Text("Estado:", color=TEXT_MUTED, size=10),
             status_txt,
-            ft.Divider(color=BORDER_COL, height=10),
-            ft.Text(
-                "El método se selecciona en el\n"
-                "panel derecho → 🔬 Algoritmos DSP.\n\n"
-                "Solo corre UN algoritmo a la vez\n"
-                "para optimizar el rendimiento.\n\n"
-                "Se recalcula cada ~0.5 s con\nel stream activo.",
-                color=TEXT_MUTED, size=9, italic=True,
-            ),
-        ], spacing=8),
+            algo_status_txt,
+        ], spacing=8, scroll=ft.ScrollMode.AUTO),
     )
 
     return ft.Container(
