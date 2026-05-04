@@ -25,6 +25,9 @@ class DSPEngine:
         self.center_freq = 1420.40
         self.data_format = "uint8"  # RTL-SDR por defecto
         self.fft_size = 4096
+        
+        self.window_raw = np.hanning(self.fft_size)
+        self.window_raw_pwr = np.sum(self.window_raw**2)
 
         # Estado del hardware BB60C
         self.sdr_handle = -1
@@ -42,15 +45,18 @@ class DSPEngine:
         self._pre_sync_state = {}
         self.sdr_overflow = False   # Indica si hay saturación ADC
         self.elapsed_samples = 0    # Contador global para eje de tiempo absoluto
+        self.waterfall_idx = 0      # Índice circular para evitar O(N) roll
+        self.data_ready = False     # Flag para notificar a la UI que un bloque de 1s está listo
 
         # Buffers circulares
         self.spectrum_data = np.zeros(self.fft_size)  # FFT sobre señal FILTRADA
         self.spectrum_raw_data = np.zeros(self.fft_size)  # FFT sobre señal RAW
 
         # Waterfall dinámico por tiempo
-        self._waterfall_sec = 2.0
+        self._analysis_window_sec = 1.0
+        self._waterfall_sec = 10.0
         self.waterfall_steps = int(
-            self._waterfall_sec * (self.sample_rate / (self.fft_size * 40))
+            self._waterfall_sec / self._analysis_window_sec
         )
         self.waterfall_data = np.full((self.waterfall_steps, self.fft_size), -100.0)
 
@@ -136,7 +142,6 @@ class DSPEngine:
         self.amp_max = 0.3
 
         # ── Parámetros de adquisición y filtrado ──────────────────────────────────────
-        self.analysis_window_sec = 0.5
         self.moving_avg_window_ms = 0.1  # 0.1ms = ~240 muestras, filtro suave
         self.use_welch = True           # Iniciar con Welch (el modo 'bonito' / smooth)
         self.visual_span_mhz = 2.4      # Span visual por defecto (MHz)
@@ -165,19 +170,28 @@ class DSPEngine:
         }
 
     @property
+    def analysis_window_sec(self):
+        return getattr(self, "_analysis_window_sec", 1.0)
+
+    @analysis_window_sec.setter
+    def analysis_window_sec(self, val):
+        self._analysis_window_sec = max(0.1, float(val))
+        # Forzar recálculo del waterfall
+        self.waterfall_history_sec = getattr(self, "_waterfall_sec", 10.0)
+
+    @property
     def waterfall_history_sec(self):
-        return self._waterfall_sec
+        return getattr(self, "_waterfall_sec", 10.0)
 
     @waterfall_history_sec.setter
     def waterfall_history_sec(self, val):
-        self._waterfall_sec = max(0.1, val)
-        batches_per_sec = self.sample_rate / (self.fft_size * 40)
-        new_steps = int(self._waterfall_sec * batches_per_sec)
-        new_steps = max(10, new_steps)
+        self._waterfall_sec = max(self.analysis_window_sec, float(val))
+        new_steps = int(self._waterfall_sec / self.analysis_window_sec)
+        new_steps = max(1, new_steps)
         if new_steps != self.waterfall_steps:
             self.waterfall_steps = new_steps
-            # Reset the array size
             self.waterfall_data = np.zeros((self.waterfall_steps, self.fft_size))
+            self.waterfall_idx = 0
 
     def start_stream(self, mode: str, kwargs: dict):
         """
@@ -228,21 +242,21 @@ class DSPEngine:
                                         ├──→ Potencia vs Tiempo
                                         └──→ SNR
         """
-        # ── 1. Calcular batches dinámicamente desde analysis_window_sec ─────────
-        # Usar solo los batches que caben en los datos disponibles
+        # ── 1. Calcular batches para promediar todo el bloque ─────────
         if batches is None:
-            max_batches = len(iq) // self.fft_size
-            batches = max(
-                1, min(max_batches, 100) 
-            ) # Permitir promediar ráfagas grandes (ej. 40 bloques)
+            batches = max(1, len(iq) // self.fft_size)
 
         # Actualizar contador de tiempo global
         self.elapsed_samples += len(iq)
 
-        # ── 2. Buffer RAW: solo la magnitud del último fragmento ───────────────
-        mag_raw = np.abs(iq[-self.fft_size :])
-        self.amplitude_data = np.roll(self.amplitude_data, -len(mag_raw))
-        self.amplitude_data[-len(mag_raw) :] = mag_raw[-len(self.amplitude_data) :]
+        # ── 2. Buffer RAW: Diezmar 1 segundo de datos a 2000 puntos para UI fluida ───────────────
+        step = max(1, len(iq) // len(self.amplitude_data))
+        mag_raw = np.abs(iq[::step][:len(self.amplitude_data)])
+        if len(mag_raw) == len(self.amplitude_data):
+            self.amplitude_data[:] = mag_raw
+        else:
+            self.amplitude_data = np.roll(self.amplitude_data, -len(mag_raw))
+            self.amplitude_data[-len(mag_raw) :] = mag_raw
 
         # ── 3. Moving Average Filter (IMPLEMENTACIÓN ULTRA-RÁPIDA) ────────
         win_len = max(1, int(self.moving_avg_window_ms * 1e-3 * self.sample_rate))
@@ -262,22 +276,24 @@ class DSPEngine:
         else:
             iq_f = iq  # Sin filtrado
 
-        # Buffer de amplitud filtrada
-        mag_f = np.abs(iq_f[-self.fft_size :])
-        self.amplitude_ma_data = np.roll(self.amplitude_ma_data, -len(mag_f))
-        self.amplitude_ma_data[-len(mag_f) :] = mag_f[-len(self.amplitude_ma_data) :]
+        # Buffer de amplitud filtrada (Diezmado)
+        mag_f = np.abs(iq_f[::step][:len(self.amplitude_ma_data)])
+        if len(mag_f) == len(self.amplitude_ma_data):
+            self.amplitude_ma_data[:] = mag_f
+        else:
+            self.amplitude_ma_data = np.roll(self.amplitude_ma_data, -len(mag_f))
+            self.amplitude_ma_data[-len(mag_f) :] = mag_f
 
         # ── 3b. Espectro RAW (FFT sobre señal sin filtrar) → solo para Tab 1 ───
-        window_raw = np.hanning(self.fft_size)
         pwr_raw_avg = np.zeros(self.fft_size)
         for b in range(batches):
             blk = iq[b * self.fft_size : (b + 1) * self.fft_size]
             if len(blk) < self.fft_size:
                 break
             blk = blk - np.mean(blk)
-            fft_c = np.fft.fftshift(np.fft.fft(blk * window_raw))
+            fft_c = np.fft.fftshift(np.fft.fft(blk * self.window_raw))
             pwr_raw_avg += np.abs(fft_c) ** 2
-        pwr_raw = 10 * np.log10(pwr_raw_avg / (max(1, batches) * np.sum(window_raw**2)) + 1e-12)
+        pwr_raw = 10 * np.log10(pwr_raw_avg / (max(1, batches) * self.window_raw_pwr) + 1e-12)
         # 🛸 Alpha efectivo: 1.0 en modo RAW (sin suavizado)
         alpha_eff = 1.0 if self.raw_mode else self.vbw_alpha
         
@@ -303,17 +319,15 @@ class DSPEngine:
             else:
                 pwr = welch_res["psd"]
         else:
-            window = np.hanning(self.fft_size)
-            win_pwr = np.sum(window**2)
             pwr_avg = np.zeros(self.fft_size)
             for b in range(batches):
                 block_iq = iq_f[b * self.fft_size : (b + 1) * self.fft_size]
                 if len(block_iq) < self.fft_size:
                     break
                 block_iq = block_iq - np.mean(block_iq)
-                fft_complex = np.fft.fftshift(np.fft.fft(block_iq * window))
+                fft_complex = np.fft.fftshift(np.fft.fft(block_iq * self.window_raw))
                 pwr_avg += np.abs(fft_complex) ** 2
-            pwr = 10 * np.log10(pwr_avg / (max(1, batches) * win_pwr) + 1e-12)
+            pwr = 10 * np.log10(pwr_avg / (max(1, batches) * self.window_raw_pwr) + 1e-12)
 
         # IIR simple sobre el tiempo (suavizado VBW)
         self.spectrum_data = (1 - alpha_eff) * self.spectrum_data + alpha_eff * pwr
@@ -321,8 +335,8 @@ class DSPEngine:
         # ── 5. Waterfall (Espectrograma) sobre señal filtrada ───────────────
         # Cada llamada a _process_dsp_core ahora representa una ráfaga (aprox 34ms)
         # por lo que añadimos una línea directamente para mantener el cronómetro real.
-        self.waterfall_data = np.roll(self.waterfall_data, 1, axis=0)
-        self.waterfall_data[0, :] = self.spectrum_data
+        self.waterfall_idx = (self.waterfall_idx - 1) % self.waterfall_steps
+        self.waterfall_data[self.waterfall_idx, :] = self.spectrum_data
 
         # ── 6. Histograma (magnitud de señal filtrada) ─────────────────────
         self.histogram_data = np.random.choice(mag_f, size=2000, replace=True)
@@ -389,9 +403,11 @@ class DSPEngine:
         # ── 10. Auto-detección de rangos óptimos ───────────────────────────
         # Solo ajustar cada 30 frames para evitar fluctuaciones
         self._frames_since_autoscale += 1
-        if self._frames_since_autoscale >= 30 and self._autoscale_enabled:
+        if self._frames_since_autoscale >= 2 and self._autoscale_enabled: # Solo 2 frames porque ahora son de 1 segundo
             self._frames_since_autoscale = 0
             self._auto_detect_ranges()
+
+        self.data_ready = True # Notificar a la UI
 
     def _auto_detect_ranges(self):
         """Auto-detecta los rangos óptimos basándose en los datos actuales."""
@@ -531,12 +547,12 @@ class DSPEngine:
             bb_initiate(h, BB_STREAMING, BB_STREAM_IQ)
             print(f"BB60C iniciado @ {self.sample_rate/1e6} MHz bandwidth")
 
-            # Leer ráfagas de 40 bloques para optimizar CPU y fluidez
-            samples_per_read = self.fft_size * 40 
+            # Leer ráfagas según la ventana de análisis
+            samples_per_read = int(self.sample_rate * self.analysis_window_sec) 
 
             while self.is_playing:
                 # 4. Capturar bloque IQ
-                # purge=BB_FALSE para mantener continuidad si procesado es rápido
+                # purge=BB_FALSE para mantener continuidad
                 res_iq = bb_get_IQ_unpacked(h, samples_per_read, BB_FALSE)
                 self.sdr_overflow = (res_iq["status"] == 2) # ADC Overflow Detection
 
@@ -546,8 +562,8 @@ class DSPEngine:
                 
                 iq = res_iq["iq"]
                 
-                # Procesar en el núcleo DSP
-                self._process_dsp_core(iq, batches=1)
+                # Procesar en el núcleo DSP (lote completo)
+                self._process_dsp_core(iq, batches=None)
 
         except Exception as e:
             print(f"SDR Hardware Error: {e}")
@@ -565,8 +581,8 @@ class DSPEngine:
                 file_size = os.path.getsize(self.filename)
 
                 bytes_per_sample = 2 if self.data_format in ("uint8", "int8") else 8
-                # Leer ráfagas de 40 bloques por iteración para tiempo real
-                chunk_bytes = self.fft_size * 40 * bytes_per_sample
+                # Leer ráfagas según la ventana de análisis
+                chunk_bytes = int(self.sample_rate * self.analysis_window_sec) * bytes_per_sample
 
                 self.current_file_time = 0.0
                 self.total_file_time = (file_size / bytes_per_sample) / self.sample_rate
@@ -602,10 +618,10 @@ class DSPEngine:
 
                     # Sanitizar datos para evitar NaNs o Infs en caso de formato erróneo
                     iq = np.nan_to_num(iq, nan=0.0, posinf=1.0, neginf=-1.0)
-                    self._process_dsp_core(iq, batches=1)
+                    self._process_dsp_core(iq, batches=None)
 
-                    # Tiempo simulado: 40 bloques por cada iteración
-                    block_time = (self.fft_size * 40) / self.sample_rate
+                    # Tiempo simulado
+                    block_time = self.analysis_window_sec
                     self.current_file_time += block_time
 
                     # Sincronización con playback_speed

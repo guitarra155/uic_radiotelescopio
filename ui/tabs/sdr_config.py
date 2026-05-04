@@ -169,6 +169,7 @@ def build_config(page: ft.Page) -> ft.Control:
     freq_f = txt_field("Frecuencia (MHz)", str(engine_instance.center_freq), "e.g. 1420.40")
     rate_f = txt_field("Sample Rate (MSps)", str(engine_instance.sample_rate / 1e6), "")
     span_visual_f = txt_field("Span Visual (Zoom MHz)", str(engine_instance.visual_span_mhz), "e.g. 1.0")
+    analysis_win_f = txt_field("Tiempo Análisis (s)", str(engine_instance.analysis_window_sec), "e.g. 1.0")
     
     ma_win_f = txt_field("Filtro MA (ms)", str(engine_instance.moving_avg_window_ms), "0.1-10.0")
     ma_switch = ft.Switch(label="Activar Filtro Moving Average", value=engine_instance.ma_enabled, active_color=ACCENT_GREEN)
@@ -198,6 +199,7 @@ def build_config(page: ft.Page) -> ft.Control:
 
     freq_f.on_change = lambda e: on_global_change(e, "center_freq")
     rate_f.on_change = lambda e: on_global_change(e, "sample_rate", factor=1e6)
+    analysis_win_f.on_change = lambda e: on_global_change(e, "analysis_window_sec")
     def on_ma_toggle(e):
         engine_instance.ma_enabled = e.control.value
         engine_instance.save_config()
@@ -338,65 +340,117 @@ def build_config(page: ft.Page) -> ft.Control:
         if not cfg or not isinstance(cfg, dict):
             return ft.Text(f"Configuración no disponible para: {chart_id}", color=ACCENT_AMBER, size=10)
 
-        # Texto de ayuda
-        help_txt = ft.Text(title_text, color=ACCENT_CYAN, size=11, weight=ft.FontWeight.BOLD)
-        
-        # Filtros para inputs manuales (para desactivar auto-scale)
+        # Restaurar on_manual_change
         def on_manual_change(e, axis, attr):
             try:
                 val = float(e.control.value)
                 engine_instance.charts_config[chart_id][attr] = val
-                # Desactivar auto-escala al cambiar manualmente
                 engine_instance.charts_config[chart_id][f"auto_{axis}"] = False
-                # Sincronizar switch
                 if axis == "x": sw_x.value = False
                 else: sw_y.value = False
                 engine_instance.save_config()
-                page.pubsub.send_all("refresh_charts") # Notificar para redibujado inmediato
+                page.pubsub.send_all("refresh_charts") 
                 page.update()
             except ValueError:
                 pass
 
-        # Inputs X
+        # Usamos los componentes globales probados
         xi_min = txt_field("X Min", str(cfg["xmin"]))
+        xi_min.expand = False
+        xi_min.width = 100
         xi_max = txt_field("X Max", str(cfg["xmax"]))
+        xi_max.expand = False
+        xi_max.width = 100
+        
         xi_min.on_change = lambda e: on_manual_change(e, "x", "xmin")
         xi_max.on_change = lambda e: on_manual_change(e, "x", "xmax")
 
-        # Inputs Y
         yi_min = txt_field("Y Min", str(cfg["ymin"]))
+        yi_min.expand = False
+        yi_min.width = 100
         yi_max = txt_field("Y Max", str(cfg["ymax"]))
+        yi_max.expand = False
+        yi_max.width = 100
+        
         yi_min.on_change = lambda e: on_manual_change(e, "y", "ymin")
         yi_max.on_change = lambda e: on_manual_change(e, "y", "ymax")
 
-        # Switches Auto
         def on_auto_toggle(e, axis):
             engine_instance.charts_config[chart_id][f"auto_{axis}"] = e.control.value
             engine_instance.save_config()
-            page.pubsub.send_all("refresh_charts") # Notificar para redibujado inmediato
+            page.pubsub.send_all("refresh_charts") 
 
-        sw_x = ft.Switch(label="Auto X", value=cfg["auto_x"], active_color=ACCENT_GREEN, 
-                         label_text_style=ft.TextStyle(size=9), on_change=lambda e: on_auto_toggle(e, "x"))
-        sw_y = ft.Switch(label="Auto Y", value=cfg["auto_y"], active_color=ACCENT_GREEN, 
-                         label_text_style=ft.TextStyle(size=9), on_change=lambda e: on_auto_toggle(e, "y"))
+        # Usar Switch, que es nativo y muy testeado
+        sw_x = ft.Switch(label="Auto X", value=cfg["auto_x"], active_color=ACCENT_GREEN, on_change=lambda e: on_auto_toggle(e, "x"))
+        sw_y = ft.Switch(label="Auto Y", value=cfg["auto_y"], active_color=ACCENT_GREEN, on_change=lambda e: on_auto_toggle(e, "y"))
 
-        return ft.ExpansionTile(
-            title=help_txt,
-            maintain_state=True,
-            collapsed_text_color=TEXT_MUTED,
-            text_color=ACCENT_CYAN,
-            controls=[
-                ft.Container(
-                    content=ft.Column([
-                        ft.Row([sw_x, sw_y], spacing=10),
-                        ft.Row([xi_min, xi_max], spacing=5),
-                        ft.Row([yi_min, yi_max], spacing=5),
-                    ], spacing=5),
-                    padding=ft.Padding(15, 5, 15, 10),
-                    border=ft.Border(bottom=ft.BorderSide(0.5, BORDER_COL))
-                )
-            ]
+        return ft.Container(
+            content=ft.Column([
+                ft.Text(title_text, color=ACCENT_CYAN, size=11, weight=ft.FontWeight.BOLD),
+                sw_x,
+                ft.Row([xi_min, xi_max], spacing=10),
+                sw_y,
+                ft.Row([yi_min, yi_max], spacing=10),
+                ft.Divider(color="#303030", height=10)
+            ], spacing=10),
+            padding=5
         )
+
+    tab_configs = {
+        0: ft.Column([
+            section_title("🎯", "Pestaña 1: Monitoreo y RFI", ACCENT_CYAN),
+            lbl("Fuerza bruta:"),
+            raw_switch,
+            _axis_control("Gráfica 1: Espectro RAW", "mon_raw_spec"),
+            _axis_control("Gráfica 2: Amplitud RAW", "mon_raw_amp"),
+        ], spacing=5),
+        1: ft.Column([
+            section_title("🔍", "Pestaña 2: Monitoreo Filtrado", ACCENT_GREEN),
+            lbl("Interruptor de Filtro"),
+            ma_switch,
+            lbl("Filtro Moving Average (ms)"),
+            ma_win_f,
+            _axis_control("Gráfica 1: Espectro Filtrado", "mon_filt_spec"),
+            _axis_control("Gráfica 2: Amplitud Filtrada", "mon_filt_amp"),
+        ], spacing=5),
+        2: ft.Column([
+            section_title("🌈", "Pestaña 3: Espectrograma", "#FF6B9D"),
+            lbl("Tiempo de Análisis por bloque (s) - Afecta velocidad general"),
+            analysis_win_f,
+            lbl("Historial Total Cascada (s)"),
+            wf_sec_f,
+            _axis_control("Cascada (Waterfall)", "spec_wf"),
+        ], spacing=5),
+        3: ft.Column([
+            section_title("📊", "Pestaña 4: Estadística", ACCENT_AMBER),
+            _axis_control("Histograma de Amplitud", "stat_hist"),
+        ], spacing=5),
+        4: ft.Column([
+            section_title("⚡", "Pestaña 5: Potencia vs Tiempo", "#FFB347"),
+            _axis_control("Potencia Instantánea", "pow_time"),
+        ], spacing=5),
+        5: ft.Column([
+            section_title("📶", "Pestaña 6: SNR vs Frecuencia", "#00CED1"),
+            _axis_control("SNR por Bin de Freq", "snr_freq"),
+        ], spacing=5),
+        6: ft.Column([
+            section_title("🔬", "Pestaña 7: Algoritmo DSP", "#B380FF"),
+            ft.Text("Ver la sección 'Algoritmo DSP' abajo.", color=TEXT_MUTED, size=9)
+        ], spacing=5),
+    }
+
+    dynamic_tab_container = ft.Container(content=tab_configs.get(engine_instance.active_tab, tab_configs[0]))
+
+    async def _update_dynamic_tab(msg):
+        if msg == "refresh_charts" or msg == "tab_changed":
+            idx = engine_instance.active_tab
+            target_content = tab_configs.get(idx, tab_configs[0])
+            if dynamic_tab_container.content != target_content:
+                dynamic_tab_container.content = target_content
+                if dynamic_tab_container.page:
+                    dynamic_tab_container.update()
+
+    page.pubsub.subscribe(_update_dynamic_tab)
 
     sdr_content = ft.Column(
         [
@@ -409,34 +463,9 @@ def build_config(page: ft.Page) -> ft.Control:
             reset_btn,
             divider(),
 
-            section_title("🎯", "Pestaña 1: Monitoreo y RFI", ACCENT_CYAN),
-            lbl("Fuerza bruta:"),
-            raw_switch,
-            _axis_control("Gráfica 1: Espectro RAW", "mon_raw_spec"),
-            _axis_control("Gráfica 2: Amplitud RAW", "mon_raw_amp"),
-            
-            section_title("🔍", "Pestaña 2: Monitoreo Filtrado", ACCENT_GREEN),
-            lbl("Interruptor de Filtro"),
-            ma_switch,
-            lbl("Filtro Moving Average (ms)"),
-            ma_win_f,
-            _axis_control("Gráfica 1: Espectro Filtrado", "mon_filt_spec"),
-            _axis_control("Gráfica 2: Amplitud Filtrada", "mon_filt_amp"),
+            dynamic_tab_container,
 
-            section_title("🌈", "Pestaña 3: Espectrograma", "#FF6B9D"),
-            lbl("Historial Cascada (segundos)"),
-            wf_sec_f,
-            _axis_control("Cascada (Waterfall)", "spec_wf"),
-
-            section_title("📊", "Pestaña 4: Estadística", ACCENT_AMBER),
-            _axis_control("Histograma de Amplitud", "stat_hist"),
-
-            section_title("⚡", "Pestaña 5: Potencia vs Tiempo", "#FFB347"),
-            _axis_control("Potencia Instantánea", "pow_time"),
-
-            section_title("📶", "Pestaña 6: SNR vs Frecuencia", "#00CED1"),
-            _axis_control("SNR por Bin de Freq", "snr_freq"),
-
+            divider(),
             section_title("🌍", "SDR & Frecuencia", TEXT_MAIN),
             lbl("Freq Central (MHz)"), freq_f,
             lbl("Span Visual (Zoom MHz)"), span_visual_f,
@@ -740,6 +769,11 @@ def build_config(page: ft.Page) -> ft.Control:
             return
         if not engine_instance.is_playing:
             return
+            
+        # OPTIMIZACIÓN: Solo ejecutar algoritmos pesados si la pestaña 6 está activa
+        if engine_instance.active_tab != 6:
+            return
+
         algo_counter[0] += 1
         if algo_counter[0] % ALGO_EVERY_N == 0:
             await _run_selected_algo()

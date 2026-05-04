@@ -91,8 +91,8 @@ def chart_amplitude() -> str:
     n = len(sig)
     # Tiempo absoluto en segundos
     elapsed_sec = engine_instance.elapsed_samples / engine_instance.sample_rate
-    # Ventana de tiempo mostrada (en segundos)
-    duration_sec = n / engine_instance.sample_rate
+    # Ventana de tiempo mostrada (depende del tiempo de análisis)
+    duration_sec = engine_instance.analysis_window_sec
     t = np.linspace(elapsed_sec - duration_sec, elapsed_sec, n)
 
     if is_new or "line" not in cache.artists["amplitude"]:
@@ -197,14 +197,14 @@ def chart_spectrum_raw() -> str:
 def chart_spectrogram() -> str:
     # El waterfall es pesado, aquí imshow es lo más rápido
     fig, ax, is_new = get_cached_fig("waterfall", figsize=(12, 5.5))
-    data = engine_instance.waterfall_data
+    data = np.roll(engine_instance.waterfall_data, -engine_instance.waterfall_idx, axis=0)
     fc = engine_instance.center_freq
     fs = engine_instance.sample_rate / 1_000_000
     # Safety check for empty buffer
     if data.size == 0:
         return fig_to_b64(fig)
 
-    secs_per_line = (engine_instance.fft_size * 40) / engine_instance.sample_rate
+    secs_per_line = engine_instance.analysis_window_sec # Ahora cada fila es el tiempo de análisis
     total_secs = engine_instance.waterfall_steps * secs_per_line
 
     if is_new or "im" not in cache.artists["waterfall"]:
@@ -271,8 +271,8 @@ def chart_signal_time() -> str:
     n = len(raw)
     # Tiempo absoluto en segundos
     elapsed_sec = engine_instance.elapsed_samples / engine_instance.sample_rate
-    # Ventana de tiempo mostrada (en segundos)
-    duration_sec = n / engine_instance.sample_rate
+    # Ventana de tiempo mostrada (depende del tiempo de análisis)
+    duration_sec = engine_instance.analysis_window_sec
     t = np.linspace(elapsed_sec - duration_sec, elapsed_sec, n)
 
     if is_new or "line_i" not in cache.artists["signal_time"]:
@@ -311,8 +311,8 @@ def chart_power_time() -> str:
         pwr = np.roll(engine_instance.power_time_data, -idx)
     
     n = len(pwr)
-    # Cálculo corregido del tiempo: basado en la tasa de refresco real del buffer
-    batch_dur = (engine_instance.fft_size * 40) / engine_instance.sample_rate
+    # Cada muestra en power_time_data ahora representa 1 ventana de análisis
+    batch_dur = engine_instance.analysis_window_sec
     t = np.arange(n) * batch_dur
 
     if is_new or "line" not in cache.artists["power_time"]:
@@ -472,8 +472,9 @@ def chart_amplitude_ma() -> str:
     fig, ax, is_new = get_cached_fig("amplitude_ma", figsize=(9.5, 2.8))
     sig = engine_instance.amplitude_ma_data
     n = len(sig)
-    # Volvemos a milisegundos (ms) para cumplir con la petición de "Tiempo"
-    t = np.linspace(0, (n / engine_instance.sample_rate) * 1000, n)
+    # Todo el buffer de amplitud corresponde al tiempo de análisis actual
+    duration_ms = engine_instance.analysis_window_sec * 1000
+    t = np.linspace(0, duration_ms, n)
 
     # Auto-detectar rango de amplitud filtrada
     sig_min, sig_max = np.min(sig), np.max(sig)

@@ -330,6 +330,8 @@ def run_esprit(iq: np.ndarray, n_signals: int = 3,
 # 5. Welch — Estimación espectral directa (periodograma promediado)
 # ─────────────────────────────────────────────────────────────────────────────
 
+_welch_window_cache = {}
+
 def run_welch(iq: np.ndarray, fft_size: int = 1024, overlap: float = 0.5,
              sample_rate: float = 2_400_000,
              center_freq: float = 1420.40) -> dict:
@@ -350,8 +352,11 @@ def run_welch(iq: np.ndarray, fft_size: int = 1024, overlap: float = 0.5,
     sig = _to_complex(iq)
     N = len(sig)
     step = max(1, int(fft_size * (1.0 - overlap)))
-    window = np.hanning(fft_size)
-    win_power = np.sum(window ** 2)  # Normalización de potencia de ventana
+    
+    if fft_size not in _welch_window_cache:
+        w = np.hanning(fft_size)
+        _welch_window_cache[fft_size] = (w, np.sum(w ** 2))
+    window, win_power = _welch_window_cache[fft_size]
 
     psd_accum = np.zeros(fft_size)
     n_segments = 0

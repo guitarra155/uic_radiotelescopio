@@ -154,15 +154,16 @@ def main(page: ft.Page):
         while True:
             is_p = engine_instance.is_playing
             try:
-                if is_p:
+                if is_p and getattr(engine_instance, "data_ready", False):
                     page.pubsub.send_all("refresh_charts")
+                    engine_instance.data_ready = False
                 elif was_playing and not is_p:
                     page.pubsub.send_all("stream_stopped")
             except RuntimeError:
                 break
                 
             was_playing = is_p
-            await asyncio.sleep(0.010)
+            await asyncio.sleep(0.05) # Chequeo rápido del flag
             
     page.run_task(refresh_loop)
 

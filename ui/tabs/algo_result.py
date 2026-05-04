@@ -97,6 +97,9 @@ def build_algo_result(page: ft.Page) -> ft.Control:
 
         if msg != "algo_results_ready":
             return
+            
+        if engine_instance.active_tab != 6:
+            return
 
         b64 = engine_instance.algo_results.get("current")
         if b64 is None:
