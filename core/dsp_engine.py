@@ -22,7 +22,7 @@ class DSPEngine:
         self.is_playing = False
         self.filename = None
         self.sample_rate = 2_400_000
-        self.center_freq = 1420.40
+        self._center_freq = 1420.40
         self.data_format = "uint8"  # RTL-SDR por defecto
         self.fft_size = 4096
         
@@ -169,6 +169,33 @@ class DSPEngine:
             "snr_freq":     {"xmin": 1419.0, "xmax": 1421.0, "ymin": -5.0, "ymax": 40.0, "auto_x": False, "auto_y": False},
         }
 
+        # ── Variables para Smart Trigger / Recorte Automático ──
+        import collections
+        self.trigger_active = False
+        self.trigger_high = 15.0
+        self.trigger_low = 5.0
+        self.trigger_state = 0
+        self.trigger_ring_buffer = collections.deque()
+
+    @property
+    def center_freq(self):
+        return getattr(self, "_center_freq", 1420.40)
+
+    @center_freq.setter
+    def center_freq(self, val):
+        val = float(val)
+        delta = val - self.center_freq
+        self._center_freq = val
+        self._retune_requested = True
+        
+        # Desplazar los límites X de las gráficas de frecuencia si están en modo manual
+        if hasattr(self, "charts_config"):
+            for chart_id in ["mon_raw_spec", "mon_filt_spec", "spec_wf", "snr_freq"]:
+                cfg = self.charts_config.get(chart_id)
+                if cfg and not cfg.get("auto_x", False):
+                    cfg["xmin"] += delta
+                    cfg["xmax"] += delta
+
     @property
     def analysis_window_sec(self):
         return getattr(self, "_analysis_window_sec", 1.0)
@@ -248,6 +275,62 @@ class DSPEngine:
 
         # Actualizar contador de tiempo global
         self.elapsed_samples += len(iq)
+
+        # ── 1.b Smart Trigger (Recorte Automático +- 1.5s) ─────────────
+        if getattr(self, 'trigger_active', False):
+            self.trigger_ring_buffer.append(iq.copy())
+            
+            # Mantener ~5 segundos de datos en el buffer circular
+            total_len = sum(len(x) for x in self.trigger_ring_buffer)
+            target_len = int(5.0 * self.sample_rate)
+            while total_len > target_len and len(self.trigger_ring_buffer) > 1:
+                total_len -= len(self.trigger_ring_buffer[0])
+                self.trigger_ring_buffer.popleft()
+                
+            energy = iq.real**2 + iq.imag**2
+            
+            if self.trigger_state == 0:
+                if np.max(energy) > self.trigger_high:
+                    self.trigger_state = 1
+            elif self.trigger_state == 1:
+                if np.min(energy) < self.trigger_low:
+                    # Fin del evento. Procesar buffer completo.
+                    full_iq = np.concatenate(list(self.trigger_ring_buffer))
+                    full_energy = full_iq.real**2 + full_iq.imag**2
+                    
+                    start_idx = -1
+                    end_idx = -1
+                    # Bucle FOR pedido para detectar cruces de umbral
+                    for i in range(len(full_energy)):
+                        if start_idx == -1 and full_energy[i] > self.trigger_high:
+                            start_idx = i
+                        elif start_idx != -1 and full_energy[i] < self.trigger_low:
+                            end_idx = i
+                            break
+                            
+                    if start_idx != -1 and end_idx != -1:
+                        center_idx = (start_idx + end_idx) // 2
+                        trim_samples = int(1.5 * self.sample_rate)
+                        
+                        trim_start = max(0, center_idx - trim_samples)
+                        trim_end = min(len(full_iq), center_idx + trim_samples)
+                        
+                        trimmed_iq = full_iq[trim_start:trim_end]
+                        
+                        # Zero-Crossing Rate de la señal extraída
+                        zcr = np.mean(np.abs(np.diff(np.sign(trimmed_iq.real))))
+                        
+                        # Guardar a disco
+                        import time, os
+                        if not os.path.exists("data"): os.makedirs("data")
+                        fname = f"data/trigger_{int(time.time())}.npy"
+                        np.save(fname, trimmed_iq)
+                        print(f"\\n[SMART TRIGGER] EVENTO CAPTURADO! Guardado en {fname}")
+                        print(f"   -> Centro: {center_idx}, Recorte: +-1.5s ({len(trimmed_iq)} pts), ZCR: {zcr:.4f}\\n")
+                        
+                    # Resetear para esperar el próximo evento o desactivarse si la UI lo dicta
+                    self.trigger_state = 0
+                    self.trigger_active = False # Auto-desarmar tras capturar
 
         # ── 2. Buffer RAW: Diezmar 1 segundo de datos a 2000 puntos para UI fluida ───────────────
         step = max(1, len(iq) // len(self.amplitude_data))
@@ -419,11 +502,18 @@ class DSPEngine:
         amp = np.nan_to_num(self.amplitude_data, nan=0.0)
         amp_f = np.nan_to_num(self.amplitude_ma_data, nan=0.0)
         
-        noise_floor = float(np.nanmedian(spec))
+        # Ignorar los bordes caídos del filtro anti-aliasing SDR para calcular el ruido
+        c_start = len(spec) // 4
+        c_end = len(spec) - c_start
+        valid_spec = spec[c_start:c_end]
+        
+        noise_floor = float(np.nanmedian(valid_spec))
         self.db_noise_floor = noise_floor
         
         fs_mhz = self.sample_rate / 1e6
-        span_mhz = fs_mhz # Ancho total real
+        # El BB60C tiene un ancho de banda analógico útil de ~75% del sample rate.
+        # Recortamos el span visual para que la señal plana ocupe todo el ancho y esconda los bordes.
+        span_mhz = fs_mhz * 0.75
 
         # 2. Aplicar lógica a cada gráfica configurada
         for chart_id, cfg in self.charts_config.items():
@@ -449,9 +539,11 @@ class DSPEngine:
             # --- Eje Y (Potencia o Amplitud) ---
             if cfg.get("auto_y"):
                 if "spec" in chart_id or "wf" in chart_id:
-                    p_max = float(np.nanpercentile(spec, 99.9))
-                    cfg["ymin"] = float(noise_floor - 25.0)
-                    cfg["ymax"] = float(p_max + 15.0)
+                    p_max = float(np.nanpercentile(valid_spec, 99.9))
+                    # Enmarcar la señal real: Piso de ruido abajo, picos arriba.
+                    altura_senal = max(10.0, p_max - noise_floor)
+                    cfg["ymin"] = float(noise_floor - altura_senal * 0.2) # Piso cerca del fondo
+                    cfg["ymax"] = float(p_max + altura_senal * 0.3) # Margen sobre los picos
                 elif "amp" in chart_id:
                     data_y = amp_f if "filt" in chart_id else amp
                     a_max = float(np.nanpercentile(data_y, 99))
@@ -460,14 +552,16 @@ class DSPEngine:
                 elif chart_id == "pow_time":
                     p_valid = self.power_time_data[self.power_time_data > -110]
                     if len(p_valid) > 5:
-                        p_min = float(np.nanpercentile(p_valid, 2))
                         p_max = float(np.nanpercentile(p_valid, 98))
-                        cfg["ymin"] = p_min - 10
-                        cfg["ymax"] = p_max + 15
+                        altura_senal = max(10.0, p_max - noise_floor)
+                        cfg["ymin"] = float(noise_floor - altura_senal * 0.2)
+                        cfg["ymax"] = float(p_max + altura_senal * 0.3)
                 elif chart_id == "snr_freq":
                     s_max = float(np.nanpercentile(self.snr_data, 99))
-                    cfg["ymin"] = -5.0
-                    cfg["ymax"] = float(max(10.0, s_max + 10.0))
+                    # El centro de SNR siempre es 0 dB
+                    span_y = float(max(10.0, s_max + 5.0))
+                    cfg["ymin"] = -span_y
+                    cfg["ymax"] = span_y
                 elif chart_id == "stat_hist":
                     h_max = float(np.nanpercentile(self.histogram_data, 99))
                     cfg["xmin"] = 0.0 # El histograma usa x para amplitud
@@ -534,12 +628,35 @@ class DSPEngine:
 
             # 3. Iniciar modo streaming
             bb_initiate(h, BB_STREAMING, BB_STREAM_IQ)
-            print(f"BB60C iniciado @ {self.sample_rate/1e6} MHz bandwidth")
+            print(f"BB60C iniciado @ {self.sample_rate/1e6} MSps (Mega-muestras por segundo)")
 
             # Leer ráfagas según la ventana de análisis
             samples_per_read = int(self.sample_rate * self.analysis_window_sec) 
 
             while self.is_playing:
+                # Retune en vivo (Live Tuning completo)
+                if getattr(self, "_retune_requested", False):
+                    self._retune_requested = False
+                    
+                    ref_safe = max(-100.0, min(20.0, float(self.bb60c_ref_level)))
+                    bw_safe  = max(0.1, min(40.0, float(self.bb60c_iq_bw)))
+                    
+                    # Recalcular decimación por si el sample_rate fue modificado
+                    self.bb60c_decimation = max(1, int(40_000_000 // max(1, self.sample_rate)))
+                    self.sample_rate = 40_000_000 // self.bb60c_decimation
+                    
+                    print(f"Reconfigurando SDR en vivo (Frec: {self.center_freq} MHz, Ref: {ref_safe} dBm, SR: {self.sample_rate/1e6} MSps)...")
+                    
+                    bb_abort(h)
+                    bb_configure_ref_level(h, ref_safe)
+                    bb_configure_gain_atten(h, self.bb60c_gain, self.bb60c_atten)
+                    bb_configure_IQ_center(h, self.center_freq * 1e6)
+                    bb_configure_IQ(h, self.bb60c_decimation, bw_safe * 1e6)
+                    bb_initiate(h, BB_STREAMING, BB_STREAM_IQ)
+                    
+                    # Actualizar lecturas por ventana tras cambiar el SR
+                    samples_per_read = int(self.sample_rate * self.analysis_window_sec)
+
                 # 4. Capturar bloque IQ
                 # purge=BB_FALSE para mantener continuidad
                 res_iq = bb_get_IQ_unpacked(h, samples_per_read, BB_FALSE)
@@ -702,6 +819,10 @@ class DSPEngine:
 
     def save_config(self):
         conf = {
+            "center_freq": self.center_freq,
+            "sample_rate": self.sample_rate,
+            "trigger_high": getattr(self, "trigger_high", 15.0),
+            "trigger_low": getattr(self, "trigger_low", 5.0),
             "db_min": self.db_min,
             "db_max": self.db_max,
             "f_min": self.f_min,
@@ -747,10 +868,14 @@ class DSPEngine:
             if os.path.exists(p):
                 with open(p, "r") as f:
                     conf = json.load(f)
+                self.center_freq = conf.get("center_freq", self.center_freq)
+                self.sample_rate = conf.get("sample_rate", self.sample_rate)
+                self.trigger_high = conf.get("trigger_high", getattr(self, "trigger_high", 15.0))
+                self.trigger_low = conf.get("trigger_low", getattr(self, "trigger_low", 5.0))
                 self.db_min = conf.get("db_min", self.db_min)
                 self.db_max = conf.get("db_max", self.db_max)
-                self.power_db_min = conf.get("power_db_min", self.power_db_min)
-                self.power_db_max = conf.get("power_db_max", self.power_db_max)
+                self.power_db_min = conf.get("power_db_min", getattr(self, "power_db_min", -100))
+                self.power_db_max = conf.get("power_db_max", getattr(self, "power_db_max", 0))
                 self.f_min = conf.get("f_min", self.f_min)
                 self.f_max = conf.get("f_max", self.f_max)
                 self.amp_min = conf.get("amp_min", self.amp_min)

@@ -40,6 +40,21 @@ _ALGO_META = {
             "Más eficiente que MUSIC para pocos componentes."
         ),
     },
+    "Welch": {
+        "color": "#FFD700",
+        "desc": (
+            "Densidad Espectral de Potencia (Welch).\n"
+            "Reduce el ruido promediando periodogramas solapados."
+        ),
+    },
+    "Correlograma": {
+        "color": "#40E0D0",
+        "desc": (
+            "Estimación espectral indirecta (Wiener-Khinchin).\n"
+            "FFT de la autocorrelación truncada (Blackman-Tukey).\n"
+            "Útil para señales inmersas en ruido."
+        ),
+    },
 }
 
 
@@ -97,17 +112,21 @@ def build_algo_result(page: ft.Page) -> ft.Control:
 
     ar_order_f = txt_field("Orden AR / Burg", "64", "16–256")
     music_ns_f = txt_field("# Señales MUSIC/ESPRIT", "3", "1–10")
+    corr_lag_f = txt_field("Max Lag Correlograma", "512", "128–1024")
 
     ar_order_row = ft.Container(content=ar_order_f, visible=True)
     music_ns_row = ft.Container(content=music_ns_f, visible=False)
+    corr_lag_row = ft.Container(content=corr_lag_f, visible=False)
 
     def _update_param_visibility():
         m = engine_instance.algo_params.get("method", "AR/Burg")
         ar_order_row.visible = m == "AR/Burg"
         music_ns_row.visible = m in ("Pseudo-MUSIC", "ESPRIT")
+        corr_lag_row.visible = m == "Correlograma"
         try:
             if ar_order_row.page: ar_order_row.update()
             if music_ns_row.page: music_ns_row.update()
+            if corr_lag_row.page: corr_lag_row.update()
         except Exception:
             pass
 
@@ -170,12 +189,17 @@ def build_algo_result(page: ft.Page) -> ft.Control:
         try:
             engine_instance.algo_params["n_signals"] = int(music_ns_f.value or 3)
         except: pass
+        try:
+            engine_instance.algo_params["corr_max_lag"] = int(corr_lag_f.value or 512)
+        except: pass
         engine_instance.save_config()
 
     ar_order_f.on_change = _save_params
     ar_order_f.on_submit = _save_params
     music_ns_f.on_change = _save_params
     music_ns_f.on_submit = _save_params
+    corr_lag_f.on_change = _save_params
+    corr_lag_f.on_submit = _save_params
 
     async def _run_selected_algo():
         if algo_running[0]:
@@ -312,6 +336,7 @@ def build_algo_result(page: ft.Page) -> ft.Control:
             method_rg,
             ar_order_row,
             music_ns_row,
+            corr_lag_row,
             ft.Divider(color=BORDER_COL, height=10),
             ft.Text("Estado:", color=TEXT_MUTED, size=10),
             status_txt,

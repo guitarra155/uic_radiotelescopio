@@ -9,8 +9,15 @@ from ui.charts import chart_histogram
 from ui.components.shared import panel, border_all
 
 def build_statistics(page: ft.Page) -> ft.Control:
-    thresh = ft.TextField(
-        label="Umbral de anomalía (%)", value="15",
+    thresh_high = ft.TextField(
+        label="Umbral Alto (Energía)", value="15.0",
+        color=TEXT_MAIN, bgcolor=DARK_BG,
+        border_color=BORDER_COL, focused_border_color=ACCENT_CYAN,
+        cursor_color=ACCENT_CYAN, border_radius=8, width=200,
+        keyboard_type=ft.KeyboardType.NUMBER,
+    )
+    thresh_low = ft.TextField(
+        label="Umbral Bajo (Energía)", value="5.0",
         color=TEXT_MAIN, bgcolor=DARK_BG,
         border_color=BORDER_COL, focused_border_color=ACCENT_CYAN,
         cursor_color=ACCENT_CYAN, border_radius=8, width=200,
@@ -27,20 +34,32 @@ def build_statistics(page: ft.Page) -> ft.Control:
     )
 
     def on_trigger(e):
+        from core.dsp_engine import engine_instance
         active[0] = not active[0]
+        
         if active[0]:
-            stat_txt.value  = f"Smart Trigger: ACTIVO  (umbral={thresh.value}%)"
+            try:
+                engine_instance.trigger_high = float(thresh_high.value)
+                engine_instance.trigger_low = float(thresh_low.value)
+            except ValueError:
+                engine_instance.trigger_high = 15.0
+                engine_instance.trigger_low = 5.0
+                
+            engine_instance.trigger_active = True
+            stat_txt.value  = f"Smart Trigger: ACTIVO (Alto={engine_instance.trigger_high}, Bajo={engine_instance.trigger_low})"
             stat_txt.color  = ACCENT_GREEN
             trigger_btn.content = "⛔  Desactivar Smart Trigger"
             trigger_btn.bgcolor = ACCENT_RED
         else:
+            engine_instance.trigger_active = False
             stat_txt.value  = "Smart Trigger: INACTIVO"
             stat_txt.color  = TEXT_MUTED
-            trigger_btn.content = "⚡  Activar Smart Trigger"
+            trigger_btn.content = "⚡  Armar Auto-Recorte (±1.5s)"
             trigger_btn.bgcolor = ACCENT_GREEN
         page.update()
 
     trigger_btn.on_click = on_trigger
+    trigger_btn.content = "⚡  Armar Auto-Recorte (±1.5s)"
 
     img = ft.Image(src=chart_histogram(), fit=ft.BoxFit.CONTAIN,
                    gapless_playback=True, border_radius=8, expand=True)
@@ -109,7 +128,9 @@ def build_statistics(page: ft.Page) -> ft.Control:
             ft.Text("⚡  Smart Trigger", color=ACCENT_CYAN, size=14,
                     weight=ft.FontWeight.BOLD),
             ft.Divider(color=BORDER_COL, height=12),
-            thresh,
+            thresh_high,
+            ft.Container(height=4),
+            thresh_low,
             ft.Container(height=8),
             trigger_btn,
             ft.Container(height=6),

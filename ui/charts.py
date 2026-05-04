@@ -131,7 +131,7 @@ def chart_spectrum() -> str:
             "Potencia (dBFS)",
         )
         (line,) = ax.plot(full_freq, spec, color=ACCENT_GREEN, linewidth=1.0)
-        ax.axhline(
+        hline = ax.axhline(
             y=engine_instance.db_noise_floor,
             color=ACCENT_AMBER,
             linestyle="--",
@@ -139,13 +139,25 @@ def chart_spectrum() -> str:
             alpha=0.7,
             label=f"Piso: {engine_instance.db_noise_floor:.1f} dB",
         )
-        ax.legend(
+        leg = ax.legend(
             loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL
         )
         cache.artists["spectrum"]["line"] = line
+        cache.artists["spectrum"]["hline"] = hline
+        cache.artists["spectrum"]["legend"] = leg
     else:
         line = cache.artists["spectrum"]["line"]
+        hline = cache.artists["spectrum"]["hline"]
+        leg = cache.artists["spectrum"]["legend"]
+        
         line.set_data(full_freq, spec)
+        
+        # Actualizar piso de ruido dinámico
+        nf = engine_instance.db_noise_floor
+        hline.set_ydata([nf, nf])
+        hline.set_label(f"Piso: {nf:.1f} dB")
+        if leg.get_texts():
+            leg.get_texts()[0].set_text(f"Piso: {nf:.1f} dB")
 
     cfg = engine_instance.charts_config["mon_filt_spec"]
     safe_set_ylim(ax, cfg["ymin"], cfg["ymax"])
@@ -171,22 +183,32 @@ def chart_spectrum_raw() -> str:
             "Potencia (dBFS)",
         )
         (line,) = ax.plot(full_freq, spec, color=ACCENT_CYAN, linewidth=1.0)
-        noise_raw = np.median(spec)
-        ax.axhline(
-            y=noise_raw,
+        hline = ax.axhline(
+            y=engine_instance.db_noise_floor,
             color=ACCENT_AMBER,
             linestyle="--",
             linewidth=0.8,
             alpha=0.7,
-            label=f"Piso: {noise_raw:.1f} dB",
+            label=f"Piso: {engine_instance.db_noise_floor:.1f} dB",
         )
-        ax.legend(
+        leg = ax.legend(
             loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL
         )
         cache.artists["spectrum_raw"]["line"] = line
+        cache.artists["spectrum_raw"]["hline"] = hline
+        cache.artists["spectrum_raw"]["legend"] = leg
     else:
         line = cache.artists["spectrum_raw"]["line"]
+        hline = cache.artists["spectrum_raw"]["hline"]
+        leg = cache.artists["spectrum_raw"]["legend"]
+        
         line.set_data(full_freq, spec)
+        
+        nf = engine_instance.db_noise_floor
+        hline.set_ydata([nf, nf])
+        hline.set_label(f"Piso: {nf:.1f} dB")
+        if leg.get_texts():
+            leg.get_texts()[0].set_text(f"Piso: {nf:.1f} dB")
 
     cfg = engine_instance.charts_config["mon_raw_spec"]
     safe_set_ylim(ax, cfg["ymin"], cfg["ymax"])
@@ -240,7 +262,7 @@ def chart_spectrogram() -> str:
     if abs(xmax - xmin) < 1e-6:
         xmin, xmax = xmin - 0.5, xmax + 0.5
     
-    im.set_extent([xmin, xmax, 0, total_secs])
+    im.set_extent([fc - fs / 2, fc + fs / 2, 0, total_secs])
     im.set_clim(cfg["ymin"], cfg["ymax"])
 
     safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
@@ -323,22 +345,32 @@ def chart_power_time() -> str:
         ax.clear()
         style_ax(ax, "Potencia vs. Tiempo", "Tiempo (s)", "Potencia (dBFS)")
         (line,) = ax.plot(t, pwr, color=ACCENT_AMBER, linewidth=1.0)
-        noise_pwr = np.median(pwr) if len(pwr) > 10 else engine_instance.db_noise_floor
-        ax.axhline(
-            y=noise_pwr,
+        hline = ax.axhline(
+            y=engine_instance.db_noise_floor,
             color=ACCENT_RED,
             linestyle="--",
             linewidth=0.8,
             alpha=0.7,
-            label=f"Piso: {noise_pwr:.1f} dBFS",
+            label=f"Piso: {engine_instance.db_noise_floor:.1f} dBFS",
         )
-        ax.legend(
+        leg = ax.legend(
             loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL
         )
         cache.artists["power_time"]["line"] = line
+        cache.artists["power_time"]["hline"] = hline
+        cache.artists["power_time"]["legend"] = leg
     else:
         line = cache.artists["power_time"]["line"]
+        hline = cache.artists["power_time"]["hline"]
+        leg = cache.artists["power_time"]["legend"]
+        
         line.set_data(t, pwr)
+        
+        nf = engine_instance.db_noise_floor
+        hline.set_ydata([nf, nf])
+        hline.set_label(f"Piso: {nf:.1f} dBFS")
+        if leg.get_texts():
+            leg.get_texts()[0].set_text(f"Piso: {nf:.1f} dBFS")
         
     cfg = engine_instance.charts_config["pow_time"]
     # Eje X: Mostrar el historial acumulado (crece hasta el máximo del buffer)

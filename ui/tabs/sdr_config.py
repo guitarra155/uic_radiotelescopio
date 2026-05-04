@@ -215,7 +215,7 @@ def build_config(page: ft.Page) -> ft.Control:
 
     # Flags de auto-escala antiguos (deprecados en favor de charts_config)
 
-    def _axis_control(title_text, chart_id):
+    def _axis_control(title_text, chart_id, x_name="X", y_name="Y"):
         """Helper para crear controles de rango X/Y para una gráfica específica."""
         cfg = engine_instance.charts_config.get(chart_id)
         if not cfg or not isinstance(cfg, dict):
@@ -235,14 +235,14 @@ def build_config(page: ft.Page) -> ft.Control:
             except ValueError:
                 pass
 
-        xi_min = txt_field("X Min", str(cfg["xmin"]))
-        xi_max = txt_field("X Max", str(cfg["xmax"]))
+        xi_min = txt_field(f"{x_name} Min", str(cfg["xmin"]))
+        xi_max = txt_field(f"{x_name} Max", str(cfg["xmax"]))
         
         xi_min.on_change = lambda e: on_manual_change(e, "x", "xmin")
         xi_max.on_change = lambda e: on_manual_change(e, "x", "xmax")
 
-        yi_min = txt_field("Y Min", str(cfg["ymin"]))
-        yi_max = txt_field("Y Max", str(cfg["ymax"]))
+        yi_min = txt_field(f"{y_name} Min", str(cfg["ymin"]))
+        yi_max = txt_field(f"{y_name} Max", str(cfg["ymax"]))
         
         yi_min.on_change = lambda e: on_manual_change(e, "y", "ymin")
         yi_max.on_change = lambda e: on_manual_change(e, "y", "ymax")
@@ -253,8 +253,8 @@ def build_config(page: ft.Page) -> ft.Control:
             page.pubsub.send_all("refresh_charts") 
 
         # Usar Switch, que es nativo y muy testeado
-        sw_x = ft.Switch(label="Auto X", value=cfg["auto_x"], active_color=ACCENT_GREEN, on_change=lambda e: on_auto_toggle(e, "x"))
-        sw_y = ft.Switch(label="Auto Y", value=cfg["auto_y"], active_color=ACCENT_GREEN, on_change=lambda e: on_auto_toggle(e, "y"))
+        sw_x = ft.Switch(label=f"Auto {x_name}", value=cfg["auto_x"], active_color=ACCENT_GREEN, on_change=lambda e: on_auto_toggle(e, "x"))
+        sw_y = ft.Switch(label=f"Auto {y_name}", value=cfg["auto_y"], active_color=ACCENT_GREEN, on_change=lambda e: on_auto_toggle(e, "y"))
 
         return ft.Container(
             content=ft.Column([
@@ -295,7 +295,7 @@ def build_config(page: ft.Page) -> ft.Control:
             analysis_win_f,
             lbl("Historial Total Cascada (s)"),
             wf_sec_f,
-            _axis_control("Cascada (Waterfall)", "spec_wf"),
+            _axis_control("Cascada (Waterfall)", "spec_wf", x_name="Freq X", y_name="Potencia Z"),
         ], spacing=5),
         4: ft.Column([
             section_title("📊", "Pestaña 4: Estadística", ACCENT_AMBER),

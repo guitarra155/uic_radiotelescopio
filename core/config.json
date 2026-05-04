@@ -1,4 +1,8 @@
 {
+    "center_freq": 2412.0,
+    "sample_rate": 40000000,
+    "trigger_high": 15.0,
+    "trigger_low": 5.0,
     "db_min": -10.0,
     "db_max": 5.0,
     "f_min": 1420.3,
@@ -14,9 +18,9 @@
     "iq_format": "uint8",
     "stream_mode": "sdr",
     "algo_params": {
-        "ar_order": 1000,
-        "n_signals": 10000,
-        "method": "ASLT",
+        "ar_order": 64,
+        "n_signals": 4,
+        "method": "Correlograma",
         "welch_fft": 1024,
         "welch_overlap": 0.5,
         "corr_max_lag": 512
@@ -31,30 +35,14 @@
     "use_welch": 0,
     "charts_config": {
         "mon_raw_spec": {
-            "xmin": 1400.4,
-            "xmax": 1440.4,
-            "ymin": -69.0,
-            "ymax": -67.0,
+            "xmin": 2398.5,
+            "xmax": 2425.5,
+            "ymin": -202.0096991374711,
+            "ymax": -37.990300833013734,
             "auto_x": 0,
             "auto_y": 0
         },
         "mon_raw_amp": {
-            "xmin": 0.0,
-            "xmax": 1.0,
-            "ymin": -72.0,
-            "ymax": -67.0,
-            "auto_x": 0,
-            "auto_y": 0
-        },
-        "mon_filt_spec": {
-            "xmin": 1400.4,
-            "xmax": 1440.4,
-            "ymin": -144.72631857884227,
-            "ymax": -55.02185039448585,
-            "auto_x": 0,
-            "auto_y": 0
-        },
-        "mon_filt_amp": {
             "xmin": 0.0,
             "xmax": 0.1,
             "ymin": 0.0,
@@ -62,17 +50,33 @@
             "auto_x": 0,
             "auto_y": 0
         },
+        "mon_filt_spec": {
+            "xmin": 2398.5,
+            "xmax": 2425.5,
+            "ymin": -202.0096991374711,
+            "ymax": -37.990300833013734,
+            "auto_x": 0,
+            "auto_y": 0
+        },
+        "mon_filt_amp": {
+            "xmin": 0.0,
+            "xmax": 4.0,
+            "ymin": 0.0,
+            "ymax": 0.0004,
+            "auto_x": 0,
+            "auto_y": 0
+        },
         "spec_wf": {
-            "xmin": 1415.4,
-            "xmax": 1425.4,
-            "ymin": -144.72631857884227,
-            "ymax": -55.02185039448585,
+            "xmin": 2392.0,
+            "xmax": 2432.0,
+            "ymin": -75.0,
+            "ymax": -50.0,
             "auto_x": 0,
             "auto_y": 0
         },
         "stat_hist": {
             "xmin": 0.0,
-            "xmax": 8e-05,
+            "xmax": 0.1,
             "ymin": 0.0,
             "ymax": 100.0,
             "auto_x": 0,
@@ -80,18 +84,18 @@
         },
         "pow_time": {
             "xmin": 0.0,
-            "xmax": 200.0,
-            "ymin": -110.0,
-            "ymax": -85.0,
-            "auto_x": 1,
-            "auto_y": 1
+            "xmax": 1.0,
+            "ymin": -75.7261080023047,
+            "ymax": -55.7261080023047,
+            "auto_x": 0,
+            "auto_y": 0
         },
         "snr_freq": {
-            "xmin": 1400.4,
-            "xmax": 1440.4,
-            "ymin": -5.0,
-            "ymax": 41.07678556327164,
-            "auto_x": 0,
+            "xmin": 2397.0,
+            "xmax": 2427.0,
+            "ymin": 0.0,
+            "ymax": 39.18225865975719,
+            "auto_x": 1,
             "auto_y": 0
         }
     }

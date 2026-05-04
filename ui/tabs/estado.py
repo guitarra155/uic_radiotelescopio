@@ -102,14 +102,26 @@ def build_estado(page: ft.Page) -> ft.Control:
             if attr == "bb60c_ref_level": val = max(-100.0, min(20.0, val))
             
             setattr(engine_instance, attr, val)
+            
+            # Avisar al hilo de hardware que reconfigure en vivo si es un parámetro físico
+            if attr in ["sample_rate", "bb60c_ref_level", "bb60c_iq_bw"]:
+                engine_instance._retune_requested = True
+                
             engine_instance.save_config()
         except ValueError: pass
 
-    freq_f.on_change = lambda e: on_global_change(e, "center_freq")
-    rate_f.on_change = lambda e: on_global_change(e, "sample_rate", factor=1e6)
-    ref_level_f.on_change = lambda e: on_global_change(e, "bb60c_ref_level")
-    rbw_f.on_change       = lambda e: on_global_change(e, "bb60c_iq_bw")
-    vbw_alpha_f.on_change = lambda e: on_global_change(e, "vbw_alpha")
+    freq_f.on_submit = lambda e: on_global_change(e, "center_freq")
+    rate_f.on_submit = lambda e: on_global_change(e, "sample_rate", factor=1e6)
+    ref_level_f.on_submit = lambda e: on_global_change(e, "bb60c_ref_level")
+    rbw_f.on_submit       = lambda e: on_global_change(e, "bb60c_iq_bw")
+    vbw_alpha_f.on_submit = lambda e: on_global_change(e, "vbw_alpha")
+    
+    # También aplicar a on_blur para que guarde si hacen click fuera del campo
+    freq_f.on_blur = lambda e: on_global_change(e, "center_freq")
+    rate_f.on_blur = lambda e: on_global_change(e, "sample_rate", factor=1e6)
+    ref_level_f.on_blur = lambda e: on_global_change(e, "bb60c_ref_level")
+    rbw_f.on_blur       = lambda e: on_global_change(e, "bb60c_iq_bw")
+    vbw_alpha_f.on_blur = lambda e: on_global_change(e, "vbw_alpha")
 
     def on_span_change(e):
         try:
@@ -117,7 +129,8 @@ def build_estado(page: ft.Page) -> ft.Control:
             engine_instance.update_visual_span(val)
         except: pass
     
-    span_visual_f.on_change = on_span_change
+    span_visual_f.on_submit = on_span_change
+    span_visual_f.on_blur = on_span_change
 
     def lbl(t, color=TEXT_MUTED, size=12):
         return ft.Text(t, color=color, size=size)
@@ -180,8 +193,8 @@ def build_estado(page: ft.Page) -> ft.Control:
 
     # Añadir sección de estado informativo
     dev_rows = [
-        ("Modelo SDR", "RTL-SDR v3 / HackRF / BB60C", TEXT_MAIN),
-        ("Estado DSP", "Multihilo Async", ACCENT_GREEN),
+        ("Modelo SDR", "BB60C", TEXT_MAIN),
+        ("Estado DSP", "Multihilo", ACCENT_GREEN),
     ]
     info_rows = [
         ft.Row([
@@ -203,12 +216,13 @@ def build_estado(page: ft.Page) -> ft.Control:
     )
 
     md_hw = ft.Markdown(
-        "**📻 Conceptos de SDR y Hardware**\n\n"
-        "- **Datos I/Q (In-phase & Quadrature):** Muestras de radio en formato de números complejos. Mantienen tanto la amplitud como la fase de la onda electromagnética.\n"
-        "- **Sample Rate (Tasa de Muestreo):** Medido en MSps (Megamuestras por seg). Según el Teorema de Nyquist-Shannon, el espectro máximo visible es idéntico a esta tasa (para datos complejos).\n"
-        "- **Nivel de Referencia (dBm):** Límite máximo de potencia permitida en la entrada del equipo (VGA/LNA) antes de que el ADC se sature (Overflow). Provocar overflow genera frecuencias falsas (Aliasing/Harmonics).\n"
-        "- **RBW (Resolution Bandwidth):** Ancho del filtro físico de frecuencia. Bajarlo reduce dramáticamente el ruido térmico capturado, pero retarda la respuesta a eventos ultra rápidos.\n"
-        "- **VBW Smoothing (Video Bandwidth):** Promedio móvil iterativo (EMA). Un Alpha cercano a 0.1 integra la señal en el tiempo, mitigando variaciones violentas de ruido y desenterrando señales estables.",
+        "**📻 Conceptos de SDR, Hardware y Live Tuning**\n\n"
+        "- **Frecuencia Central (MHz):** Determina el punto medio del espectro físico monitoreado.\n  *Rango:* 0.009 MHz a 6000 MHz (depende del BB60C).\n  *Efecto:* Su cambio aplica **Sintonización en Vivo (Live Tuning)**, moviendo los osciladores físicos de la antena sin detener el software.\n"
+        "- **Sample Rate / Tasa de Muestreo (MSps):** Velocidad de captura del ADC. Dicta tu \"ancho de banda visual\" total.\n  *Rango:* 1.0 a 40.0 MSps.\n  *Efecto:* Valores altos permiten ver bandas gigantes (como WiFi completo) pero exigen mucha CPU. Se aplica en tiempo real ajustando la decimación del hardware.\n"
+        "- **Nivel de Referencia (dBm):** Controla el pre-amplificador (LNA). Actúa como techo de potencia para evitar la saturación (`ADC Overflow`).\n  *Rango:* -100 dBm (Máxima ganancia) a +20 dBm (Mínima ganancia).\n  *Efecto:* Si buscas señales astronómicas, usa -80. Si monitoreas radares o TV, usa 0 o +10 para evitar saturación cruzada.\n"
+        "- **RBW / IQ BW (MHz):** Filtro Pasa-Banda de hardware para la captura I/Q.\n  *Rango:* 0.1 MHz a 40.0 MHz.\n  *Efecto:* Cerrar este valor aisla la señal deseada y mata el ruido térmico adyacente. Se re-sintetiza al presionar Enter.\n"
+        "- **VBW Smoothing (Video Bandwidth):** Promedio matemático temporal (EMA) sobre el espectro dibujado.\n  *Rango:* 0.1 (Muy suavizado, revela pulsos débiles y estables) a 1.0 (Sin suavizado, 100% caótico y físico).\n  *Efecto:* Aplicado solo en software, es instantáneo y no interrumpe al hardware.\n"
+        "- **Live Tuning (Reconfiguración al Vuelo):** Todos estos controles se aplican *al presionar Enter o quitar el cursor (Blur)*. El motor inyecta comandos C++ (`bb_abort` y `bb_initiate`) reiniciando el dispositivo en un lapso de milisegundos sin congelar la ventana gráfica.",
         selectable=True,
     )
 
@@ -216,10 +230,19 @@ def build_estado(page: ft.Page) -> ft.Control:
         "**🔬 Matemáticas y Algoritmos (DSP)**\n\n"
         "- **FFT (Fast Fourier Transform):** Algoritmo clásico para obtener frecuencias. Es extremadamente rápido pero sufre de *fugas espectrales* (spectral leakage) y enmascaramiento por resolución limitada.\n"
         "- **Welch PSD:** Calcula la Densidad Espectral de Potencia mediante la división del bloque en ventanas que se solapan (overlap) y se promedian. Resulta en gráficas libres de picos de ruido esporádicos.\n"
-        "- **AR / Burg (Autoregresivo):** Estima el espectro resolviendo ecuaciones matemáticas para predecir la señal futura (modelo de todo-polos). Alcanza resoluciones que la FFT no puede lograr en muestras temporales cortas.\n"
+        "- **Correlograma:** Estimación espectral indirecta basada en el *Teorema de Wiener-Khinchin*. Calcula la autocorrelación de la señal, le aplica una ventana temporal y luego su FFT. Excelente para revelar señales periódicas ocultas en ruido térmico.\n"
         "- **CWT (Continuous Wavelet Transform):** Utiliza la ondícula de *Morlet* (una sinusoide envuelta en una gaussiana). Escanea la señal para entregar un mapa ultra-preciso de correlación de Tiempo y Frecuencia.\n"
         "- **MUSIC & ESPRIT:** Algoritmos de subespacios ortogonales. Descomponen la matriz de covarianza de la señal separando matemáticamente el \"Subespacio de Señal\" del \"Subespacio de Ruido\". Permiten calcular frecuencias de sinusoides puras con resolución infinita teórica.\n"
         "- **Filtro MA (Moving Average):** Filtro FIR (*Finite Impulse Response*) pasa-bajos simple temporal que limpia ruido térmico de alta frecuencia instantáneo.",
+        selectable=True,
+    )
+
+    md_trigger = ft.Markdown(
+        "**⚡ Smart Trigger y Eventos Transitorios**\n\n"
+        "- **Magnitud de Energía ($I^2 + Q^2$):** La potencia base instantánea de la señal analítica compleja. Se utiliza como métrica principal para disparar la captura de eventos.\n"
+        "- **Umbrales e Histéresis:** Dos límites (Alto y Bajo). El algoritmo captura cuando se supera el *Umbral Alto* y finaliza cuando cae bajo el *Umbral Bajo*, previniendo \"falsos positivos\" repetitivos por el ruido estadístico.\n"
+        "- **Recorte Automático (Trim $\\pm 1.5s$):** El algoritmo iterativo localiza el centro exacto del pulso detectado y recorta 3 segundos íntegros (1.5 segundos a cada lado). Preservar el silencio antes y después del evento es crucial para validar detecciones en radioastronomía.\n"
+        "- **Zero-Crossing Rate (ZCR):** Tasa de cruces por cero. Una métrica rápida en el dominio del tiempo. El ruido puramente térmico tiene un ZCR altísimo y desordenado; pulsos coherentes reducen significativamente esta tasa.",
         selectable=True,
     )
 
@@ -239,6 +262,10 @@ def build_estado(page: ft.Page) -> ft.Control:
             ft.ExpansionPanel(
                 header=ft.ListTile(title=ft.Text("Procesamiento Digital (DSP)", color="#B380FF", weight=ft.FontWeight.W_600)),
                 content=ft.Container(content=md_dsp, padding=10, bgcolor=DARK_BG, border_radius=6),
+            ),
+            ft.ExpansionPanel(
+                header=ft.ListTile(title=ft.Text("Smart Trigger & Recorte", color=ACCENT_RED, weight=ft.FontWeight.W_600)),
+                content=ft.Container(content=md_trigger, padding=10, bgcolor=DARK_BG, border_radius=6),
             ),
         ],
     )
