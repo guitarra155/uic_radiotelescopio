@@ -88,106 +88,18 @@ def build_config(page: ft.Page) -> ft.Control:
         )
 
     # ─────────────────────────────────────────────────────────────────────────
-    # ── Controles de la sección Fuente & SDR ─────────────────────────────────
+    # ── Controles de Renderizado y Procesamiento ─────────────────────────────
     # ─────────────────────────────────────────────────────────────────────────
-    filepath_input = txt_field(
-        "Ruta del Archivo .iq", engine_instance.iq_filename, "Ej: C:\\Datos\\señal.iq"
-    )
-
-    # USAMOS FORMA ALTERNATIVA: Cuadro de diálogo nativo de Windows (Tkinter)
-    # Esto evita el error "Unknown control: FilePicker" de Flet en Windows local.
-    async def on_pick_file(e):
-        def _pick():
-            root = tk.Tk()
-            root.withdraw()
-            root.attributes("-topmost", True)
-            path = filedialog.askopenfilename(
-                title="Seleccionar archivo .iq",
-                filetypes=[("Archivos IQ", "*.iq"), ("Todos", "*.*")]
-            )
-            root.destroy()
-            return path
-
-        selected_path = await asyncio.to_thread(_pick)
-        if selected_path:
-            filepath_input.value = selected_path
-            engine_instance.iq_filename = selected_path
-            engine_instance.save_config()
-            page.update()
-
-    pick_btn = ft.ElevatedButton(
-        content=ft.Text("📁 Abrir", size=11),
-        on_click=on_pick_file,
-        tooltip="Seleccionar archivo .iq",
-        style=ft.ButtonStyle(
-            color=TEXT_MAIN,
-            bgcolor=PANEL_BG,
-            shape=ft.RoundedRectangleBorder(radius=8),
-        ),
-    )
-
-    def on_filepath_change(e):
-        engine_instance.iq_filename = e.control.value
-        engine_instance.save_config()
-
-    filepath_input.on_change = on_filepath_change
-
-    fmt_dd = dd(
-        "Formato Datos .iq", engine_instance.iq_format, ["uint8", "int8", "complex64"]
-    )
-
-    def on_fmt_change(e):
-        engine_instance.iq_format = e.control.value
-        engine_instance.save_config()
-
-    fmt_dd.on_change = on_fmt_change
-
-    def on_mode_change(e):
-        engine_instance.stream_mode = e.control.value
-        engine_instance.save_config()
-
-    mode_rg = ft.RadioGroup(
-        value=engine_instance.stream_mode,
-        on_change=on_mode_change,
-        content=ft.Column(
-            [
-                ft.Radio(
-                    value="sdr",
-                    label="🛠️ SDR Físico (RTL/HackRF)",
-                    active_color=ACCENT_GREEN,
-                ),
-                ft.Radio(
-                    value="file",
-                    label="📼 Archivo Local (.iq)",
-                    active_color=ACCENT_AMBER,
-                ),
-            ],
-            spacing=4,
-        ),
-    )
-
-    freq_f = txt_field("Frecuencia (MHz)", str(engine_instance.center_freq), "e.g. 1420.40")
-    rate_f = txt_field("Sample Rate (MSps)", str(engine_instance.sample_rate / 1e6), "")
-    span_visual_f = txt_field("Span Visual (Zoom MHz)", str(engine_instance.visual_span_mhz), "e.g. 1.0")
-    analysis_win_f = txt_field("Tiempo Análisis (s)", str(engine_instance.analysis_window_sec), "e.g. 1.0")
     
+    analysis_win_f = txt_field("Tiempo Análisis (s)", str(engine_instance.analysis_window_sec), "e.g. 1.0")
     ma_win_f = txt_field("Filtro MA (ms)", str(engine_instance.moving_avg_window_ms), "0.1-10.0")
     ma_switch = ft.Switch(label="Activar Filtro Moving Average", value=engine_instance.ma_enabled, active_color=ACCENT_GREEN)
     wf_sec_f = txt_field("Historial (s)", str(engine_instance.waterfall_history_sec), "10-300")
-    
-    # NUEVOS: Controles sugeridos por el profesor
-    ref_level_f = txt_field("Nivel Ref. (dBm)", str(engine_instance.bb60c_ref_level), "-100 a +20")
-    rbw_f = txt_field("RBW / IQ BW (MHz)", str(engine_instance.bb60c_iq_bw), "0.1 a 20.0")
-    vbw_alpha_f = txt_field("VBW Smoothing", str(engine_instance.vbw_alpha), "0.1-1.0")
     raw_switch = ft.Switch(label="Modo 100% RAW (Física)", value=engine_instance.raw_mode, active_color=ACCENT_CYAN)
     
     def on_global_change(e, attr, factor=1.0):
         try:
             val = float(e.control.value) * factor
-            # Validaciones de seguridad
-            if attr == "bb60c_iq_bw": val = max(0.1, min(40.0, val))
-            if attr == "bb60c_ref_level": val = max(-100.0, min(20.0, val))
-            
             setattr(engine_instance, attr, val)
             engine_instance.save_config()
         except ValueError: pass
@@ -197,9 +109,8 @@ def build_config(page: ft.Page) -> ft.Control:
         engine_instance.save_config()
         page.pubsub.send_all("refresh_charts")
 
-    freq_f.on_change = lambda e: on_global_change(e, "center_freq")
-    rate_f.on_change = lambda e: on_global_change(e, "sample_rate", factor=1e6)
     analysis_win_f.on_change = lambda e: on_global_change(e, "analysis_window_sec")
+    
     def on_ma_toggle(e):
         engine_instance.ma_enabled = e.control.value
         engine_instance.save_config()
@@ -210,14 +121,6 @@ def build_config(page: ft.Page) -> ft.Control:
 
     raw_switch.on_change = on_raw_toggle
     wf_sec_f.on_change = lambda e: on_global_change(e, "waterfall_history_sec")
-
-    def on_span_change(e):
-        try:
-            val = float(e.control.value)
-            engine_instance.update_visual_span(val)
-        except: pass
-    
-    span_visual_f.on_change = on_span_change
 
     def on_sync_toggle(e):
         val = e.control.value
@@ -249,14 +152,7 @@ def build_config(page: ft.Page) -> ft.Control:
         active_color=ft.Colors.ORANGE_800,
         on_change=on_sync_toggle
     )
-    
-    ref_level_f.on_change = lambda e: on_global_change(e, "bb60c_ref_level")
-    rbw_f.on_change       = lambda e: on_global_change(e, "bb60c_iq_bw")
-    vbw_alpha_f.on_change = lambda e: on_global_change(e, "vbw_alpha")
 
-    # NUEVO: Los controles de rango ahora son dinámicos vía _axis_control
-
-    # Lógica de actualización ahora centralizada en _axis_control.on_manual_change
 
     # Indicador de Overflow
     overflow_txt = ft.Text("⚠️ ADC OVERFLOW", color=ft.Colors.AMBER_ACCENT, 
@@ -274,16 +170,11 @@ def build_config(page: ft.Page) -> ft.Control:
         engine_instance.save_config()
 
     def on_reset_defaults(e):
-        """Restablece los valores y fuerza un refresco de la configuración."""
         engine_instance.reset_to_defaults()
-        # En lugar de actualizar controles individuales (que pueden no existir),
-        # notificamos para un refresco total de la UI de configuración.
         page.pubsub.send_all("config_reset")
 
     reset_btn = ft.ElevatedButton(
-        content=ft.Text(
-            "Restaurar Valores por Defecto", size=12, weight=ft.FontWeight.W_600
-        ),
+        content=ft.Text("Restaurar Valores por Defecto", size=12, weight=ft.FontWeight.W_600),
         on_click=on_reset_defaults,
         style=ft.ButtonStyle(
             color=TEXT_MAIN,
@@ -297,20 +188,10 @@ def build_config(page: ft.Page) -> ft.Control:
         on_change=on_welch_toggle,
         content=ft.Column(
             [
-                ft.Radio(
-                    value="fft", label="FFT Promedioado", active_color=ACCENT_GREEN
-                ),
-                ft.Text(
-                    "FFT clásico: rápido, bueno para señales\nestables. Promedia múltiples bloques.",
-                    color=TEXT_MUTED,
-                    size=9,
-                ),
+                ft.Radio(value="fft", label="FFT Promedioado", active_color=ACCENT_GREEN),
+                ft.Text("FFT clásico: rápido, promedia múltiples bloques.", color=TEXT_MUTED, size=9),
                 ft.Radio(value="welch", label="Welch PSD", active_color="#FFD700"),
-                ft.Text(
-                    "Welch: más suave, mejor resolución\nen frecuencia, usa solapamiento.",
-                    color=TEXT_MUTED,
-                    size=9,
-                ),
+                ft.Text("Welch: usa solapamiento para mejor resolución.", color=TEXT_MUTED, size=9),
             ],
             spacing=2,
         ),
@@ -389,13 +270,17 @@ def build_config(page: ft.Page) -> ft.Control:
 
     tab_configs = {
         0: ft.Column([
+            section_title("🏠", "Inicio & Configuración", ACCENT_GREEN),
+            ft.Text("Controles generales configurados en la pantalla principal.", color=TEXT_MUTED, size=9)
+        ], spacing=5),
+        1: ft.Column([
             section_title("🎯", "Pestaña 1: Monitoreo y RFI", ACCENT_CYAN),
             lbl("Fuerza bruta:"),
             raw_switch,
             _axis_control("Gráfica 1: Espectro RAW", "mon_raw_spec"),
             _axis_control("Gráfica 2: Amplitud RAW", "mon_raw_amp"),
         ], spacing=5),
-        1: ft.Column([
+        2: ft.Column([
             section_title("🔍", "Pestaña 2: Monitoreo Filtrado", ACCENT_GREEN),
             lbl("Interruptor de Filtro"),
             ma_switch,
@@ -404,7 +289,7 @@ def build_config(page: ft.Page) -> ft.Control:
             _axis_control("Gráfica 1: Espectro Filtrado", "mon_filt_spec"),
             _axis_control("Gráfica 2: Amplitud Filtrada", "mon_filt_amp"),
         ], spacing=5),
-        2: ft.Column([
+        3: ft.Column([
             section_title("🌈", "Pestaña 3: Espectrograma", "#FF6B9D"),
             lbl("Tiempo de Análisis por bloque (s) - Afecta velocidad general"),
             analysis_win_f,
@@ -412,25 +297,21 @@ def build_config(page: ft.Page) -> ft.Control:
             wf_sec_f,
             _axis_control("Cascada (Waterfall)", "spec_wf"),
         ], spacing=5),
-        3: ft.Column([
+        4: ft.Column([
             section_title("📊", "Pestaña 4: Estadística", ACCENT_AMBER),
             _axis_control("Histograma de Amplitud", "stat_hist"),
         ], spacing=5),
-        4: ft.Column([
+        5: ft.Column([
             section_title("⚡", "Pestaña 5: Potencia vs Tiempo", "#FFB347"),
             _axis_control("Potencia Instantánea", "pow_time"),
         ], spacing=5),
-        5: ft.Column([
+        6: ft.Column([
             section_title("📶", "Pestaña 6: SNR vs Frecuencia", "#00CED1"),
             _axis_control("SNR por Bin de Freq", "snr_freq"),
         ], spacing=5),
-        6: ft.Column([
-            section_title("🔬", "Pestaña 7: Algoritmo DSP", "#B380FF"),
-            ft.Text("Ver la sección 'Algoritmo DSP' abajo.", color=TEXT_MUTED, size=9)
-        ], spacing=5),
         7: ft.Column([
-            section_title("ℹ️", "Pestaña 8: Estado", ACCENT_GREEN),
-            ft.Text("Información de estado visible en la pestaña principal.", color=TEXT_MUTED, size=9)
+            section_title("🔬", "Pestaña 7: Algoritmo DSP", "#B380FF"),
+            ft.Text("La configuración del método está en la pestaña central.", color=TEXT_MUTED, size=9, italic=True)
         ], spacing=5),
     }
 
@@ -459,56 +340,15 @@ def build_config(page: ft.Page) -> ft.Control:
             divider(),
 
             dynamic_tab_container,
-
-            divider(),
-            section_title("🌍", "SDR & Frecuencia", TEXT_MAIN),
-            lbl("Freq Central (MHz)"), freq_f,
-            lbl("Span Visual (Zoom MHz)"), span_visual_f,
-            lbl("Sample Rate (MSps)"), rate_f,
-            divider(),
-
-            section_title("🔧", "Hardware (BB60C)", ACCENT_CYAN),
-            lbl("Nivel de Referencia (dBm)"),
-            ref_level_f,
-            lbl("Ajusta el techo de entrada para no saturar.", size=8),
-            
-            lbl("RBW / Ancho Banda IQ (MHz)"),
-            rbw_f,
-            lbl("Filtro físico del SDR. Valores bajos = menos ruido.", size=8),
-            
-            lbl("Suavizado VBW (Digital)"),
-            vbw_alpha_f,
-            lbl("0.1 = Muy filtrado, 1.0 = Tiempo Real/Puro.", size=8),
-            divider(),
-            
-            section_title("📁", "Origen de Datos", TEXT_MAIN),
-            ft.Row([filepath_input, pick_btn], spacing=5),
-            fmt_dd,
-            mode_rg,
         ],
         spacing=8,
         scroll=ft.ScrollMode.AUTO,
     )
 
-    # Fin de sdr_content avanzado
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # ── Controles de la sección Estado ───────────────────────────────────────
-    # ─────────────────────────────────────────────────────────────────────────
-    # (La sección de Estado ha sido movida a ui/tabs/estado.py)
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # ── Controles de la sección Algoritmo DSP movidos a su propia pestaña ────
-    # ─────────────────────────────────────────────────────────────────────────
-
     # ── FINALIZACIÓN ─────────────────────────────────────────────────────────
-    tab_configs[6] = ft.Column([
-        section_title("🔬", "Pestaña 7: Algoritmo DSP", "#B380FF"),
-        ft.Text("La configuración del método está en la pestaña central.", color=TEXT_MUTED, size=9, italic=True)
-    ], spacing=5)
 
-    if engine_instance.active_tab == 6:
-        dynamic_tab_container.content = tab_configs[6]
+    if engine_instance.active_tab == 7:
+        dynamic_tab_container.content = tab_configs[7]
 
     return ft.Container(
         content=ft.Column([sdr_content], scroll=ft.ScrollMode.AUTO, expand=True),

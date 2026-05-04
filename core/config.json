@@ -33,8 +33,8 @@
         "mon_raw_spec": {
             "xmin": 1400.4,
             "xmax": 1440.4,
-            "ymin": -144.72631857884227,
-            "ymax": -55.02185039448585,
+            "ymin": -69.0,
+            "ymax": -67.0,
             "auto_x": 0,
             "auto_y": 0
         },
@@ -72,7 +72,7 @@
         },
         "stat_hist": {
             "xmin": 0.0,
-            "xmax": 0.001,
+            "xmax": 8e-05,
             "ymin": 0.0,
             "ymax": 100.0,
             "auto_x": 0,
@@ -83,8 +83,8 @@
             "xmax": 200.0,
             "ymin": -110.0,
             "ymax": -85.0,
-            "auto_x": 0,
-            "auto_y": 0
+            "auto_x": 1,
+            "auto_y": 1
         },
         "snr_freq": {
             "xmin": 1400.4,

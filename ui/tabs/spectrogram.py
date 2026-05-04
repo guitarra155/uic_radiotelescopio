@@ -29,7 +29,7 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
         if msg == "refresh_charts":
             from core.dsp_engine import engine_instance
 
-            if engine_instance.active_tab != 2:
+            if engine_instance.active_tab != 3:
                 return  # Solo renderizar si es la pestaña activa
 
             if is_rendering[0]:

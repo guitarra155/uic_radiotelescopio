@@ -46,26 +46,26 @@ def main(page: ft.Page):
     footer = build_footer()
 
     tab_labels = [
-        "📡  Monitoreo y RFI",          # 0 — señal ORIGINAL
-        "🔍  Monitoreo Filtrado",        # 1 — señal POST-MA
-        "🌈  Espectrograma",             # 2
-        "📊  Estadística & Smart Trigger",# 3
-        "⚡  Potencia vs. Tiempo",        # 4
-        "📶  SNR vs. Frecuencia",        # 5
-        "🔬  Algoritmo DSP",             # 6
-        "ℹ️  Estado",                    # 7
+        "🏠  Inicio & Configuración",    # 0
+        "📡  Monitoreo y RFI",          # 1 — señal ORIGINAL
+        "🔍  Monitoreo Filtrado",        # 2 — señal POST-MA
+        "🌈  Espectrograma",             # 3
+        "📊  Estadística & Smart Trigger",# 4
+        "⚡  Potencia vs. Tiempo",        # 5
+        "📶  SNR vs. Frecuencia",        # 6
+        "🔬  Algoritmo DSP",             # 7
     ]
 
     # Renderizamos los componentes visuales de cada módulo
     tab_contents = [
-        build_monitoring(page, key_state),           # 0 — RAW
-        build_monitoring_filtered(page, key_state),  # 1 — Filtrada
-        build_spectrogram(page, key_state),          # 2
-        build_statistics(page),                       # 3
-        build_signal_analysis(page, key_state),      # 4 — Potencia vs Tiempo
-        build_freq_snr(page, key_state),             # 5 — SNR
-        build_algo_result(page),                     # 6
-        build_estado(page),                          # 7
+        build_estado(page),                          # 0
+        build_monitoring(page, key_state),           # 1 — RAW
+        build_monitoring_filtered(page, key_state),  # 2 — Filtrada
+        build_spectrogram(page, key_state),          # 3
+        build_statistics(page),                       # 4
+        build_signal_analysis(page, key_state),      # 5 — Potencia vs Tiempo
+        build_freq_snr(page, key_state),             # 6 — SNR
+        build_algo_result(page),                     # 7
     ]
 
     selected = [0]  # índice activo
@@ -128,10 +128,11 @@ def main(page: ft.Page):
 
     import asyncio
 
-    # Panel Izquierdo: Sistema de Pestañas (72% del ancho)
-    left_panel = ft.Container(
-        content=ft.Column([custom_tab_bar, tab_body], expand=True, spacing=0),
-        expand=100
+    # Panel Izquierdo (Contenido de la pestaña, 72% del ancho)
+    left_panel_content = ft.Container(
+        content=tab_body,
+        expand=100,
+        padding=ft.Padding(top=5, left=0, right=0, bottom=0)
     )
 
     # Panel Derecho: Configuración Fija (28% del ancho)
@@ -142,7 +143,9 @@ def main(page: ft.Page):
         expand=35
     )
 
-    main_view = ft.Row([left_panel, right_panel], expand=True, spacing=0)
+    lower_split = ft.Row([left_panel_content, right_panel], expand=True, spacing=0)
+
+    main_view = ft.Column([custom_tab_bar, lower_split], expand=True, spacing=0)
 
     # ── Manejo de Reset de Configuración ───────────────────────
     def on_config_reset(msg):

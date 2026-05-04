@@ -44,7 +44,7 @@ def build_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
         if msg != "refresh_charts":
             return
         from core.dsp_engine import engine_instance
-        if engine_instance.active_tab != 0:
+        if engine_instance.active_tab != 1:
             return
         if is_rendering[0]:
             return

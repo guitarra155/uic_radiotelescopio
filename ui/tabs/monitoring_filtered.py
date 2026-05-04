@@ -35,7 +35,7 @@ def build_monitoring_filtered(page: ft.Page, key_state: dict) -> ft.Control:
             return
         from core.dsp_engine import engine_instance
 
-        if engine_instance.active_tab != 1:  # índice 1 = esta pestaña
+        if engine_instance.active_tab != 2:  # índice 2 = esta pestaña
             return
         if is_rendering[0]:
             return

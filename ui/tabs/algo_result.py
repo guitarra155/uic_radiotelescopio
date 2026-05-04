@@ -271,7 +271,7 @@ def build_algo_result(page: ft.Page) -> ft.Control:
             return
             
         # OPTIMIZACIÓN: Solo ejecutar algoritmos pesados si la pestaña 6 está activa
-        if engine_instance.active_tab != 6:
+        if engine_instance.active_tab != 7:
             return
 
         algo_counter[0] += 1

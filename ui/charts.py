@@ -236,10 +236,14 @@ def chart_spectrogram() -> str:
         im.set_data(data)
         
     cfg = engine_instance.charts_config["spec_wf"]
-    im.set_extent([cfg["xmin"], cfg["xmax"], 0, total_secs])
+    xmin, xmax = cfg["xmin"], cfg["xmax"]
+    if abs(xmax - xmin) < 1e-6:
+        xmin, xmax = xmin - 0.5, xmax + 0.5
+    
+    im.set_extent([xmin, xmax, 0, total_secs])
     im.set_clim(cfg["ymin"], cfg["ymax"])
 
-    ax.set_xlim([cfg["xmin"], cfg["xmax"]])
+    safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
     return fig_to_b64(fig)
 
 
@@ -261,7 +265,7 @@ def chart_histogram() -> str:
         ax.plot(x, gauss, color=ACCENT_GREEN, linewidth=1.5)
 
     cfg = engine_instance.charts_config["stat_hist"]
-    ax.set_xlim([cfg["xmin"], cfg["xmax"]])
+    safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
     return fig_to_b64(fig)
 
 
