@@ -159,14 +159,14 @@ class DSPEngine:
         # NUEVO: Configuración granular por gráfica
         # Estructura: xmin, xmax, ymin, ymax, auto_x, auto_y
         self.charts_config = {
-            "mon_raw_spec": {"xmin": 1419.0, "xmax": 1421.0, "ymin": -100.0, "ymax": -20.0, "auto_x": True, "auto_y": True},
-            "mon_raw_amp":  {"xmin": 0.0, "xmax": 1.0, "ymin": 0.0, "ymax": 1.0, "auto_x": True, "auto_y": True},
-            "mon_filt_spec": {"xmin": 1419.0, "xmax": 1421.0, "ymin": -100.0, "ymax": -20.0, "auto_x": True, "auto_y": True},
-            "mon_filt_amp": {"xmin": 0.0, "xmax": 1.0, "ymin": 0.0, "ymax": 1.0, "auto_x": True, "auto_y": True},
-            "spec_wf":      {"xmin": 1419.0, "xmax": 1421.0, "ymin": -100.0, "ymax": -20.0, "auto_x": True, "auto_y": True},
-            "stat_hist":    {"xmin": 0.0, "xmax": 1.5, "ymin": 0.0, "ymax": 100.0, "auto_x": True, "auto_y": True},
-            "pow_time":     {"xmin": 0.0, "xmax": 20.0, "ymin": -100.0, "ymax": -20.0, "auto_x": False, "auto_y": True},
-            "snr_freq":     {"xmin": 1419.0, "xmax": 1421.0, "ymin": -5.0, "ymax": 40.0, "auto_x": True, "auto_y": True},
+            "mon_raw_spec": {"xmin": 1419.0, "xmax": 1421.0, "ymin": -100.0, "ymax": -20.0, "auto_x": False, "auto_y": False},
+            "mon_raw_amp":  {"xmin": 0.0, "xmax": 1.0, "ymin": 0.0, "ymax": 1.0, "auto_x": False, "auto_y": False},
+            "mon_filt_spec": {"xmin": 1419.0, "xmax": 1421.0, "ymin": -100.0, "ymax": -20.0, "auto_x": False, "auto_y": False},
+            "mon_filt_amp": {"xmin": 0.0, "xmax": 1.0, "ymin": 0.0, "ymax": 1.0, "auto_x": False, "auto_y": False},
+            "spec_wf":      {"xmin": 1419.0, "xmax": 1421.0, "ymin": -100.0, "ymax": -20.0, "auto_x": False, "auto_y": False},
+            "stat_hist":    {"xmin": 0.0, "xmax": 1.5, "ymin": 0.0, "ymax": 100.0, "auto_x": False, "auto_y": False},
+            "pow_time":     {"xmin": 0.0, "xmax": 20.0, "ymin": -100.0, "ymax": -20.0, "auto_x": False, "auto_y": False},
+            "snr_freq":     {"xmin": 1419.0, "xmax": 1421.0, "ymin": -5.0, "ymax": 40.0, "auto_x": False, "auto_y": False},
         }
 
     @property
@@ -410,98 +410,87 @@ class DSPEngine:
         self.data_ready = True # Notificar a la UI
 
     def _auto_detect_ranges(self):
-        """Auto-detecta los rangos óptimos basándose en los datos actuales."""
+        """Auto-detecta los rangos óptimos basándose en los datos actuales, evitando NaNs."""
         if not self.is_playing:
             return
 
-        # --- 1. Calcular indicadores clave ---
-        noise_floor = np.median(self.spectrum_data)
-        self.db_noise_floor = float(noise_floor)
-        peak_idx = np.argmax(self.spectrum_data)
-        fs_mhz = self.sample_rate / 1e6
-        peak_freq = self.center_freq + (peak_idx / self.fft_size - 0.5) * fs_mhz
-
-        # --- 2. Aplicar lógica a cada gráfica configurada ---
+        # 1. Sanitizar datos de entrada para evitar cálculos corruptos
+        spec = np.nan_to_num(self.spectrum_data, nan=-100.0)
+        amp = np.nan_to_num(self.amplitude_data, nan=0.0)
+        amp_f = np.nan_to_num(self.amplitude_ma_data, nan=0.0)
         
-        # 2.1 Especros (RAW y Filtered) y Waterfall
-        for spec_id in ["mon_raw_spec", "mon_filt_spec", "spec_wf"]:
-            cfg = self.charts_config.get(spec_id)
-            if not cfg: continue
-            
-            # Eje Y: Centrado en nivel de referencia con margen generoso
-            if cfg["auto_y"]:
-                spec_max = np.percentile(self.spectrum_data, 99.8)
-                cfg["ymin"] = noise_floor - 30.0
-                cfg["ymax"] = spec_max + 20.0
-                
-            # Eje X: Centrado en la frecuencia central con el ancho de banda real
-            if cfg["auto_x"]:
-                span = self.sample_rate / 2_000_000 # MHz
-                cfg["xmin"] = self.center_freq - span
-                cfg["xmax"] = self.center_freq + span
-                
-            # Evitar rangos absurdos (como los 100MHz vistos en el screenshot)
-            if (cfg["xmax"] - cfg["xmin"]) > 50.0:
-                cfg["xmin"] = self.center_freq - 1.2
-                cfg["xmax"] = self.center_freq + 1.2
+        noise_floor = float(np.nanmedian(spec))
+        self.db_noise_floor = noise_floor
+        
+        fs_mhz = self.sample_rate / 1e6
+        span_mhz = fs_mhz # Ancho total real
 
-        # 2.2 Amplitud (Time Domain)
-        for amp_id in ["mon_raw_amp", "mon_filt_amp"]:
-            cfg = self.charts_config.get(amp_id)
-            if cfg:
-                if cfg["auto_y"]:
-                    data = self.amplitude_ma_data if "filt" in amp_id else self.amplitude_data
-                    mag_max = np.percentile(data, 99)
+        # 2. Aplicar lógica a cada gráfica configurada
+        for chart_id, cfg in self.charts_config.items():
+            if not isinstance(cfg, dict): continue
+
+            # --- Eje X (Frecuencia o Tiempo) ---
+            if cfg.get("auto_x"):
+                if "spec" in chart_id or "wf" in chart_id or "snr" in chart_id:
+                    # Centrar en center_freq con el span real del SDR
+                    cfg["xmin"] = float(self.center_freq - span_mhz / 2)
+                    cfg["xmax"] = float(self.center_freq + span_mhz / 2)
+                elif "amp" in chart_id:
+                    # Tiempo basado en muestras y sample rate
+                    duration_ms = (len(amp) / self.sample_rate) * 1000
+                    cfg["xmin"] = 0.0
+                    cfg["xmax"] = float(max(0.1, duration_ms))
+                elif chart_id == "pow_time":
+                    # El tiempo en potencia crece hasta el máximo del buffer
+                    n_pwr = len(self.power_time_data)
+                    cfg["xmin"] = 0.0
+                    cfg["xmax"] = float(n_pwr * self.analysis_window_sec)
+
+            # --- Eje Y (Potencia o Amplitud) ---
+            if cfg.get("auto_y"):
+                if "spec" in chart_id or "wf" in chart_id:
+                    p_max = float(np.nanpercentile(spec, 99.9))
+                    cfg["ymin"] = float(noise_floor - 25.0)
+                    cfg["ymax"] = float(p_max + 15.0)
+                elif "amp" in chart_id:
+                    data_y = amp_f if "filt" in chart_id else amp
+                    a_max = float(np.nanpercentile(data_y, 99))
                     cfg["ymin"] = 0.0
-                    cfg["ymax"] = max(0.1, float(mag_max * 1.5))
-                    if cfg["ymax"] <= cfg["ymin"] + 0.001:
-                        cfg["ymax"] = cfg["ymin"] + 1.0
-                if cfg["auto_x"]:
-                    duration_ms = (len(self.amplitude_data) / self.sample_rate) * 1000
-                    cfg["xmin"] = 0
-                    cfg["xmax"] = max(0.1, float(duration_ms))
+                    cfg["ymax"] = float(max(0.01, a_max * 1.3))
+                elif chart_id == "pow_time":
+                    p_valid = self.power_time_data[self.power_time_data > -110]
+                    if len(p_valid) > 5:
+                        p_min = float(np.nanpercentile(p_valid, 2))
+                        p_max = float(np.nanpercentile(p_valid, 98))
+                        cfg["ymin"] = p_min - 10
+                        cfg["ymax"] = p_max + 15
+                elif chart_id == "snr_freq":
+                    s_max = float(np.nanpercentile(self.snr_data, 99))
+                    cfg["ymin"] = -5.0
+                    cfg["ymax"] = float(max(10.0, s_max + 10.0))
+                elif chart_id == "stat_hist":
+                    h_max = float(np.nanpercentile(self.histogram_data, 99))
+                    cfg["xmin"] = 0.0 # El histograma usa x para amplitud
+                    cfg["xmax"] = float(max(0.1, h_max * 1.2))
 
-        # 2.3 Potencia vs Tiempo
-        cfg = self.charts_config.get("pow_time")
-        if cfg and cfg["auto_y"]:
-            # Solo usar los datos que ya han sido escritos para no promediar el vacío (-100)
-            written = self.power_samples_written
-            d_len = len(self.power_time_data)
-            p_subset = self.power_time_data[:written] if written < d_len else self.power_time_data
-            
-            pwr_valid = p_subset[p_subset > -110] # Ignorar valores de inicialización
-            if len(pwr_valid) > 5:
-                p_max = np.percentile(pwr_valid, 98)
-                p_min = np.percentile(pwr_valid, 2)
-                cfg["ymin"] = float(p_min - 5)
-                cfg["ymax"] = float(p_max + 10)
-            
-            # Garantizar que no sean idénticos
-            if cfg["ymax"] <= cfg["ymin"] + 0.1:
-                cfg["ymax"] = cfg["ymin"] + 10.0
+            # --- Validación Final Anti-Colapso (ymin < ymax y sin NaNs) ---
+            for attr in ["xmin", "xmax", "ymin", "ymax"]:
+                if np.isnan(cfg[attr]) or np.isinf(cfg[attr]):
+                    # Fallback a valores seguros por defecto
+                    if "min" in attr: cfg[attr] = -100.0 if "spec" in chart_id else 0.0
+                    else: cfg[attr] = 0.0 if "spec" in chart_id else 1.0
 
-        # 2.4 SNR vs Frecuencia
-        cfg = self.charts_config.get("snr_freq")
-        if cfg:
-            if cfg["auto_y"]:
-                snr_max = np.percentile(self.snr_data, 99)
-                cfg["ymin"] = -5
-                cfg["ymax"] = snr_max + 10
-            if cfg["auto_x"]:
-                cfg["xmin"] = peak_freq - 1.0
-                cfg["xmax"] = peak_freq + 1.0
+            if cfg["ymax"] <= cfg["ymin"]:
+                cfg["ymax"] = cfg["ymin"] + 10.0 if "spec" in chart_id else cfg["ymin"] + 0.1
+            if cfg["xmax"] <= cfg["xmin"]:
+                cfg["xmax"] = cfg["xmin"] + 1.0
 
-        # 2.5 Histograma
-        cfg = self.charts_config.get("stat_hist")
-        if cfg and cfg["auto_x"]:
-            cfg["xmin"] = 0
-            cfg["xmax"] = np.percentile(self.histogram_data, 99) * 1.2
 
     def reset_to_defaults(self):
         """Restaura los rangos de visualización a los óptimos detectados por el sistema."""
         for cfg in self.charts_config.values():
-            cfg["auto_x"] = True
-            cfg["auto_y"] = True
+            cfg["auto_x"] = False
+            cfg["auto_y"] = False
 
         # Forzar re-detección inmediata
         self._frames_since_autoscale = 30
@@ -793,6 +782,9 @@ class DSPEngine:
                     for k, v in cc.items():
                         if k in self.charts_config:
                             self.charts_config[k].update(v)
+                            # Forzar Auto a False SIEMPRE al abrir el programa
+                            self.charts_config[k]["auto_x"] = False
+                            self.charts_config[k]["auto_y"] = False
         except Exception as e:
             print("Load Config Error:", e)
 

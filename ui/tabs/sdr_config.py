@@ -354,23 +354,14 @@ def build_config(page: ft.Page) -> ft.Control:
             except ValueError:
                 pass
 
-        # Usamos los componentes globales probados
         xi_min = txt_field("X Min", str(cfg["xmin"]))
-        xi_min.expand = False
-        xi_min.width = 100
         xi_max = txt_field("X Max", str(cfg["xmax"]))
-        xi_max.expand = False
-        xi_max.width = 100
         
         xi_min.on_change = lambda e: on_manual_change(e, "x", "xmin")
         xi_max.on_change = lambda e: on_manual_change(e, "x", "xmax")
 
         yi_min = txt_field("Y Min", str(cfg["ymin"]))
-        yi_min.expand = False
-        yi_min.width = 100
         yi_max = txt_field("Y Max", str(cfg["ymax"]))
-        yi_max.expand = False
-        yi_max.width = 100
         
         yi_min.on_change = lambda e: on_manual_change(e, "y", "ymin")
         yi_max.on_change = lambda e: on_manual_change(e, "y", "ymax")
