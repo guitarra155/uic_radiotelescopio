@@ -98,6 +98,9 @@ def build_config(page: ft.Page) -> ft.Control:
             ft.Divider(height=20, color="#303030")
         ], spacing=2)
 
+    # Columna principal persistente para mantener el scroll
+    main_col = ft.Column(scroll=ft.ScrollMode.AUTO, spacing=10)
+
     def render_panel():
         """Genera los controles basados en el estado actual del motor."""
         idx = engine_instance.active_tab
@@ -123,7 +126,7 @@ def build_config(page: ft.Page) -> ft.Control:
             tab_content = ft.Column([
                 row("Análisis (s)", make_input(f"{engine_instance.analysis_window_sec:.8f}", 
                     lambda e: (setattr(engine_instance, "analysis_window_sec", float(e.control.value)), engine_instance.save_config(), on_ui_event(e)))),
-                row("Historial (s)", make_input(engine_instance.waterfall_history_sec, 
+                row("Historial (s)", make_input(f"{engine_instance.waterfall_history_sec:.8f}", 
                     lambda e: (setattr(engine_instance, "waterfall_history_sec", float(e.control.value)), engine_instance.save_config(), on_ui_event(e)))),
                 build_axis_group("Cascada", "spec_wf"),
             ])
@@ -132,8 +135,8 @@ def build_config(page: ft.Page) -> ft.Control:
         elif idx == 6: tab_content = build_axis_group("SNR", "snr_freq")
         else: tab_content = ft.Text("Configuración general activa", color=TEXT_MUTED, size=10)
 
-        # Retornar el layout principal
-        return ft.Column([
+        # Actualizar la lista de controles de la columna persistente
+        main_col.controls = [
             ft.Text("⚙️ CONFIGURACIÓN", size=14, weight=ft.FontWeight.BOLD, color=ACCENT_CYAN),
             ft.Divider(height=10, color=ACCENT_CYAN),
             
@@ -146,18 +149,19 @@ def build_config(page: ft.Page) -> ft.Control:
             
             ft.Divider(height=20, color=BORDER_COL),
             tab_content
-        ], scroll=ft.ScrollMode.AUTO, spacing=10)
+        ]
 
     # --- Suscripción a eventos ---
     async def _update_tab(msg):
         if msg == "tab_changed":
-            root_container.content = render_panel()
-            if root_container.page: root_container.update()
+            render_panel()
+            main_col.update()
 
     page.pubsub.subscribe(_update_tab)
     
     # Carga inicial
-    root_container.content = render_panel()
+    render_panel()
+    root_container.content = main_col
     
     return ft.Container(
         content=root_container,
