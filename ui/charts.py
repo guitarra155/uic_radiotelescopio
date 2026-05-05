@@ -28,10 +28,15 @@ cache = ChartCache()
 def get_cached_fig(name, figsize=(9.5, 3.0), is_3d=False):
     """Crea o recupera una figura de la caché para evitar sobrecoste de memoria."""
     if name not in cache.figs:
-        fig = Figure(figsize=figsize, dpi=100)
+        fig = Figure(figsize=figsize, dpi=72)  # 72dpi suficiente para pantalla
         fig.patch.set_facecolor(MPL_BG)
         ax = fig.subplots()
         style_ax(ax)
+        # tight_layout UNA SOLA VEZ al crear la figura, no en cada frame
+        try:
+            fig.tight_layout(pad=1.0)
+        except:
+            pass
         cache.figs[name] = fig
         cache.axes[name] = ax
         cache.artists[name] = {}
@@ -40,13 +45,9 @@ def get_cached_fig(name, figsize=(9.5, 3.0), is_3d=False):
 
 
 def fig_to_b64(fig: Figure) -> str:
-    """Retorna Base64 crudo con mejor uso del espacio."""
-    try:
-        fig.tight_layout(pad=1.0)
-    except:
-        pass
+    """Retorna Base64 crudo. tight_layout ya fue aplicado al crear la figura."""
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=100, bbox_inches="tight", pad_inches=0.1)
+    fig.savefig(buf, format="png", dpi=72, bbox_inches=None)
     buf.seek(0)
     enc = base64.b64encode(buf.read()).decode()
     buf.close()
@@ -89,11 +90,10 @@ def chart_amplitude() -> str:
     fig, ax, is_new = get_cached_fig("amplitude", figsize=(9.5, 2.8))
     sig = engine_instance.amplitude_data
     n = len(sig)
-    # Tiempo absoluto en segundos
-    elapsed_sec = engine_instance.elapsed_samples / engine_instance.sample_rate
-    # Ventana de tiempo mostrada (depende del tiempo de análisis)
+    # Tiempo RELATIVO: siempre de 0 a la duración de la ventana
+    # La señal siempre será visible; solo cambia la escala X si cambia analysis_window_sec
     duration_sec = engine_instance.analysis_window_sec
-    t = np.linspace(elapsed_sec - duration_sec, elapsed_sec, n)
+    t = np.linspace(0.0, duration_sec, n)
 
     if is_new or "line" not in cache.artists["amplitude"]:
         ax.clear()
@@ -106,10 +106,10 @@ def chart_amplitude() -> str:
         line = cache.artists["amplitude"]["line"]
         line.set_data(t, sig)
         
-    # Aplicar límites siempre (fuera del else)
+    # El eje X siempre cubre exactamente la ventana de análisis actual
     cfg = engine_instance.charts_config["mon_raw_amp"]
-    ax.set_ylim([cfg["ymin"], cfg["ymax"]])
-    ax.set_xlim([cfg["xmin"], cfg["xmax"]])
+    safe_set_ylim(ax, cfg["ymin"], cfg["ymax"])
+    safe_set_xlim(ax, 0.0, duration_sec)
 
     return fig_to_b64(fig)
 
@@ -441,8 +441,8 @@ def chart_ar_spectrum(result: dict) -> str:
     else:
         line = cache.artists["ar_spectrum"]["line"]
         line.set_data(freqs, psd)
-        ax.set_xlim([freqs[0], freqs[-1]])
-        ax.set_ylim([np.min(psd) - 5, np.max(psd) + 5])
+        safe_set_xlim(ax, freqs[0], freqs[-1])
+        safe_set_ylim(ax, np.min(psd) - 5, np.max(psd) + 5)
 
     return fig_to_b64(fig)
 
@@ -497,8 +497,8 @@ def chart_music_spectrum(result: dict) -> str:
     else:
         line = cache.artists[name]["line"]
         line.set_data(freqs, spec)
-        ax.set_xlim([freqs[0], freqs[-1]])
-        ax.set_ylim([np.min(spec) - 2, np.max(spec) + 2])
+        safe_set_xlim(ax, freqs[0], freqs[-1])
+        safe_set_ylim(ax, np.min(spec) - 2, np.max(spec) + 2)
 
     return fig_to_b64(fig)
 
@@ -508,20 +508,16 @@ def chart_amplitude_ma() -> str:
     fig, ax, is_new = get_cached_fig("amplitude_ma", figsize=(9.5, 2.8))
     sig = engine_instance.amplitude_ma_data
     n = len(sig)
-    # Todo el buffer de amplitud corresponde al tiempo de análisis actual
-    duration_ms = engine_instance.analysis_window_sec * 1000
-    t = np.linspace(0, duration_ms, n)
-
-    # Auto-detectar rango de amplitud filtrada
-    sig_min, sig_max = np.min(sig), np.max(sig)
-    margin = (sig_max - sig_min) * 0.1 if sig_max > sig_min else 0.1
+    # Tiempo RELATIVO: siempre de 0 a la duración de la ventana (en segundos)
+    duration_sec = engine_instance.analysis_window_sec
+    t = np.linspace(0.0, duration_sec, n)
 
     if is_new or "line" not in cache.artists["amplitude_ma"]:
         ax.clear()
         style_ax(
             ax,
             f"Amplitud Filtrada — MA ({engine_instance.moving_avg_window_ms:.2f} ms)",
-            "Tiempo (ms)",
+            "Tiempo (s)",
             "Amplitud (V)",
         )
         (line,) = ax.plot(t, sig, color=ACCENT_AMBER, linewidth=0.9, alpha=0.9)
@@ -535,12 +531,13 @@ def chart_amplitude_ma() -> str:
             fontsize=9,
             pad=6,
         )
-    # Forzar el uso de los límites configurados en el engine (FUERA del else)
+    # El eje X siempre cubre exactamente la ventana de análisis actual
     cfg = engine_instance.charts_config["mon_filt_amp"]
     safe_set_ylim(ax, cfg["ymin"], cfg["ymax"])
-    safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
+    ax.set_xlim([0.0, duration_sec])
 
     return fig_to_b64(fig)
+
 
 
 def chart_welch_spectrum(result: dict) -> str:
@@ -560,8 +557,8 @@ def chart_welch_spectrum(result: dict) -> str:
     else:
         line = cache.artists[name]["line"]
         line.set_data(freqs, psd)
-        ax.set_xlim([freqs[0], freqs[-1]])
-        ax.set_ylim([np.min(psd) - 5, np.max(psd) + 5])
+        safe_set_xlim(ax, freqs[0], freqs[-1])
+        safe_set_ylim(ax, np.min(psd) - 5, np.max(psd) + 5)
         ax.set_title(
             f"Espectro de Welch ({n_seg} segmentos)",
             color=ACCENT_CYAN,
@@ -592,8 +589,8 @@ def chart_correlogram_spectrum(result: dict) -> str:
     else:
         line = cache.artists[name]["line"]
         line.set_data(freqs, psd)
-        ax.set_xlim([freqs[0], freqs[-1]])
-        ax.set_ylim([np.min(psd) - 5, np.max(psd) + 5])
+        safe_set_xlim(ax, freqs[0], freqs[-1])
+        safe_set_ylim(ax, np.min(psd) - 5, np.max(psd) + 5)
         ax.set_title(
             f"Correlograma — lag máx {max_lag} muestras",
             color=ACCENT_CYAN,

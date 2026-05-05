@@ -127,6 +127,7 @@ def build_estado(page: ft.Page) -> ft.Control:
         try:
             val = float(e.control.value)
             engine_instance.update_visual_span(val)
+            engine_instance.save_config()
         except: pass
     
     span_visual_f.on_submit = on_span_change

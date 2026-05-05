@@ -47,8 +47,11 @@ class DSPEngine:
         self.stream_mode = "sdr"
         self.bb60c_decimation = 1
         
-        self._initializing = True # Bandera de seguridad
-        self.sample_rate = 2_400_000
+        self._initializing = True
+        # Asignar directamente sin pasar por el setter (evita prints en arranque)
+        # load_config() restaurará los valores reales guardados
+        self._sample_rate = 40_000_000
+        self.bb60c_decimation = 1
         self._initializing = False
         
         self.window_raw = np.hanning(self.fft_size)
@@ -1011,7 +1014,15 @@ class DSPEngine:
         # No guardar durante la inicialización
         if getattr(self, "_initializing", False):
             return
-            
+        # Debounce: cancelar el timer anterior y programar uno nuevo en 1s
+        # Esto evita escribir a disco en cada tecla pulsada
+        if hasattr(self, "_save_timer") and self._save_timer is not None:
+            self._save_timer.cancel()
+        self._save_timer = threading.Timer(1.0, self._do_save_config)
+        self._save_timer.daemon = True
+        self._save_timer.start()
+
+    def _do_save_config(self):
         conf = {
             "center_freq": self.center_freq,
             "sample_rate": self.sample_rate,
@@ -1040,6 +1051,7 @@ class DSPEngine:
             "ma_enabled": self.ma_enabled,
             "raw_mode": self.raw_mode,
             "use_welch": self.use_welch,
+            "visual_span_mhz": self.visual_span_mhz,
             "charts_config": self.charts_config,
         }
         try:
@@ -1100,6 +1112,8 @@ class DSPEngine:
                 self.vbw_alpha = conf.get("vbw_alpha", self.vbw_alpha)
                 self.ma_enabled = conf.get("ma_enabled", self.ma_enabled)
                 self.raw_mode = conf.get("raw_mode", self.raw_mode)
+                if "visual_span_mhz" in conf:
+                    self.update_visual_span(conf["visual_span_mhz"])
 
                 # Cargar configuración granular si existe
                 cc = conf.get("charts_config")
