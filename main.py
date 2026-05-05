@@ -160,6 +160,12 @@ def main(page: ft.Page):
         while True:
             is_p = engine_instance.is_playing
             try:
+                # El motor detectó metadatos nuevos (ej: sintonía automática)
+                if getattr(engine_instance, "metadata_updated", False):
+                    # Solo enviamos señal de refresco de gráficas/títulos, NO de configuración
+                    engine_instance.metadata_updated = False
+                    page.pubsub.send_all("refresh_charts")
+
                 if is_p and getattr(engine_instance, "data_ready", False):
                     page.pubsub.send_all("refresh_charts")
                     engine_instance.data_ready = False

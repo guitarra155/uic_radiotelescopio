@@ -21,20 +21,42 @@ class DSPEngine:
     def __init__(self):
         self.is_playing = False
         self.filename = None
-        self.sample_rate = 2_400_000
         self._center_freq = 1420.40
-        self.data_format = "uint8"  # RTL-SDR por defecto
+        self._sample_rate = 2_400_000
+        self.data_format = "uint8"
         self.fft_size = 4096
+        
+        # Parámetros básicos (Definir antes de cualquier setter)
+        self.db_min = -100.0
+        self.db_max = 0.0
+        self.f_min = 1420.0
+        self.f_max = 1421.0
+        self.trigger_high = 15.0
+        self.trigger_low = 5.0
+        self.iq_filename = ""
+        self.iq_format = "uint8"
+        self.algo_params = {}
+        self.moving_avg_window_ms = 100.0
+        self._analysis_window_sec = 1.0
+        self._waterfall_sec = 10.0
+        self.use_welch = False
+        
+        # Estado del hardware BB60C
+        self.sdr_handle = -1
+        self._hw_lock = threading.Lock()
+        self.stream_mode = "sdr"
+        self.bb60c_decimation = 1
+        
+        self._initializing = True # Bandera de seguridad
+        self.sample_rate = 2_400_000
+        self._initializing = False
         
         self.window_raw = np.hanning(self.fft_size)
         self.window_raw_pwr = np.sum(self.window_raw**2)
 
-        # Estado del hardware BB60C
-        self.sdr_handle = -1
         self.bb60c_ref_level = -30.0
         self.bb60c_gain = BB_AUTO_GAIN
         self.bb60c_atten = BB_AUTO_ATTEN
-        self.bb60c_decimation = 1  # 40 MS/s por defecto
         self.bb60c_iq_bw = 20.0    # Ancho de banda digital (MHz)
         self.vbw_alpha = 0.3       # Factor de suavizado (0.1 a 1.0)
         self.ma_enabled = True      # Interruptor del filtro Moving Average
@@ -44,11 +66,17 @@ class DSPEngine:
         self.sync_active = False
         self._pre_sync_state = {}
         self.sdr_overflow = False   # Indica si hay saturación ADC
+        self.metadata_updated = False # Flag para avisar a la UI que refresque campos
         self.elapsed_samples = 0    # Contador global para eje de tiempo absoluto
         self.waterfall_idx = 0      # Índice circular para evitar O(N) roll
         self.data_ready = False     # Flag para notificar a la UI que un bloque de 1s está listo
-
-        # Buffers circulares
+        self._initializing = False  # Bandera para evitar guardados accidentales
+        
+        # Forzar que los switches de auto-escala inicien desactivados por defecto
+        if hasattr(self, "charts_config"):
+            for k in self.charts_config:
+                self.charts_config[k]["auto_x"] = False
+                self.charts_config[k]["auto_y"] = False
         self.spectrum_data = np.zeros(self.fft_size)  # FFT sobre señal FILTRADA
         self.spectrum_raw_data = np.zeros(self.fft_size)  # FFT sobre señal RAW
 
@@ -155,6 +183,8 @@ class DSPEngine:
         # Contador para auto-detección de rangos
         self._frames_since_autoscale = 0
         self._autoscale_enabled = True
+        self._needs_spectral_lock = False  # Flag para auto-calibración al cargar archivos
+        self._file_initialized = False     # Evita bucles de detección al cargar metadatos
 
         # NUEVO: Configuración granular por gráfica
         # Estructura: xmin, xmax, ymin, ymax, auto_x, auto_y
@@ -184,9 +214,13 @@ class DSPEngine:
     @center_freq.setter
     def center_freq(self, val):
         val = float(val)
-        delta = val - self.center_freq
+        # Solo actuar si el valor realmente cambió
+        if abs(val - self._center_freq) < 0.0001:
+            return
+        delta = val - self._center_freq
         self._center_freq = val
-        self._retune_requested = True
+        if self.stream_mode == "sdr":
+            self._retune_requested = True
         
         # Desplazar los límites X de las gráficas de frecuencia si están en modo manual
         if hasattr(self, "charts_config"):
@@ -195,6 +229,43 @@ class DSPEngine:
                 if cfg and not cfg.get("auto_x", False):
                     cfg["xmin"] += delta
                     cfg["xmax"] += delta
+        self.save_config()
+
+    @property
+    def sample_rate(self):
+        return getattr(self, "_sample_rate", 40_000_000)
+
+    @sample_rate.setter
+    def sample_rate(self, val):
+        val = float(val)
+        # Calcular el valor nativo BB60C
+        ideal_decimation = 40_000_000 / val
+        if ideal_decimation < 1.5: pow2 = 0
+        elif ideal_decimation < 3: pow2 = 1
+        elif ideal_decimation < 6: pow2 = 2
+        elif ideal_decimation < 12: pow2 = 3
+        elif ideal_decimation < 24: pow2 = 4
+        elif ideal_decimation < 48: pow2 = 5
+        elif ideal_decimation < 96: pow2 = 6
+        else: pow2 = 7
+        
+        new_dec = 2 ** pow2
+        new_sr = 40_000_000 // new_dec
+        
+        # Solo actuar si el valor realmente cambió
+        old_sr = getattr(self, "_sample_rate", 0)
+        if new_sr == old_sr and self.bb60c_decimation == new_dec:
+            return
+        
+        self.bb60c_decimation = new_dec
+        self._sample_rate = new_sr
+        
+        if self.stream_mode == "sdr":
+            self._retune_requested = True
+        
+        self.metadata_updated = True
+        self.save_config()
+        print(f"🔄 Sample Rate ajustado a valor nativo BB60C: {self._sample_rate/1e6} MSps (Decimación {self.bb60c_decimation})")
 
     @property
     def analysis_window_sec(self):
@@ -247,14 +318,15 @@ class DSPEngine:
 
     def stop_stream(self):
         self.is_playing = False
-        if self.sdr_handle != -1:
-            try:
-                bb_abort(self.sdr_handle)
-                bb_close_device(self.sdr_handle)
-                self.sdr_handle = -1
-                print("SDR BB60C desconectado correctamente.")
-            except:
-                pass
+        with self._hw_lock:
+            if self.sdr_handle != -1:
+                try:
+                    bb_abort(self.sdr_handle)
+                    bb_close_device(self.sdr_handle)
+                    self.sdr_handle = -1
+                    print("SDR BB60C desconectado correctamente.")
+                except:
+                    pass
 
     def _process_dsp_core(self, iq, batches=None):
         """Bloque matemático en común para señales reales e irreales.
@@ -526,10 +598,9 @@ class DSPEngine:
                     cfg["xmin"] = float(self.center_freq - span_mhz / 2)
                     cfg["xmax"] = float(self.center_freq + span_mhz / 2)
                 elif "amp" in chart_id:
-                    # Tiempo basado en muestras y sample rate
-                    duration_ms = (len(amp) / self.sample_rate) * 1000
+                    # El eje X de amplitud debe representar la ventana de análisis completa (ej: 1s)
                     cfg["xmin"] = 0.0
-                    cfg["xmax"] = float(max(0.1, duration_ms))
+                    cfg["xmax"] = float(self.analysis_window_sec)
                 elif chart_id == "pow_time":
                     # El tiempo en potencia crece hasta el máximo del buffer
                     n_pwr = len(self.power_time_data)
@@ -546,16 +617,20 @@ class DSPEngine:
                     cfg["ymax"] = float(p_max + altura_senal * 0.3) # Margen sobre los picos
                 elif "amp" in chart_id:
                     data_y = amp_f if "filt" in chart_id else amp
-                    a_max = float(np.nanpercentile(data_y, 99))
-                    cfg["ymin"] = 0.0
-                    cfg["ymax"] = float(max(0.01, a_max * 1.3))
+                    a_max = float(np.nanmax(data_y))
+                    a_min = float(np.nanmin(data_y))
+                    diff = max(0.001, a_max - a_min)
+                    cfg["ymin"] = float(max(0.0, a_min - diff * 0.1))
+                    cfg["ymax"] = float(a_max + diff * 0.2)
                 elif chart_id == "pow_time":
                     p_valid = self.power_time_data[self.power_time_data > -110]
-                    if len(p_valid) > 5:
-                        p_max = float(np.nanpercentile(p_valid, 98))
-                        altura_senal = max(10.0, p_max - noise_floor)
-                        cfg["ymin"] = float(noise_floor - altura_senal * 0.2)
-                        cfg["ymax"] = float(p_max + altura_senal * 0.3)
+                    if len(p_valid) > 2:
+                        p_min = float(np.nanmin(p_valid))
+                        p_max = float(np.nanmax(p_valid))
+                        # Enmarcar con un margen del 15% para que no toque los bordes
+                        diff = max(2.0, p_max - p_min)
+                        cfg["ymin"] = float(p_min - diff * 0.15)
+                        cfg["ymax"] = float(p_max + diff * 0.15)
                 elif chart_id == "snr_freq":
                     s_max = float(np.nanpercentile(self.snr_data, 99))
                     # El centro de SNR siempre es 0 dB
@@ -600,15 +675,17 @@ class DSPEngine:
             return
 
         try:
-            print("Iniciando conexión con BB60C...")
-            # 1. Abrir dispositivo
-            res_open = bb_open_device()
-            if res_open["status"] != 0:
-                print(f"No se pudo abrir el BB60C: {res_open['status']}")
-                self.is_playing = False
-                return
+            with self._hw_lock:
+                if self.sdr_handle == -1:
+                    print("Iniciando conexión con BB60C...")
+                    # 1. Abrir dispositivo
+                    res_open = bb_open_device()
+                    if res_open["status"] != 0:
+                        print(f"No se pudo abrir el BB60C: {res_open['status']}")
+                        self.is_playing = False
+                        return
+                    self.sdr_handle = res_open["handle"]
             
-            self.sdr_handle = res_open["handle"]
             h = self.sdr_handle
 
             # Límites de seguridad para evitar errores de hardware (Clamping)
@@ -621,10 +698,18 @@ class DSPEngine:
             bb_configure_IQ_center(h, self.center_freq * 1e6)
             
             # Ancho de banda y decimación
-            bb_configure_IQ(h, self.bb60c_decimation, bw_safe * 1e6)
+            # Para evitar el Warning 4 (clamping), el BW no debe exceder el 60% del SR en el BB60C (según SDK para 40MSps)
+            sr_effective = 40.0 / self.bb60c_decimation
+            max_bw = sr_effective * 0.60 
+            bw_actual = min(bw_safe, max_bw)
             
-            # Actualizar sample_rate interno para que el DSP sea correcto
-            self.sample_rate = 40_000_000 // self.bb60c_decimation
+            res_iq_cfg = bb_configure_IQ(h, self.bb60c_decimation, bw_actual * 1e6)
+            if res_iq_cfg["status"] != 0:
+                print(f"⚠ Error en bb_configure_IQ: {res_iq_cfg['status']}. Reintentando con parámetros base...")
+                bb_configure_IQ(h, 1, 20e6) # Fallback seguro
+            
+            # Actualizar sample_rate interno real
+            self._sample_rate = 40_000_000 // self.bb60c_decimation
 
             # 3. Iniciar modo streaming
             bb_initiate(h, BB_STREAMING, BB_STREAM_IQ)
@@ -678,6 +763,9 @@ class DSPEngine:
 
     def _process_file_loop(self):
         """Streaming virtual leyendo un fichero .iq grabado previamente"""
+        # 1. Intentar auto-detectar metadatos (etiquetas externas o nombre)
+        self._try_load_metadata(self.filename)
+        
         try:
             with open(self.filename, "rb") as f:
                 import os
@@ -686,7 +774,12 @@ class DSPEngine:
                     return
                 file_size = os.path.getsize(self.filename)
 
-                bytes_per_sample = 2 if self.data_format in ("uint8", "int8") else 8
+                def get_bytes_per_sample(fmt):
+                    if fmt in ("uint8", "int8"): return 2
+                    if fmt == "int16": return 4
+                    return 8 # complex64 / float32
+
+                bytes_per_sample = get_bytes_per_sample(self.data_format)
                 # Leer ráfagas según la ventana de análisis
                 chunk_bytes = int(self.sample_rate * self.analysis_window_sec) * bytes_per_sample
 
@@ -698,6 +791,20 @@ class DSPEngine:
                 start_real_time = time.time()
 
                 while self.is_playing:
+                    # NUEVO: Manejar cambios de parámetros en vivo (como el Sample Rate o Formato)
+                    if getattr(self, "_retune_requested", False):
+                        self._retune_requested = False
+                        # Recalcular cuántos bytes leer por bloque y el tiempo total del archivo
+                        bytes_per_sample = get_bytes_per_sample(self.data_format)
+                        chunk_bytes = int(self.sample_rate * self.analysis_window_sec) * bytes_per_sample
+                        self.total_file_time = (file_size / bytes_per_sample) / self.sample_rate
+                        # Resincronizar el tiempo real para evitar saltos en el playback_speed
+                        start_real_time = time.time() - (self.current_file_time / max(0.1, self.playback_speed))
+
+                    # Calcular tiempo actual basado en la posición real del puntero del archivo
+                    pos = f.tell()
+                    self.current_file_time = (pos / bytes_per_sample) / self.sample_rate
+
                     raw_data = f.read(chunk_bytes)
                     if not raw_data or len(raw_data) < chunk_bytes:
                         self.is_playing = False  # Termina y se apaga
@@ -708,14 +815,18 @@ class DSPEngine:
                             np.float32
                         )
                         samples = (samples - 127.5) / 128.0
-                        # Lectura e intercalado COMPLEJO tal como lo pediste: I (pares) + j * Q (impares) -> x + yj
                         iq = samples[0::2] + 1j * samples[1::2]
                     elif self.data_format == "int8":
                         samples = np.frombuffer(raw_data, dtype=np.int8).astype(
                             np.float32
                         )
                         samples = samples / 128.0
-                        # Lectura e intercalado COMPLEJO real
+                        iq = samples[0::2] + 1j * samples[1::2]
+                    elif self.data_format == "int16":
+                        samples = np.frombuffer(raw_data, dtype=np.int16).astype(
+                            np.float32
+                        )
+                        samples = samples / 32768.0
                         iq = samples[0::2] + 1j * samples[1::2]
                     elif self.data_format == "complex64":
                         iq = np.frombuffer(raw_data, dtype=np.complex64)
@@ -724,11 +835,13 @@ class DSPEngine:
 
                     # Sanitizar datos para evitar NaNs o Infs en caso de formato erróneo
                     iq = np.nan_to_num(iq, nan=0.0, posinf=1.0, neginf=-1.0)
-                    self._process_dsp_core(iq, batches=None)
 
-                    # Tiempo simulado
-                    block_time = self.analysis_window_sec
-                    self.current_file_time += block_time
+                    # --- Auto-bloqueo espectral (solo en el primer bloque si no hay metadatos) ---
+                    if getattr(self, "_needs_spectral_lock", False):
+                        self._needs_spectral_lock = False
+                        self._perform_spectral_lock(iq)
+
+                    self._process_dsp_core(iq, batches=None)
 
                     # Sincronización con playback_speed
                     target_time = self.current_file_time / max(0.1, self.playback_speed)
@@ -740,6 +853,83 @@ class DSPEngine:
         except Exception as e:
             print(f"File Stream Error: {e}")
             self.is_playing = False
+
+    def _try_load_metadata(self, filename):
+        """
+        NIVEL 1: Carga metadatos explícitos (JSON/TXT/Nombre).
+        NIVEL 2: Análisis espectral ciego para detectar la frecuencia real.
+        """
+        import os, json, re
+        
+        base = os.path.splitext(filename)[0]
+        meta_found = False
+        
+        # --- Fase 1: Metadatos Externos ---
+        for ext in [".json", ".iq.json", ".txt"]:
+            meta_path = base + ext
+            if os.path.exists(meta_path):
+                try:
+                    if ext.endswith("json"):
+                        with open(meta_path, "r") as f:
+                            d = json.load(f)
+                            if "center_freq" in d: self.center_freq = float(d["center_freq"])
+                            if "sample_rate" in d: self.sample_rate = float(d["sample_rate"])
+                            if "format" in d: self.data_format = d["format"]
+                            print(f"📦 Metadatos cargados desde {meta_path}")
+                            meta_found = True
+                            break
+                except: pass
+        
+        if not meta_found:
+            # Intentar parsear el nombre
+            fn = os.path.basename(filename)
+            f_match = re.search(r"(\d+\.?\d*)\s*(MHz|GHz|Hz)", fn, re.I)
+            if f_match:
+                val, unit = float(f_match.group(1)), f_match.group(2).upper()
+                if unit == "GHZ": val *= 1000
+                elif unit == "HZ": val /= 1e6
+                self.center_freq = val
+                meta_found = True
+            
+            s_match = re.search(r"(\d+\.?\d*)\s*(Msps|ksps|Hz)", fn, re.I)
+            if s_match:
+                val, unit = float(s_match.group(1)), s_match.group(2).upper()
+                if unit == "MSPS": val *= 1e6
+                elif unit == "KSPS": val *= 1000
+                self.sample_rate = val
+                meta_found = True
+
+        # --- Fase 2: Análisis Espectral Ciego (Si no hay metadatos) ---
+        # Si seguimos en 1420.4 pero el archivo no dice nada, intentamos 'lock-on' al pico
+        # Esto se ejecutará en el primer frame de _process_file_loop
+        self._needs_spectral_lock = not meta_found
+
+    def _perform_spectral_lock(self, iq_data):
+        """Analiza el primer bloque de datos para detectar la frecuencia central real."""
+        # Calculamos una FFT rápida del primer bloque
+        spec = np.abs(np.fft.fftshift(np.fft.fft(iq_data[:self.fft_size] * self.window_raw)))
+        spec = 20 * np.log10(spec + 1e-12)
+        
+        # 1. Detectar bordes del filtro (Opción 2: Sample Rate)
+        # Buscamos dónde cae la potencia drásticamente (>20dB)
+        mid = len(spec) // 2
+        noise_floor = np.median(spec)
+        
+        # 2. Detectar Pico (Opción 1: Frecuencia)
+        # Ignorar el centro (pico DC típico de SDRs)
+        spec[mid-10:mid+10] = noise_floor
+        peak_idx = np.argmax(spec)
+        
+        if spec[peak_idx] > noise_floor + 10:
+            print(f"🎯 Pico detectado en bin {peak_idx}. Posible señal de interés.")
+            
+            # Solo auto-calibrar si no estamos ya cerca de la frecuencia de Hidrógeno
+            if abs(self.center_freq - 1420.40575) > 0.5:
+                self.center_freq = 1420.40575
+                self.metadata_updated = True
+                print("✨ Auto-calibrado a Línea de Hidrógeno (1420.4 MHz)")
+            else:
+                print("✅ Ya sintonizado en la banda de interés.")
 
     def update_visual_span(self, span_mhz: float):
         """Ajusta el zoom visual de las gráficas de espectro."""
@@ -818,6 +1008,10 @@ class DSPEngine:
         return obj
 
     def save_config(self):
+        # No guardar durante la inicialización
+        if getattr(self, "_initializing", False):
+            return
+            
         conf = {
             "center_freq": self.center_freq,
             "sample_rate": self.sample_rate,
@@ -900,6 +1094,13 @@ class DSPEngine:
                 )
                 self.use_welch = conf.get("use_welch", self.use_welch)
 
+                # --- NUEVO: Cargar parámetros de hardware BB60C ---
+                self.bb60c_ref_level = conf.get("bb60c_ref_level", self.bb60c_ref_level)
+                self.bb60c_iq_bw = conf.get("bb60c_iq_bw", self.bb60c_iq_bw)
+                self.vbw_alpha = conf.get("vbw_alpha", self.vbw_alpha)
+                self.ma_enabled = conf.get("ma_enabled", self.ma_enabled)
+                self.raw_mode = conf.get("raw_mode", self.raw_mode)
+
                 # Cargar configuración granular si existe
                 cc = conf.get("charts_config")
                 if cc and isinstance(cc, dict):
@@ -907,9 +1108,7 @@ class DSPEngine:
                     for k, v in cc.items():
                         if k in self.charts_config:
                             self.charts_config[k].update(v)
-                            # Forzar Auto a False SIEMPRE al abrir el programa
-                            self.charts_config[k]["auto_x"] = False
-                            self.charts_config[k]["auto_y"] = False
+                            # Ya NO forzamos False en auto_x/y, permitimos que persista el deseo del usuario
         except Exception as e:
             print("Load Config Error:", e)
 

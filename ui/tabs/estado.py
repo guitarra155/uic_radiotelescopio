@@ -62,7 +62,7 @@ def build_estado(page: ft.Page) -> ft.Control:
     filepath_input.on_change = on_filepath_change
 
     fmt_dd = dd(
-        "Formato Datos .iq", engine_instance.iq_format, ["uint8", "int8", "complex64"]
+        "Formato Datos .iq", engine_instance.iq_format, ["uint8", "int8", "int16", "complex64"]
     )
 
     def on_fmt_change(e):

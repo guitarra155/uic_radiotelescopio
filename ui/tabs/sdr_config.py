@@ -235,14 +235,14 @@ def build_config(page: ft.Page) -> ft.Control:
             except ValueError:
                 pass
 
-        xi_min = txt_field(f"{x_name} Min", str(cfg["xmin"]))
-        xi_max = txt_field(f"{x_name} Max", str(cfg["xmax"]))
+        xi_min = txt_field(f"{x_name} Min", f"{cfg['xmin']:.2f}")
+        xi_max = txt_field(f"{x_name} Max", f"{cfg['xmax']:.2f}")
         
         xi_min.on_change = lambda e: on_manual_change(e, "x", "xmin")
         xi_max.on_change = lambda e: on_manual_change(e, "x", "xmax")
 
-        yi_min = txt_field(f"{y_name} Min", str(cfg["ymin"]))
-        yi_max = txt_field(f"{y_name} Max", str(cfg["ymax"]))
+        yi_min = txt_field(f"{y_name} Min", f"{cfg['ymin']:.2f}")
+        yi_max = txt_field(f"{y_name} Max", f"{cfg['ymax']:.2f}")
         
         yi_min.on_change = lambda e: on_manual_change(e, "y", "ymin")
         yi_max.on_change = lambda e: on_manual_change(e, "y", "ymax")

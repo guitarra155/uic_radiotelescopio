@@ -13,6 +13,11 @@ def build_header(page: ft.Page) -> ft.Control:
     sdr_dot = ft.Text("●", color=ACCENT_RED, size=16)
     sdr_lbl = ft.Text("Estado SDR: Detenido", color=ACCENT_RED, size=12, weight=ft.FontWeight.W_600)
     timer_lbl = ft.Text("", color=ACCENT_AMBER, size=14, weight=ft.FontWeight.W_700)
+    
+    header_title = ft.Text(
+        f"Radiotelescopio ({engine_instance.center_freq:.2f} MHz)",
+        color=ACCENT_CYAN, size=14, weight=ft.FontWeight.BOLD, expand=True,
+    )
 
     async def on_header_msg(msg):
         if msg == "stream_stopped":
@@ -23,7 +28,17 @@ def build_header(page: ft.Page) -> ft.Control:
             sdr_lbl.color = ACCENT_RED
             page.update()
         elif msg == "refresh_charts":
+            # Actualizar el título con la frecuencia real
+            header_title.value = f"Radiotelescopio ({engine_instance.center_freq:.2f} MHz)"
+            header_title.update()
+            
             if engine_instance.stream_mode == "file":
+                # El motor detectó metadatos nuevos (ej: sintonía automática)
+                if getattr(engine_instance, "metadata_updated", False):
+                    engine_instance.metadata_updated = False
+                    # Ya no enviamos "config_reset" para evitar saltos de scroll
+                    # En su lugar, el header se actualizará mediante refresh_charts
+                    page.pubsub.send_all("refresh_charts")
                 # Renderiza tiempo transcurrido en el header
                 c = engine_instance.current_file_time
                 t = engine_instance.total_file_time
@@ -103,10 +118,7 @@ def build_header(page: ft.Page) -> ft.Control:
                 "Procesamiento DSP —",
                 color=TEXT_MAIN, size=15, weight=ft.FontWeight.BOLD,
             ),
-            ft.Text(
-                "Radiotelescopio (1420.40 MHz)",
-                color=ACCENT_CYAN, size=14, weight=ft.FontWeight.BOLD, expand=True,
-            ),
+            header_title,
             ft.Row([sdr_dot, sdr_lbl], spacing=5,
                    vertical_alignment=ft.CrossAxisAlignment.CENTER),
             ft.Container(width=16),
