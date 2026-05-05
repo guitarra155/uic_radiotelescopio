@@ -99,6 +99,7 @@ def main(page: ft.Page):
             
             tab_btns[idx].content.color = ACCENT_CYAN
             indicators[idx].bgcolor = ACCENT_CYAN
+            page.pubsub.send_all("tab_changed")
             page.update()
         btn.on_click = lambda e: on_click(e, i)
         return btn

@@ -109,7 +109,8 @@ def build_config(page: ft.Page) -> ft.Control:
         engine_instance.save_config()
         page.pubsub.send_all("refresh_charts")
 
-    analysis_win_f.on_change = lambda e: on_global_change(e, "analysis_window_sec")
+    analysis_win_f.on_submit = lambda e: on_global_change(e, "analysis_window_sec")
+    analysis_win_f.on_blur = lambda e: on_global_change(e, "analysis_window_sec")
     
     def on_ma_toggle(e):
         engine_instance.ma_enabled = e.control.value
@@ -117,10 +118,12 @@ def build_config(page: ft.Page) -> ft.Control:
         page.pubsub.send_all("refresh_charts")
 
     ma_switch.on_change = on_ma_toggle
-    ma_win_f.on_change = lambda e: on_global_change(e, "moving_avg_window_ms")
+    ma_win_f.on_submit = lambda e: on_global_change(e, "moving_avg_window_ms")
+    ma_win_f.on_blur = lambda e: on_global_change(e, "moving_avg_window_ms")
 
     raw_switch.on_change = on_raw_toggle
-    wf_sec_f.on_change = lambda e: on_global_change(e, "waterfall_history_sec")
+    wf_sec_f.on_submit = lambda e: on_global_change(e, "waterfall_history_sec")
+    wf_sec_f.on_blur = lambda e: on_global_change(e, "waterfall_history_sec")
 
     def on_sync_toggle(e):
         val = e.control.value
@@ -238,14 +241,18 @@ def build_config(page: ft.Page) -> ft.Control:
         xi_min = txt_field(f"{x_name} Min", f"{cfg['xmin']:.2f}")
         xi_max = txt_field(f"{x_name} Max", f"{cfg['xmax']:.2f}")
         
-        xi_min.on_change = lambda e: on_manual_change(e, "x", "xmin")
-        xi_max.on_change = lambda e: on_manual_change(e, "x", "xmax")
+        xi_min.on_submit = lambda e: on_manual_change(e, "x", "xmin")
+        xi_min.on_blur = lambda e: on_manual_change(e, "x", "xmin")
+        xi_max.on_submit = lambda e: on_manual_change(e, "x", "xmax")
+        xi_max.on_blur = lambda e: on_manual_change(e, "x", "xmax")
 
         yi_min = txt_field(f"{y_name} Min", f"{cfg['ymin']:.2f}")
         yi_max = txt_field(f"{y_name} Max", f"{cfg['ymax']:.2f}")
         
-        yi_min.on_change = lambda e: on_manual_change(e, "y", "ymin")
-        yi_max.on_change = lambda e: on_manual_change(e, "y", "ymax")
+        yi_min.on_submit = lambda e: on_manual_change(e, "y", "ymin")
+        yi_min.on_blur = lambda e: on_manual_change(e, "y", "ymin")
+        yi_max.on_submit = lambda e: on_manual_change(e, "y", "ymax")
+        yi_max.on_blur = lambda e: on_manual_change(e, "y", "ymax")
 
         def on_auto_toggle(e, axis):
             engine_instance.charts_config[chart_id][f"auto_{axis}"] = e.control.value
@@ -318,7 +325,7 @@ def build_config(page: ft.Page) -> ft.Control:
     dynamic_tab_container = ft.Container(content=tab_configs.get(engine_instance.active_tab, tab_configs[0]))
 
     async def _update_dynamic_tab(msg):
-        if msg == "refresh_charts" or msg == "tab_changed":
+        if msg == "tab_changed":
             idx = engine_instance.active_tab
             target_content = tab_configs.get(idx, tab_configs[0])
             if dynamic_tab_container.content != target_content:
@@ -328,31 +335,46 @@ def build_config(page: ft.Page) -> ft.Control:
 
     page.pubsub.subscribe(_update_dynamic_tab)
 
-    sdr_content = ft.Column(
-        [
-            section_title("🎯", "Modo de Escala Inteligente", ACCENT_AMBER),
-            ft.Text("Las gráficas se centran automáticamente al nivel de referencia y señal "
-                    "a menos que cambies un valor manualmente.", color=TEXT_MUTED, size=9, italic=True),
-            lbl("Control de Sincronización:"),
-            sync_switch,
-            overflow_txt,
-            reset_btn,
-            divider(),
+    # ─────────────────────────────────────────────────────────────────────────
+    # ── NUEVO DISEÑO: LISTADO COMPACTO (TIPO SPIKE) ─────────────────────────
+    # ─────────────────────────────────────────────────────────────────────────
 
-            dynamic_tab_container,
-        ],
-        spacing=8,
-        scroll=ft.ScrollMode.AUTO,
+    def make_tile(title, icon, color, content, expanded=False):
+        return ft.ExpansionTile(
+            title=ft.Text(f"{icon} {title}", color=color, size=12, weight=ft.FontWeight.BOLD),
+            maintain_state=True,
+            expanded=expanded,
+            collapsed_text_color=color,
+            text_color=color,
+            controls_padding=ft.Padding(10, 0, 10, 10),
+            controls=[content]
+        )
+
+    config_list = ft.ListView(
+        expand=True,
+        spacing=0,
+        padding=0,
+        controls=[
+            make_tile("Modo de Escala e Interfaz", "🎯", ACCENT_AMBER, ft.Column([
+                ft.Text("Las gráficas se auto-centran dinámicamente.", color=TEXT_MUTED, size=9, italic=True),
+                sync_switch,
+                overflow_txt,
+                reset_btn,
+            ], spacing=10), expanded=True),
+            
+            ft.Container(height=1, bgcolor=BORDER_COL),
+            
+            ft.Container(
+                content=dynamic_tab_container,
+                padding=0,
+            )
+        ]
     )
 
-    # ── FINALIZACIÓN ─────────────────────────────────────────────────────────
-
-    if engine_instance.active_tab == 7:
-        dynamic_tab_container.content = tab_configs[7]
-
     return ft.Container(
-        content=ft.Column([sdr_content], scroll=ft.ScrollMode.AUTO, expand=True),
+        content=config_list,
         expand=True,
         width=300,
-        padding=ft.Padding(left=10, top=10, right=15, bottom=10),
+        bgcolor=PANEL_BG,
+        border=ft.Border(left=ft.BorderSide(1, BORDER_COL)),
     )
