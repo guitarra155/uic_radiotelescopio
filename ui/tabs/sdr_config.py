@@ -17,6 +17,26 @@ def build_config(page: ft.Page) -> ft.Control:
         """Cualquier cambio en la UI dispara un refresco total del panel."""
         page.pubsub.send_all("tab_changed")
 
+    LABEL_WIDTH = 100
+    INPUT_WIDTH = 145
+    ROW_HEIGHT = 35
+
+    def prop_row(label: str, control: ft.Control, tooltip: str = "") -> ft.Row:
+        """Crea una fila alineada [Etiqueta | Control] con medidas estrictas."""
+        return ft.Row([
+            ft.Container(
+                content=ft.Text(label, color=TEXT_MUTED, size=10, no_wrap=True),
+                width=LABEL_WIDTH,
+                alignment=ft.Alignment(-1, 0),
+                tooltip=tooltip
+            ),
+            ft.Container(
+                content=control,
+                width=INPUT_WIDTH,
+                alignment=ft.Alignment(1, 0)
+            )
+        ], spacing=10, height=ROW_HEIGHT, vertical_alignment=ft.CrossAxisAlignment.CENTER)
+
     def make_toggle(value, on_click):
         """Usa Iconos en lugar de Checkbox para evitar errores de renderizado."""
         return ft.IconButton(
@@ -30,7 +50,7 @@ def build_config(page: ft.Page) -> ft.Control:
     def make_input(value, on_submit):
         return ft.TextField(
             value=str(value),
-            width=120,
+            width=INPUT_WIDTH,
             height=28,
             text_size=11,
             content_padding=ft.Padding(8, 0, 8, 0),
@@ -69,12 +89,12 @@ def build_config(page: ft.Page) -> ft.Control:
         return ft.Column([
             ft.Text(f"📊 {title}", color=ACCENT_CYAN, size=12, weight=ft.FontWeight.BOLD),
             row("Auto Eje X", make_toggle(cfg.get("auto_x"), lambda e: toggle_auto(e, "x"))),
-            row("X Mín", make_input(f"{cfg.get('xmin'):.2f}", lambda e: set_val(e, "x", "xmin"))),
-            row("X Máx", make_input(f"{cfg.get('xmax'):.2f}", lambda e: set_val(e, "x", "xmax"))),
+            row("X Mín", make_input(f"{cfg.get('xmin', 0):.8f}", lambda e: set_val(e, "x", "xmin"))),
+            row("X Máx", make_input(f"{cfg.get('xmax', 0):.8f}", lambda e: set_val(e, "x", "xmax"))),
             ft.Container(height=5),
             row("Auto Eje Y", make_toggle(cfg.get("auto_y"), lambda e: toggle_auto(e, "y"))),
-            row("Y Mín", make_input(f"{cfg.get('ymin'):.2f}", lambda e: set_val(e, "y", "ymin"))),
-            row("Y Máx", make_input(f"{cfg.get('ymax'):.2f}", lambda e: set_val(e, "y", "ymax"))),
+            row("Y Mín", make_input(f"{cfg.get('ymin', 0):.8f}", lambda e: set_val(e, "y", "ymin"))),
+            row("Y Máx", make_input(f"{cfg.get('ymax', 0):.8f}", lambda e: set_val(e, "y", "ymax"))),
             ft.Divider(height=20, color="#303030")
         ], spacing=2)
 
@@ -94,14 +114,14 @@ def build_config(page: ft.Page) -> ft.Control:
             tab_content = ft.Column([
                 row("Filtro MA", make_toggle(engine_instance.ma_enabled, 
                     lambda e: (setattr(engine_instance, "ma_enabled", not engine_instance.ma_enabled), engine_instance.save_config(), on_ui_event(e)))),
-                row("Ventana (ms)", make_input(engine_instance.moving_avg_window_ms, 
+                row("Ventana (ms)", make_input(f"{engine_instance.moving_avg_window_ms:.8f}", 
                     lambda e: (setattr(engine_instance, "moving_avg_window_ms", float(e.control.value)), engine_instance.save_config(), on_ui_event(e)))),
                 build_axis_group("Espectro Filtrado", "mon_filt_spec"),
                 build_axis_group("Amplitud Filtrada", "mon_filt_amp"),
             ])
         elif idx == 3:
             tab_content = ft.Column([
-                row("Análisis (s)", make_input(engine_instance.analysis_window_sec, 
+                row("Análisis (s)", make_input(f"{engine_instance.analysis_window_sec:.8f}", 
                     lambda e: (setattr(engine_instance, "analysis_window_sec", float(e.control.value)), engine_instance.save_config(), on_ui_event(e)))),
                 row("Historial (s)", make_input(engine_instance.waterfall_history_sec, 
                     lambda e: (setattr(engine_instance, "waterfall_history_sec", float(e.control.value)), engine_instance.save_config(), on_ui_event(e)))),

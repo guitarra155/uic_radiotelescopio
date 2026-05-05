@@ -87,13 +87,13 @@ def build_estado(page: ft.Page) -> ft.Control:
         ),
     )
 
-    freq_f = txt_field("Frecuencia (MHz)", str(engine_instance.center_freq), "e.g. 1420.40")
-    rate_f = txt_field("Sample Rate (MSps)", str(engine_instance.sample_rate / 1e6), "")
-    span_visual_f = txt_field("Span Visual (Zoom MHz)", str(engine_instance.visual_span_mhz), "e.g. 1.0")
+    freq_f = txt_field("Frecuencia (MHz)", f"{engine_instance.center_freq:.8f}", "e.g. 1420.40")
+    rate_f = txt_field("Sample Rate (MSps)", f"{engine_instance.sample_rate / 1e6:.8f}", "")
+    span_visual_f = txt_field("Span Visual (Zoom MHz)", f"{engine_instance.visual_span_mhz:.8f}", "e.g. 1.0")
 
-    ref_level_f = txt_field("Nivel Ref. (dBm)", str(engine_instance.bb60c_ref_level), "-100 a +20")
-    rbw_f = txt_field("RBW / IQ BW (MHz)", str(engine_instance.bb60c_iq_bw), "0.1 a 20.0")
-    vbw_alpha_f = txt_field("VBW Smoothing", str(engine_instance.vbw_alpha), "0.1-1.0")
+    ref_level_f = txt_field("Nivel Ref. (dBm)", f"{engine_instance.bb60c_ref_level:.8f}", "-100 a +20")
+    rbw_f = txt_field("RBW / IQ BW (MHz)", f"{engine_instance.bb60c_iq_bw:.8f}", "0.1 a 20.0")
+    vbw_alpha_f = txt_field("VBW Smoothing", f"{engine_instance.vbw_alpha:.8f}", "0.1-1.0")
 
     def on_global_change(e, attr, factor=1.0):
         try:
