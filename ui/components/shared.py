@@ -28,5 +28,5 @@ def txt_field(label, value="", hint="") -> ft.TextField:
         label=label, value=value, hint_text=hint,
         color=TEXT_MAIN, bgcolor=DARK_BG,
         border_color=BORDER_COL, focused_border_color=ACCENT_CYAN,
-        cursor_color=ACCENT_CYAN, border_radius=8, expand=True,
+        cursor_color=ACCENT_CYAN, border_radius=8,
     )
