@@ -4,6 +4,7 @@ from core.constants import *
 from ui.components.layout import build_header, build_footer
 from ui.tabs.monitoring import build_monitoring
 from ui.tabs.monitoring_filtered import build_monitoring_filtered
+from ui.tabs.comparison import build_comparison
 from ui.tabs.spectrogram import build_spectrogram
 from ui.tabs.statistics import build_statistics
 from ui.tabs.sdr_config import build_config
@@ -49,25 +50,23 @@ def main(page: ft.Page):
 
     tab_labels = [
         "🏠  Inicio & Configuración",    # 0
-        "📡  Monitoreo y RFI",          # 1 — señal ORIGINAL
-        "🔍  Monitoreo Filtrado",        # 2 — señal POST-MA
-        "🌈  Espectrograma",             # 3
-        "📊  Estadística & Smart Trigger",# 4
-        "⚡  Potencia vs. Tiempo",        # 5
-        "📶  SNR vs. Frecuencia",        # 6
-        "🔬  Algoritmo DSP",             # 7
+        "🌓  Comparación MA (RAW vs Filtrado)", # 1
+        "🌈  Espectrograma",             # 2
+        "📊  Estadística & Smart Trigger",# 3
+        "⚡  Potencia vs. Tiempo",        # 4
+        "📶  SNR vs. Frecuencia",        # 5
+        "🔬  Algoritmo DSP",             # 6
     ]
 
     # Renderizamos los componentes visuales de cada módulo
     tab_contents = [
         build_estado(page),                          # 0
-        build_monitoring(page, key_state),           # 1 — RAW
-        build_monitoring_filtered(page, key_state),  # 2 — Filtrada
-        build_spectrogram(page, key_state),          # 3
-        build_statistics(page),                       # 4
-        build_signal_analysis(page, key_state),      # 5 — Potencia vs Tiempo
-        build_freq_snr(page, key_state),             # 6 — SNR
-        build_algo_result(page),                     # 7
+        build_comparison(page, key_state),           # 1
+        build_spectrogram(page, key_state),          # 2
+        build_statistics(page),                       # 3
+        build_signal_analysis(page, key_state),      # 4
+        build_freq_snr(page, key_state),             # 5
+        build_algo_result(page),                     # 6
     ]
 
     selected = [0]  # índice activo

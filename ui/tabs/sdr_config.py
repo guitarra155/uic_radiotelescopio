@@ -105,24 +105,42 @@ def build_config(page: ft.Page) -> ft.Control:
         """Genera los controles basados en el estado actual del motor."""
         idx = engine_instance.active_tab
         
-        # Pestaña actual
+        # Pestaña de Comparación (Antes Monitoreo RAW)
         if idx == 1:
             tab_content = ft.Column([
-                row("Modo RAW", make_toggle(engine_instance.raw_mode, 
-                    lambda e: (setattr(engine_instance, "raw_mode", not engine_instance.raw_mode), engine_instance.save_config(), on_ui_event(e)))),
-                build_axis_group("Espectro RAW", "mon_raw_spec"),
-                build_axis_group("Amplitud RAW", "mon_raw_amp"),
-            ])
-        elif idx == 2:
-            tab_content = ft.Column([
+                ft.Text("🛠️ CONTROLES MA", size=11, weight=ft.FontWeight.BOLD, color=ACCENT_CYAN),
                 row("Filtro MA", make_toggle(engine_instance.ma_enabled, 
                     lambda e: (setattr(engine_instance, "ma_enabled", not engine_instance.ma_enabled), engine_instance.save_config(), on_ui_event(e)))),
-                row("Ventana (muestras)", make_input(f"{int(engine_instance.moving_avg_samples)}", 
-                    lambda e: (setattr(engine_instance, "moving_avg_samples", max(1, int(float(e.control.value)))), engine_instance.save_config(), on_ui_event(e)))),
+                
+                ft.Row([
+                    ft.Text("Muestras (W):", size=10, color=TEXT_MUTED),
+                    ma_val_text := ft.Text(f"{int(engine_instance.moving_avg_samples)}", size=11, color=ACCENT_CYAN, weight=ft.FontWeight.BOLD),
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                
+                ft.Slider(
+                    min=3, max=301, divisions=149,
+                    value=max(3, engine_instance.moving_avg_samples),
+                    label="{value}",
+                    on_change=lambda e: (
+                        setattr(engine_instance, "moving_avg_samples", int(e.control.value)),
+                        setattr(ma_val_text, "value", str(int(e.control.value))),
+                        ma_val_text.update()
+                    ),
+                    on_change_end=lambda e: (engine_instance.save_config(), on_ui_event(e))
+                ),
+
+                ft.Divider(height=10, color=BORDER_COL),
+                ft.Text("🎨 GUÍA VISUAL", size=11, weight=ft.FontWeight.BOLD, color=ACCENT_CYAN),
+                ft.Row([ft.Container(width=10, height=10, bgcolor=ACCENT_CYAN, border_radius=2), ft.Text("Señal Original", size=10)], spacing=5),
+                ft.Row([ft.Container(width=10, height=10, bgcolor=ACCENT_AMBER, border_radius=2), ft.Text("Señal Filtrada", size=10)], spacing=5),
+                
+                ft.Divider(height=20, color=ACCENT_CYAN),
+                build_axis_group("Espectro RAW", "mon_raw_spec"),
+                build_axis_group("Amplitud RAW", "mon_raw_amp"),
                 build_axis_group("Espectro Filtrado", "mon_filt_spec"),
                 build_axis_group("Amplitud Filtrada", "mon_filt_amp"),
             ])
-        elif idx == 3:
+        elif idx == 2:
             tab_content = ft.Column([
                 row("Análisis (s)", make_input(f"{engine_instance.analysis_window_sec:.8f}", 
                     lambda e: (setattr(engine_instance, "analysis_window_sec", float(e.control.value)), engine_instance.save_config(), on_ui_event(e)))),
@@ -130,9 +148,10 @@ def build_config(page: ft.Page) -> ft.Control:
                     lambda e: (setattr(engine_instance, "waterfall_history_sec", float(e.control.value)), engine_instance.save_config(), on_ui_event(e)))),
                 build_axis_group("Cascada", "spec_wf"),
             ])
-        elif idx == 4: tab_content = build_axis_group("Histograma", "stat_hist")
-        elif idx == 5: tab_content = build_axis_group("Potencia", "pow_time")
-        elif idx == 6: tab_content = build_axis_group("SNR", "snr_freq")
+        elif idx == 3: tab_content = build_axis_group("Histograma", "stat_hist")
+        elif idx == 4: tab_content = build_axis_group("Potencia", "pow_time")
+        elif idx == 5: tab_content = build_axis_group("SNR", "snr_freq")
+        elif idx == 6: tab_content = ft.Text("Configuración de Algoritmo Activa", color=TEXT_MUTED, size=10)
         else: tab_content = ft.Text("Configuración general activa", color=TEXT_MUTED, size=10)
 
         # Actualizar la lista de controles de la columna persistente
