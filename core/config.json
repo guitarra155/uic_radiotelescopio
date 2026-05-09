@@ -1,6 +1,6 @@
 {
     "center_freq": 1420.40575,
-    "sample_rate": 1250000,
+    "sample_rate": 2500000,
     "trigger_high": 15.0,
     "trigger_low": 5.0,
     "db_min": -90,
@@ -13,7 +13,7 @@
     "snr_db_max": 30,
     "amp_min": 0.0,
     "amp_max": 0.3,
-    "waterfall": 10.0,
+    "waterfall": 1.0,
     "iq_filename": "C:/SignalHound/ArchivosIQ/IQREC_Milk2025-02-12_11h39m03s_1.iq",
     "iq_format": "uint8",
     "stream_mode": "file",
@@ -36,9 +36,9 @@
     "visual_span_mhz": 40.0,
     "charts_config": {
         "mon_raw_spec": {
-            "xmin": 1419.937,
-            "xmax": 1420.8745,
-            "ymin": -10.0,
+            "xmin": 1419.46825,
+            "xmax": 1421.34325,
+            "ymin": -5.0,
             "ymax": 10.0,
             "auto_x": 0,
             "auto_y": 0
@@ -52,28 +52,28 @@
             "auto_y": 0
         },
         "mon_filt_spec": {
-            "xmin": 1419.937,
-            "xmax": 1420.8745,
-            "ymin": -70.0,
-            "ymax": 12.909297209051916,
-            "auto_x": 1,
+            "xmin": 1419.46825,
+            "xmax": 1421.34325,
+            "ymin": -5.0,
+            "ymax": 10.0,
+            "auto_x": 0,
             "auto_y": 0
         },
         "mon_filt_amp": {
             "xmin": 0.0,
-            "xmax": 0.01,
+            "xmax": 0.1,
             "ymin": 0.0,
-            "ymax": 1.50570286,
+            "ymax": 1.2222890292278423,
             "auto_x": 0,
-            "auto_y": 0
+            "auto_y": 1
         },
         "spec_wf": {
             "xmin": 1420.0,
             "xmax": 1420.8745,
-            "ymin": -60.0,
-            "ymax": 0.0,
+            "ymin": -17.99972170129349,
+            "ymax": 8.743688866832258,
             "auto_x": 0,
-            "auto_y": 0
+            "auto_y": 1
         },
         "stat_hist": {
             "xmin": 0.0,
@@ -86,16 +86,16 @@
         "pow_time": {
             "xmin": 0.0,
             "xmax": 200.0,
-            "ymin": -108.99737992,
-            "ymax": -31.02008725064787,
+            "ymin": -113.05627260930291,
+            "ymax": 0.0980900046556048,
             "auto_x": 1,
-            "auto_y": 0
+            "auto_y": 1
         },
         "snr_freq": {
-            "xmin": 1419.937,
-            "xmax": 1420.8745,
-            "ymin": -26.19492952235756,
-            "ymax": 26.19492952235756,
+            "xmin": 1419.46825,
+            "xmax": 1421.34325,
+            "ymin": -26.56782026668455,
+            "ymax": 26.56782026668455,
             "auto_x": 1,
             "auto_y": 1
         }
