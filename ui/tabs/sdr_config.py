@@ -117,8 +117,8 @@ def build_config(page: ft.Page) -> ft.Control:
             tab_content = ft.Column([
                 row("Filtro MA", make_toggle(engine_instance.ma_enabled, 
                     lambda e: (setattr(engine_instance, "ma_enabled", not engine_instance.ma_enabled), engine_instance.save_config(), on_ui_event(e)))),
-                row("Ventana (ms)", make_input(f"{engine_instance.moving_avg_window_ms:.8f}", 
-                    lambda e: (setattr(engine_instance, "moving_avg_window_ms", float(e.control.value)), engine_instance.save_config(), on_ui_event(e)))),
+                row("Ventana (muestras)", make_input(f"{int(engine_instance.moving_avg_samples)}", 
+                    lambda e: (setattr(engine_instance, "moving_avg_samples", max(1, int(float(e.control.value)))), engine_instance.save_config(), on_ui_event(e)))),
                 build_axis_group("Espectro Filtrado", "mon_filt_spec"),
                 build_axis_group("Amplitud Filtrada", "mon_filt_amp"),
             ])

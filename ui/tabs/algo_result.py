@@ -67,7 +67,7 @@ def build_algo_result(page: ft.Page) -> ft.Control:
     # Imagen del resultado — inicia con placeholder válido
     img = ft.Image(
         src=chart_algo_placeholder(),
-        fit=ft.BoxFit.CONTAIN,
+        fit=ft.BoxFit.FILL,
         gapless_playback=True,
         border_radius=10,
         expand=True,

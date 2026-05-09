@@ -16,7 +16,7 @@ def build_freq_snr(page: ft.Page, key_state: dict) -> ft.Control:
 
     img = ft.Image(
         src=chart_freq_snr(),
-        fit=ft.BoxFit.CONTAIN,
+        fit=ft.BoxFit.FILL,
         gapless_playback=True,
         border_radius=10,
         expand=True,
@@ -273,6 +273,7 @@ def build_freq_snr(page: ft.Page, key_state: dict) -> ft.Control:
             on_scroll=on_zoom_scroll,
             drag_interval=0,
             content=img,
+            expand=True,
         ),
         expand=True,
         bgcolor=PANEL_BG,

@@ -33,9 +33,9 @@ def build_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
 
     rfi_switch.on_change = on_rfi
 
-    img_spec = ft.Image(src=chart_spectrum_raw(), fit=ft.BoxFit.CONTAIN,
+    img_spec = ft.Image(src=chart_spectrum_raw(), fit=ft.BoxFit.FILL,
                         gapless_playback=True, border_radius=8, expand=True)
-    img_amp  = ft.Image(src=chart_amplitude(),   fit=ft.BoxFit.CONTAIN,
+    img_amp  = ft.Image(src=chart_amplitude(),   fit=ft.BoxFit.FILL,
                         gapless_playback=True, border_radius=8, expand=True)
 
     is_rendering = [False]
@@ -71,34 +71,35 @@ def build_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
 
     from core.dsp_engine import engine_instance
 
-    def on_zoom_scroll(e: ft.ScrollEvent):
+    def on_zoom_scroll(e: ft.ScrollEvent, chart_id: str):
         ctrl  = key_state.get('ctrl', False)
         shift = key_state.get('shift', False)
         if not ctrl and not shift:
             return
         dir    = 1 if e.scroll_delta_y > 0 else -1
         factor = 0.25 * dir
+        cfg = engine_instance.charts_config[chart_id]
         if ctrl:
-            s_amp = engine_instance.amp_max - engine_instance.amp_min
-            engine_instance.amp_min -= s_amp * factor
-            engine_instance.amp_max += s_amp * factor
-            s_db = engine_instance.db_max - engine_instance.db_min
-            engine_instance.db_min -= s_db * factor
-            engine_instance.db_max += s_db * factor
+            s_y = cfg["ymax"] - cfg["ymin"]
+            cfg["ymin"] -= s_y * factor
+            cfg["ymax"] += s_y * factor
+            cfg["auto_y"] = False
             engine_instance.save_config()
         elif shift:
-            s_f = engine_instance.f_max - engine_instance.f_min
-            engine_instance.f_min -= s_f * factor
-            engine_instance.f_max += s_f * factor
+            s_x = cfg["xmax"] - cfg["xmin"]
+            cfg["xmin"] -= s_x * factor
+            cfg["xmax"] += s_x * factor
+            cfg["auto_x"] = False
             engine_instance.save_config()
 
-    def _chart_box(img, accent=BORDER_COL):
+    def _chart_box(img, chart_id, accent=BORDER_COL):
         return ft.Container(
             content=ft.GestureDetector(
                 mouse_cursor=ft.MouseCursor.ZOOM_IN,
-                on_scroll=on_zoom_scroll,
+                on_scroll=lambda e: on_zoom_scroll(e, chart_id),
                 drag_interval=0,
                 content=img,
+                expand=True,
             ),
             expand=True,
             bgcolor=PANEL_BG,
@@ -113,9 +114,9 @@ def build_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
         )
 
     graphs = ft.Column([
-        ft.Container(content=_chart_box(img_spec, ACCENT_CYAN), expand=1),
-        ft.Container(content=_chart_box(img_amp,  ACCENT_CYAN), expand=1),
-    ], expand=True, spacing=10, scroll=ft.ScrollMode.AUTO)
+        ft.Container(content=_chart_box(img_spec, "mon_raw_spec", ACCENT_CYAN), expand=1),
+        ft.Container(content=_chart_box(img_amp,  "mon_raw_amp", ACCENT_CYAN), expand=1),
+    ], expand=True, spacing=10)
 
     side = panel(
         width=230,
@@ -146,11 +147,11 @@ def build_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
             ft.Text("Sin ningún filtro aplicado.\n"
                     "Usar como referencia pre-MA.",
                     color=TEXT_MUTED, size=9, italic=True),
-        ], spacing=8),
+        ], spacing=4),
     )
 
     return ft.Container(
         content=ft.Row([graphs, side], spacing=12, expand=True),
-        expand=True,
-        padding=ft.Padding(left=14, top=14, right=14, bottom=14),
+        expand=75,
+        padding=ft.Padding(left=5, top=0, right=0, bottom=0),
     )

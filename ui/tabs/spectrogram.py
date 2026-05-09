@@ -12,7 +12,7 @@ from ui.components.shared import panel, border_all
 def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
     img = ft.Image(
         src=chart_spectrogram(),
-        fit=ft.BoxFit.CONTAIN,
+        fit=ft.BoxFit.FILL,
         border_radius=10,
         expand=True,
         gapless_playback=True,
@@ -115,6 +115,7 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
                     on_scroll=on_zoom_scroll,
                     drag_interval=0,
                     content=img,
+                    expand=True,
                 ),
                 expand=True,
                 bgcolor=PANEL_BG,

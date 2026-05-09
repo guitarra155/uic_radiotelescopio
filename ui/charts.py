@@ -25,23 +25,46 @@ class ChartCache:
 cache = ChartCache()
 
 
+def get_dynamic_figsize(base_width=9.5, base_height=2.8):
+    """Calcula un tamaño dinámico basado en la resolución actual de la ventana."""
+    win_w = getattr(engine_instance, "window_width", 1280)
+    win_h = getattr(engine_instance, "window_height", 720)
+    
+    # Tomamos 1280x720 como nuestra resolución base (escala 1.0)
+    scale_w = max(0.5, win_w / 1280.0)
+    scale_h = max(0.5, win_h / 720.0)
+    
+    return (base_width * scale_w, base_height * scale_h)
+
 def get_cached_fig(name, figsize=(9.5, 3.0), is_3d=False):
     """Crea o recupera una figura de la caché para evitar sobrecoste de memoria."""
     if name not in cache.figs:
-        fig = Figure(figsize=figsize, dpi=72)  # 72dpi suficiente para pantalla
+        fig = Figure(figsize=figsize, dpi=300)  # 72dpi suficiente para pantalla
         fig.patch.set_facecolor(MPL_BG)
         ax = fig.subplots()
         style_ax(ax)
         # tight_layout UNA SOLA VEZ al crear la figura, no en cada frame
         try:
-            fig.tight_layout(pad=1.0)
+            fig.tight_layout(pad=0.2)
         except:
             pass
         cache.figs[name] = fig
         cache.axes[name] = ax
         cache.artists[name] = {}
         return fig, ax, True  # True = Recién creado
-    return cache.figs[name], cache.axes[name], False
+    
+    fig = cache.figs[name]
+    ax = cache.axes[name]
+    
+    # Actualizar dinámicamente si el tamaño cambia
+    current_size = fig.get_size_inches()
+    if abs(current_size[0] - figsize[0]) > 0.1 or abs(current_size[1] - figsize[1]) > 0.1:
+        fig.set_size_inches(figsize)
+        try:
+            fig.tight_layout(pad=0.2)
+        except:
+            pass
+    return fig, ax, False
 
 
 def fig_to_b64(fig: Figure) -> str:
@@ -87,7 +110,8 @@ def style_ax(ax, title="", xlabel="", ylabel=""):
 
 
 def chart_amplitude() -> str:
-    fig, ax, is_new = get_cached_fig("amplitude", figsize=(9.5, 2.8))
+    dyn_size = get_dynamic_figsize(9.5, 2.8)
+    fig, ax, is_new = get_cached_fig("amplitude", figsize=dyn_size)
     sig = engine_instance.amplitude_data
     n = len(sig)
     # Tiempo RELATIVO: siempre de 0 a la duración de la ventana
@@ -109,13 +133,14 @@ def chart_amplitude() -> str:
     # El eje X siempre cubre exactamente la ventana de análisis actual
     cfg = engine_instance.charts_config["mon_raw_amp"]
     safe_set_ylim(ax, cfg["ymin"], cfg["ymax"])
-    safe_set_xlim(ax, 0.0, duration_sec)
+    safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
 
     return fig_to_b64(fig)
 
 
 def chart_spectrum() -> str:
-    fig, ax, is_new = get_cached_fig("spectrum", figsize=(9.5, 2.8))
+    dyn_size = get_dynamic_figsize(9.5, 2.8)
+    fig, ax, is_new = get_cached_fig("spectrum", figsize=dyn_size)
     spec = engine_instance.spectrum_data
     fc = engine_instance.center_freq
     fs = engine_instance.sample_rate / 1_000_000
@@ -167,7 +192,8 @@ def chart_spectrum() -> str:
 
 def chart_spectrum_raw() -> str:
     """Espectro FFT desde señal RAW (sin filtro MA) — exclusivo Tab 1."""
-    fig, ax, is_new = get_cached_fig("spectrum_raw", figsize=(9.5, 2.8))
+    dyn_size = get_dynamic_figsize(9.5, 2.8)
+    fig, ax, is_new = get_cached_fig("spectrum_raw", figsize=dyn_size)
     spec = engine_instance.spectrum_raw_data
     fc = engine_instance.center_freq
     fs = engine_instance.sample_rate / 1_000_000
@@ -218,7 +244,8 @@ def chart_spectrum_raw() -> str:
 
 def chart_spectrogram() -> str:
     # El waterfall es pesado, aquí imshow es lo más rápido
-    fig, ax, is_new = get_cached_fig("waterfall", figsize=(12, 5.5))
+    dyn_size = get_dynamic_figsize(12.0, 5.5)
+    fig, ax, is_new = get_cached_fig("waterfall", figsize=dyn_size)
     data = np.roll(engine_instance.waterfall_data, -engine_instance.waterfall_idx, axis=0)
     fc = engine_instance.center_freq
     fs = engine_instance.sample_rate / 1_000_000
@@ -270,7 +297,8 @@ def chart_spectrogram() -> str:
 
 
 def chart_histogram() -> str:
-    fig, ax, is_new = get_cached_fig("histogram", figsize=(9.5, 4.5))
+    dyn_size = get_dynamic_figsize(9.5, 4.5)
+    fig, ax, is_new = get_cached_fig("histogram", figsize=dyn_size)
     samples = engine_instance.histogram_data
 
     # El histograma es difícil de actualizar vía set_data, lo regeneramos pero reusando la figura
@@ -292,7 +320,8 @@ def chart_histogram() -> str:
 
 
 def chart_signal_time() -> str:
-    fig, ax, is_new = get_cached_fig("signal_time", figsize=(9.5, 2.6))
+    dyn_size = get_dynamic_figsize(9.5, 2.6)
+    fig, ax, is_new = get_cached_fig("signal_time", figsize=dyn_size)
     raw = engine_instance.amplitude_data.astype(np.float32)
     n = len(raw)
     # Tiempo absoluto en segundos
@@ -322,7 +351,8 @@ def chart_signal_time() -> str:
 
 
 def chart_power_time() -> str:
-    fig, ax, is_new = get_cached_fig("power_time", figsize=(9.5, 4.5))
+    dyn_size = get_dynamic_figsize(9.5, 4.5)
+    fig, ax, is_new = get_cached_fig("power_time", figsize=dyn_size)
     written = engine_instance.power_samples_written
     data_len = len(engine_instance.power_time_data)
     
@@ -384,7 +414,8 @@ def chart_power_time() -> str:
 
 
 def chart_freq_snr() -> str:
-    fig, ax, is_new = get_cached_fig("freq_snr", figsize=(9.5, 4.5))
+    dyn_size = get_dynamic_figsize(9.5, 4.5)
+    fig, ax, is_new = get_cached_fig("freq_snr", figsize=dyn_size)
     snr = engine_instance.snr_data
     fc, fs = engine_instance.center_freq, engine_instance.sample_rate / 1e6
     full_freq = np.linspace(fc - fs / 2, fc + fs / 2, len(snr))
@@ -428,7 +459,8 @@ def chart_algo_placeholder() -> str:
 
 # Funciones pesadas (AR/Burg, CWT, MUSIC, ESPRIT) ahora con CACHÉ para velocidad 100ms
 def chart_ar_spectrum(result: dict) -> str:
-    fig, ax, is_new = get_cached_fig("ar_spectrum", figsize=(9.5, 4.0))
+    dyn_size = get_dynamic_figsize(9.5, 4.0)
+    fig, ax, is_new = get_cached_fig("ar_spectrum", figsize=dyn_size)
     freqs, psd = result["freqs"], result["psd"]
 
     if is_new or "line" not in cache.artists["ar_spectrum"]:
@@ -449,7 +481,8 @@ def chart_ar_spectrum(result: dict) -> str:
 
 def chart_cwt_map(result: dict) -> str:
     """Mapa de la CWT: intensidad tiempo-frecuencia (Escalograma)."""
-    fig, ax, is_new = get_cached_fig("cwt_map", figsize=(9.5, 4.0))
+    dyn_size = get_dynamic_figsize(9.5, 4.0)
+    fig, ax, is_new = get_cached_fig("cwt_map", figsize=dyn_size)
     cwt_mat = result["cwt_matrix"]
     t_ms = result["times_s"] * 1000
     f_mhz = result["freqs_hz"] / 1e6
@@ -482,7 +515,8 @@ def chart_music_spectrum(result: dict) -> str:
     """Pseudo-espectro MUSIC o ESPRIT."""
     method = result.get("method", "MUSIC")
     name = "music_spectrum"
-    fig, ax, is_new = get_cached_fig(name, figsize=(9.5, 4.0))
+    dyn_size = get_dynamic_figsize(9.5, 4.0)
+    fig, ax, is_new = get_cached_fig(name, figsize=dyn_size)
     freqs = result["freqs"]
     spec = result.get("music_spectrum", result.get("esprit_spectrum"))
 
@@ -505,10 +539,11 @@ def chart_music_spectrum(result: dict) -> str:
 
 def chart_amplitude_ma() -> str:
     """Gráfica de amplitud post-Moving Average para comparación con la señal cruda."""
-    fig, ax, is_new = get_cached_fig("amplitude_ma", figsize=(9.5, 2.8))
+    dyn_size = get_dynamic_figsize(9.5, 2.8)
+    fig, ax, is_new = get_cached_fig("amplitude_ma", figsize=dyn_size)
     sig = engine_instance.amplitude_ma_data
     n = len(sig)
-    # Tiempo RELATIVO: siempre de 0 a la duración de la ventana (en segundos)
+
     duration_sec = engine_instance.analysis_window_sec
     t = np.linspace(0.0, duration_sec, n)
 
@@ -516,7 +551,7 @@ def chart_amplitude_ma() -> str:
         ax.clear()
         style_ax(
             ax,
-            f"Amplitud Filtrada — MA ({engine_instance.moving_avg_window_ms:.2f} ms)",
+            f"Amplitud Filtrada — MA ({int(engine_instance.moving_avg_samples)} muestras)",
             "Tiempo (s)",
             "Amplitud (V)",
         )
@@ -526,7 +561,7 @@ def chart_amplitude_ma() -> str:
         line = cache.artists["amplitude_ma"]["line"]
         line.set_data(t, sig)
         ax.set_title(
-            f"Amplitud Filtrada — MA ({engine_instance.moving_avg_window_ms:.2f} ms)",
+            f"Amplitud Filtrada — MA ({int(engine_instance.moving_avg_samples)} muestras)",
             color=ACCENT_CYAN,
             fontsize=9,
             pad=6,
@@ -534,7 +569,7 @@ def chart_amplitude_ma() -> str:
     # El eje X siempre cubre exactamente la ventana de análisis actual
     cfg = engine_instance.charts_config["mon_filt_amp"]
     safe_set_ylim(ax, cfg["ymin"], cfg["ymax"])
-    ax.set_xlim([0.0, duration_sec])
+    safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
 
     return fig_to_b64(fig)
 
@@ -543,7 +578,8 @@ def chart_amplitude_ma() -> str:
 def chart_welch_spectrum(result: dict) -> str:
     """Espectro Welch: reutiliza el mismo estilo que AR/Burg con clave de caché propia."""
     name = "welch_spectrum"
-    fig, ax, is_new = get_cached_fig(name, figsize=(9.5, 4.0))
+    dyn_size = get_dynamic_figsize(9.5, 4.0)
+    fig, ax, is_new = get_cached_fig(name, figsize=dyn_size)
     freqs, psd = result["freqs"], result["psd"]
     n_seg = result.get("n_segments", "?")
 
@@ -572,7 +608,8 @@ def chart_welch_spectrum(result: dict) -> str:
 def chart_correlogram_spectrum(result: dict) -> str:
     """Espectro Correlograma (Wiener-Khinchin): clave de caché propia."""
     name = "correlogram_spectrum"
-    fig, ax, is_new = get_cached_fig(name, figsize=(9.5, 4.0))
+    dyn_size = get_dynamic_figsize(9.5, 4.0)
+    fig, ax, is_new = get_cached_fig(name, figsize=dyn_size)
     freqs, psd = result["freqs"], result["psd"]
     max_lag = result.get("max_lag", "?")
 

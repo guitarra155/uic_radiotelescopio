@@ -1,8 +1,3 @@
-"""
-main.py
-Punto de entrada principal. Ensambla y configura el layout global agrupando todos los submódulos.
-"""
-
 import flet as ft
 
 from core.constants import *
@@ -21,7 +16,6 @@ def main(page: ft.Page):
     from core.dsp_engine import engine_instance
     engine_instance.load_config()
 
-    # Diccionario simple para rastrear modificadores de teclado (Ctrl/Shift)
     key_state = {'ctrl': False, 'shift': False}
 
     def on_keyboard(e: ft.KeyboardEvent):
@@ -33,13 +27,21 @@ def main(page: ft.Page):
     page.title      = "Plataforma DSP"
     page.theme_mode = ft.ThemeMode.DARK
     page.bgcolor    = DARK_BG
-    page.window.width     = 1280
-    page.window.height    = 720
+    page.window.width     = 1920    
+    page.window.height    = 1080
     page.window.min_width = 900
     page.window.min_height= 620
     page.padding = 0
     page.spacing = 0
     page.theme   = ft.Theme(color_scheme_seed=ACCENT_CYAN, use_material3=True)
+
+    # Capturar y sincronizar las dimensiones de la ventana con el renderizador de gráficas
+    def on_page_resize(e):
+        engine_instance.window_width = page.window.width
+        engine_instance.window_height = page.window.height
+    page.on_resize = on_page_resize
+    engine_instance.window_width = page.window.width
+    engine_instance.window_height = page.window.height
 
     # Componentes de Layout Base
     header = build_header(page)
@@ -155,7 +157,7 @@ def main(page: ft.Page):
             page.update()
     page.pubsub.subscribe(on_config_reset)
 
-    # ── Tarea Asíncrona de Refresco de Interfaz ──────────────
+    # ── Tarea de Refresco de Interfaz ──────────────
     async def refresh_loop():
         was_playing = False
         while True:

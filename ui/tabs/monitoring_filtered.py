@@ -15,14 +15,14 @@ def build_monitoring_filtered(page: ft.Page, key_state: dict) -> ft.Control:
 
     img_spec = ft.Image(
         src=chart_spectrum(),
-        fit=ft.BoxFit.CONTAIN,
+        fit=ft.BoxFit.FILL,
         gapless_playback=True,
         border_radius=8,
         expand=True,
     )
     img_amp = ft.Image(
         src=chart_amplitude_ma(),
-        fit=ft.BoxFit.CONTAIN,
+        fit=ft.BoxFit.FILL,
         gapless_playback=True,
         border_radius=8,
         expand=True,
@@ -63,36 +63,35 @@ def build_monitoring_filtered(page: ft.Page, key_state: dict) -> ft.Control:
         engine_instance.save_config()
         # No hace falta refrescar imagen inmediatamente, el loop lo hará.
 
-    def on_zoom_scroll(e: ft.ScrollEvent):
+    def on_zoom_scroll(e: ft.ScrollEvent, chart_id: str):
         ctrl = key_state.get("ctrl", False)
         shift = key_state.get("shift", False)
         if not ctrl and not shift:
             return
         dir_ = 1 if e.scroll_delta_y > 0 else -1
         factor = 0.25 * dir_
+        cfg = engine_instance.charts_config[chart_id]
         if ctrl:
-            # Zoom en Eje Y (Amplitud y Espectro)
-            s_amp = engine_instance.amp_max - engine_instance.amp_min
-            engine_instance.amp_min -= s_amp * factor
-            engine_instance.amp_max += s_amp * factor
-            s_db = engine_instance.db_max - engine_instance.db_min
-            engine_instance.db_min -= s_db * factor
-            engine_instance.db_max += s_db * factor
+            s_y = cfg["ymax"] - cfg["ymin"]
+            cfg["ymin"] -= s_y * factor
+            cfg["ymax"] += s_y * factor
+            cfg["auto_y"] = False
             engine_instance.save_config()
         elif shift:
-            # Zoom en Eje X (Frecuencia)
-            s_f = engine_instance.f_max - engine_instance.f_min
-            engine_instance.f_min -= s_f * factor
-            engine_instance.f_max += s_f * factor
+            s_x = cfg["xmax"] - cfg["xmin"]
+            cfg["xmin"] -= s_x * factor
+            cfg["xmax"] += s_x * factor
+            cfg["auto_x"] = False
             engine_instance.save_config()
 
-    def _chart_box(img, accent=BORDER_COL):
+    def _chart_box(img, chart_id, accent=BORDER_COL):
         return ft.Container(
             content=ft.GestureDetector(
                 mouse_cursor=ft.MouseCursor.ZOOM_IN,
-                on_scroll=on_zoom_scroll,
+                on_scroll=lambda e: on_zoom_scroll(e, chart_id),
                 drag_interval=0,
                 content=img,
+                expand=True,
             ),
             expand=True,
             bgcolor=PANEL_BG,
@@ -108,12 +107,11 @@ def build_monitoring_filtered(page: ft.Page, key_state: dict) -> ft.Control:
 
     graphs = ft.Column(
         [
-            ft.Container(content=_chart_box(img_spec, ACCENT_GREEN), expand=1),
-            ft.Container(content=_chart_box(img_amp, ACCENT_AMBER), expand=1),
+            ft.Container(content=_chart_box(img_spec, "mon_filt_spec", ACCENT_GREEN), expand=1),
+            ft.Container(content=_chart_box(img_amp, "mon_filt_amp", ACCENT_AMBER), expand=1),
         ],
         expand=True,
         spacing=10,
-        scroll=ft.ScrollMode.AUTO,
     )
 
     side = panel(

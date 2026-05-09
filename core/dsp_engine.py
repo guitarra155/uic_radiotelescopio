@@ -36,7 +36,7 @@ class DSPEngine:
         self.iq_filename = ""
         self.iq_format = "uint8"
         self.algo_params = {}
-        self.moving_avg_window_ms = 100.0
+        self.moving_avg_samples = 240
         self._analysis_window_sec = 1.0
         self._waterfall_sec = 10.0
         self.use_welch = False
@@ -173,8 +173,8 @@ class DSPEngine:
         self.amp_max = 0.3
 
         # ── Parámetros de adquisición y filtrado ──────────────────────────────────────
-        self.moving_avg_window_ms = 0.1  # 0.1ms = ~240 muestras, filtro suave
-        self.use_welch = True           # Iniciar con Welch (el modo 'bonito' / smooth)
+        self.moving_avg_samples = 240   # Filtro suave directo en cantidad de muestras
+        self.use_welch = False          # Desactivado para garantizar comparación 1:1 con la Pestaña 1
         self.visual_span_mhz = 2.4      # Span visual por defecto (MHz)
 
         # Flags de auto-escala globales (compatibilidad parcial)
@@ -417,7 +417,7 @@ class DSPEngine:
             self.amplitude_data[-len(mag_raw) :] = mag_raw
 
         # ── 3. Moving Average Filter (IMPLEMENTACIÓN ULTRA-RÁPIDA) ────────
-        win_len = max(1, int(self.moving_avg_window_ms * 1e-3 * self.sample_rate))
+        win_len = max(1, int(self.moving_avg_samples))
         
         if self.ma_enabled and win_len > 1:
             # Optimizamos usando Suma Acumulada para que sea O(N) independientemente de la ventana
@@ -1044,7 +1044,7 @@ class DSPEngine:
             "stream_mode": self.stream_mode,
             "algo_params": self.algo_params,
             "analysis_window_sec": self.analysis_window_sec,
-            "moving_avg_window_ms": self.moving_avg_window_ms,
+            "moving_avg_samples": self.moving_avg_samples,
             "bb60c_ref_level": self.bb60c_ref_level,
             "bb60c_iq_bw": self.bb60c_iq_bw,
             "vbw_alpha": self.vbw_alpha,
@@ -1101,10 +1101,10 @@ class DSPEngine:
                 self.analysis_window_sec = conf.get(
                     "analysis_window_sec", self.analysis_window_sec
                 )
-                self.moving_avg_window_ms = conf.get(
-                    "moving_avg_window_ms", self.moving_avg_window_ms
+                self.moving_avg_samples = conf.get(
+                    "moving_avg_samples", self.moving_avg_samples
                 )
-                self.use_welch = conf.get("use_welch", self.use_welch)
+                self.use_welch = False  # Forzar apagado incluso si hay una config vieja guardada
 
                 # --- NUEVO: Cargar parámetros de hardware BB60C ---
                 self.bb60c_ref_level = conf.get("bb60c_ref_level", self.bb60c_ref_level)
