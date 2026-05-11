@@ -465,7 +465,172 @@ def run_correlogram(iq: np.ndarray, max_lag: int = 512, fft_size: int = 2048,
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 7. ASLT — Stub async-ready (pendiente de archivos externos)
+# 7. Helpers 1D para espectrogramas 2D (ventana deslizante)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _burg_psd_1d(sig: np.ndarray, order: int, n_freqs: int) -> np.ndarray:
+    """Calcula PSD por Burg para un solo segmento. Retorna array 1D en dB."""
+    N = len(sig)
+    order = min(order, N // 2 - 1)
+
+    ef = sig[1:].copy()
+    eb = sig[:-1].copy()
+    ar_coeffs = np.zeros(order, dtype=np.complex128)
+    total_err = np.dot(sig, sig.conj()).real / N
+
+    for m in range(order):
+        num = -2.0 * np.dot(ef, eb.conj())
+        den = np.dot(ef, ef.conj()) + np.dot(eb, eb.conj())
+        km = num / (den + 1e-30)
+
+        ar_new = ar_coeffs[:m+1].copy()
+        ar_new[m] = km
+        ar_new[:m] = ar_coeffs[:m] + km * ar_coeffs[:m][::-1].conj()
+        ar_coeffs[:m+1] = ar_new
+
+        ef_new = ef[1:] + km * eb[1:]
+        eb_new = eb[:-1] + km.conj() * ef[:-1]
+        ef, eb = ef_new, eb_new
+        total_err *= (1.0 - abs(km) ** 2)
+
+    freqs_norm = np.linspace(-0.5, 0.5, n_freqs)
+    z = np.exp(2j * np.pi * freqs_norm)
+
+    denom = np.ones(n_freqs, dtype=np.complex128)
+    for k, a in enumerate(ar_coeffs):
+        denom += a * z ** (-(k + 1))
+
+    psd = total_err / (np.abs(denom) ** 2 + 1e-30)
+    return 10 * np.log10(np.fft.fftshift(psd) + 1e-30)
+
+
+def _correlogram_psd_1d(sig: np.ndarray, max_lag: int, fft_size: int) -> np.ndarray:
+    """Calcula PSD por correlograma para un solo segmento. Retorna array 1D en dB."""
+    N = len(sig)
+    max_lag = min(max_lag, N // 2)
+
+    acf = np.zeros(2 * max_lag + 1, dtype=np.complex128)
+    for k in range(max_lag + 1):
+        acf[max_lag + k] = np.dot(sig[:N - k], sig[k:].conj()) / N
+        acf[max_lag - k] = acf[max_lag + k].conj()
+
+    bartlett = np.bartlett(2 * max_lag + 1)
+    acf_windowed = acf * bartlett
+
+    fft_size_eff = max(fft_size, 2 * (2 * max_lag + 1))
+    psd_raw = np.abs(np.fft.fftshift(np.fft.fft(acf_windowed, n=fft_size_eff)))
+    psd_db = 10 * np.log10(psd_raw + 1e-30)
+
+    if len(psd_db) != fft_size:
+        idx = np.round(np.linspace(0, len(psd_db) - 1, fft_size)).astype(int)
+        psd_db = psd_db[idx]
+
+    return psd_db
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 8. AR/Burg 2D — Espectrograma paramétrico (ventana deslizante)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def run_ar_burg_2d(iq: np.ndarray, order: int = 64, n_freqs: int = 512,
+                   window_len: int = 512, hop_len: int = 128,
+                   sample_rate: float = 2_400_000,
+                   center_freq: float = 1420.40) -> dict:
+    """
+    Espectrograma paramétrico AR/Burg: aplica el método de Burg sobre
+    ventanas deslizantes para producir una matriz 2D tiempo-frecuencia.
+
+    Args:
+        iq          : Muestras IQ.
+        order       : Orden del modelo AR por ventana.
+        n_freqs     : Puntos en el eje de frecuencia.
+        window_len  : Longitud de cada ventana temporal.
+        hop_len     : Paso entre ventanas sucesivas.
+        sample_rate : Tasa de muestreo en Hz.
+        center_freq : Frecuencia central en MHz.
+
+    Returns:
+        dict con 'matrix' (n_windows × n_freqs), 'times_s', 'freqs_mhz'.
+    """
+    sig = _normalize(_to_complex(iq))
+    N = len(sig)
+    window_len = min(window_len, N)
+    order = min(order, window_len // 2 - 1)
+
+    n_windows = max(1, (N - window_len) // hop_len + 1)
+    spec_matrix = np.zeros((n_windows, n_freqs))
+
+    for w in range(n_windows):
+        start = w * hop_len
+        segment = sig[start:start + window_len]
+        spec_matrix[w, :] = _burg_psd_1d(segment, order, n_freqs)
+
+    times_s = np.arange(n_windows) * hop_len / sample_rate
+    fs_mhz = sample_rate / 1_000_000
+    freqs_mhz = np.linspace(center_freq - fs_mhz / 2,
+                             center_freq + fs_mhz / 2, n_freqs)
+
+    return {
+        "matrix": spec_matrix,
+        "times_s": times_s,
+        "freqs_mhz": freqs_mhz,
+        "method": "AR/Burg 2D"
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 9. Correlograma 2D — Espectrograma indirecto (ventana deslizante)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def run_correlogram_2d(iq: np.ndarray, max_lag: int = 256, n_freqs: int = 512,
+                       window_len: int = 512, hop_len: int = 128,
+                       sample_rate: float = 2_400_000,
+                       center_freq: float = 1420.40) -> dict:
+    """
+    Espectrograma por Correlograma (Wiener-Khinchin): aplica el método
+    indirecto sobre ventanas deslizantes para producir una matriz 2D.
+
+    Args:
+        iq          : Muestras IQ.
+        max_lag     : Máximo retardo de autocorrelación por ventana.
+        n_freqs     : Puntos en el eje de frecuencia.
+        window_len  : Longitud de cada ventana temporal.
+        hop_len     : Paso entre ventanas sucesivas.
+        sample_rate : Tasa de muestreo en Hz.
+        center_freq : Frecuencia central en MHz.
+
+    Returns:
+        dict con 'matrix' (n_windows × n_freqs), 'times_s', 'freqs_mhz'.
+    """
+    sig = _normalize(_to_complex(iq))
+    N = len(sig)
+    window_len = min(window_len, N)
+
+    n_windows = max(1, (N - window_len) // hop_len + 1)
+    spec_matrix = np.zeros((n_windows, n_freqs))
+
+    for w in range(n_windows):
+        start = w * hop_len
+        segment = sig[start:start + window_len]
+        spec_matrix[w, :] = _correlogram_psd_1d(
+            segment, min(max_lag, window_len // 2), n_freqs
+        )
+
+    times_s = np.arange(n_windows) * hop_len / sample_rate
+    fs_mhz = sample_rate / 1_000_000
+    freqs_mhz = np.linspace(center_freq - fs_mhz / 2,
+                             center_freq + fs_mhz / 2, n_freqs)
+
+    return {
+        "matrix": spec_matrix,
+        "times_s": times_s,
+        "freqs_mhz": freqs_mhz,
+        "method": "Correlograma 2D"
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 10. ASLT — Stub async-ready (pendiente de archivos externos)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def run_aslt(iq: np.ndarray, sample_rate: float = 2_400_000,

@@ -636,3 +636,80 @@ def chart_correlogram_spectrum(result: dict) -> str:
         )
 
     return fig_to_b64(fig)
+
+
+def chart_ar_spectrogram(result: dict) -> str:
+    """Espectrograma 2D AR/Burg paramétrico (ventana deslizante)."""
+    dyn_size = get_dynamic_figsize(12.0, 5.5)
+    fig, ax, is_new = get_cached_fig("ar_spectrogram", figsize=dyn_size)
+    matrix = result["matrix"]
+    times_s = result["times_s"]
+    freqs_mhz = result["freqs_mhz"]
+    t_ms = times_s * 1000
+
+    if is_new or "im" not in cache.artists["ar_spectrogram"]:
+        ax.clear()
+        style_ax(ax, "Espectrograma AR/Burg (Paramétrico)", "Frecuencia (MHz)", "Tiempo (ms)")
+        im = ax.imshow(
+            matrix,
+            aspect="auto",
+            origin="lower",
+            extent=[freqs_mhz[0], freqs_mhz[-1], t_ms[0], t_ms[-1]],
+            cmap="magma",
+            interpolation="bilinear",
+        )
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="2%", pad=0.05)
+        cbar = fig.colorbar(im, cax=cax)
+        cbar.set_label("PSD (dB)", fontsize=7, color=TEXT_MUTED)
+        cbar.ax.tick_params(labelsize=6, colors=TEXT_MUTED)
+        cbar.outline.set_edgecolor(BORDER_COL)
+        cache.artists["ar_spectrogram"]["im"] = im
+        cache.artists["ar_spectrogram"]["cbar"] = cbar
+    else:
+        im = cache.artists["ar_spectrogram"]["im"]
+        im.set_data(matrix)
+        im.set_extent([freqs_mhz[0], freqs_mhz[-1], t_ms[0], t_ms[-1]])
+        im.set_clim(np.percentile(matrix, 5), np.percentile(matrix, 98))
+
+    return fig_to_b64(fig)
+
+
+def chart_correlogram_spectrogram(result: dict) -> str:
+    """Espectrograma 2D Correlograma (Wiener-Khinchin) ventana deslizante."""
+    dyn_size = get_dynamic_figsize(12.0, 5.5)
+    fig, ax, is_new = get_cached_fig("corr_spectrogram", figsize=dyn_size)
+    matrix = result["matrix"]
+    times_s = result["times_s"]
+    freqs_mhz = result["freqs_mhz"]
+    t_ms = times_s * 1000
+
+    if is_new or "im" not in cache.artists["corr_spectrogram"]:
+        ax.clear()
+        style_ax(ax, "Espectrograma Correlograma (Wiener-Khinchin)", "Frecuencia (MHz)", "Tiempo (ms)")
+        im = ax.imshow(
+            matrix,
+            aspect="auto",
+            origin="lower",
+            extent=[freqs_mhz[0], freqs_mhz[-1], t_ms[0], t_ms[-1]],
+            cmap="viridis",
+            interpolation="bilinear",
+        )
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="2%", pad=0.05)
+        cbar = fig.colorbar(im, cax=cax)
+        cbar.set_label("PSD (dB)", fontsize=7, color=TEXT_MUTED)
+        cbar.ax.tick_params(labelsize=6, colors=TEXT_MUTED)
+        cbar.outline.set_edgecolor(BORDER_COL)
+        cache.artists["corr_spectrogram"]["im"] = im
+        cache.artists["corr_spectrogram"]["cbar"] = cbar
+    else:
+        im = cache.artists["corr_spectrogram"]["im"]
+        im.set_data(matrix)
+        im.set_extent([freqs_mhz[0], freqs_mhz[-1], t_ms[0], t_ms[-1]])
+        im.set_clim(np.percentile(matrix, 5), np.percentile(matrix, 98))
+
+    return fig_to_b64(fig)
+

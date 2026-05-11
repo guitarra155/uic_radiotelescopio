@@ -1063,7 +1063,7 @@ class DSPEngine:
 
             with open(
                 os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json"),
-                "w",
+                "w", encoding="utf-8"
             ) as f:
                 json.dump(sanitized, f, indent=4)
         except Exception as e:
@@ -1075,7 +1075,7 @@ class DSPEngine:
 
             p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
             if os.path.exists(p):
-                with open(p, "r") as f:
+                with open(p, "r", encoding="utf-8") as f:
                     conf = json.load(f)
                 self.center_freq = conf.get("center_freq", self.center_freq)
                 self.sample_rate = conf.get("sample_rate", self.sample_rate)

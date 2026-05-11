@@ -23,57 +23,58 @@
         "method": "AR/Burg",
         "welch_fft": 1024,
         "welch_overlap": 0.5,
-        "corr_max_lag": 512
+        "corr_max_lag": 512,
+        "spec2d_method": "waterfall"
     },
     "analysis_window_sec": 1.0,
-    "moving_avg_samples": 3,
+    "moving_avg_samples": 240,
     "bb60c_ref_level": -30.0,
     "bb60c_iq_bw": 20.0,
     "vbw_alpha": 0.3,
     "ma_enabled": 1,
-    "raw_mode": 1,
+    "raw_mode": 0,
     "use_welch": 0,
     "visual_span_mhz": 2.4,
     "charts_config": {
         "mon_raw_spec": {
-            "xmin": 1420.2,
-            "xmax": 1420.6,
-            "ymin": -10.0,
-            "ymax": 15.0,
-            "auto_x": 0,
-            "auto_y": 0
+            "xmin": 1419.937,
+            "xmax": 1420.8745,
+            "ymin": -49.81571593985262,
+            "ymax": 13.952442775911805,
+            "auto_x": 1,
+            "auto_y": 1
         },
         "mon_raw_amp": {
             "xmin": 0.0,
-            "xmax": 0.1,
-            "ymin": 0.9305101335048676,
-            "ymax": 1.495630919933319,
-            "auto_x": 0,
+            "xmax": 1.0,
+            "ymin": 0.9376551568508148,
+            "ymax": 1.4943318247795105,
+            "auto_x": 1,
             "auto_y": 1
         },
         "mon_filt_spec": {
-            "xmin": 1420.2,
-            "xmax": 1420.6,
-            "ymin": -10.0,
-            "ymax": 15.0,
-            "auto_x": 0,
-            "auto_y": 0
+            "xmin": 1419.937,
+            "xmax": 1420.8745,
+            "ymin": -49.81571593985262,
+            "ymax": 13.952442775911805,
+            "auto_x": 1,
+            "auto_y": 1
         },
         "mon_filt_amp": {
             "xmin": 0.0,
-            "xmax": 0.1,
-            "ymin": 0.22570357005963543,
-            "ymax": 1.5080660965774726,
-            "auto_x": 0,
+            "xmax": 1.0,
+            "ymin": 0.0,
+            "ymax": 0.788468637142191,
+            "auto_x": 1,
             "auto_y": 1
         },
         "spec_wf": {
-            "xmin": 1419.0057499999998,
-            "xmax": 1421.0057499999998,
-            "ymin": -100.0,
-            "ymax": -20.0,
-            "auto_x": 0,
-            "auto_y": 0
+            "xmin": 1419.937,
+            "xmax": 1420.8745,
+            "ymin": -49.81571593985262,
+            "ymax": 13.952442775911805,
+            "auto_x": 1,
+            "auto_y": 1
         },
         "stat_hist": {
             "xmin": 0.0,

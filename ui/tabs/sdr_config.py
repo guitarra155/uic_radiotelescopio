@@ -133,10 +133,6 @@ def build_config(page: ft.Page) -> ft.Control:
             ])
         elif idx == 2:
             tab_content = ft.Column([
-                row("Análisis (s)", make_input(f"{engine_instance.analysis_window_sec:.8f}", 
-                    lambda e: (setattr(engine_instance, "analysis_window_sec", float(e.control.value)), engine_instance.save_config(), on_ui_event(e)))),
-                row("Historial (s)", make_input(f"{engine_instance.waterfall_history_sec:.8f}", 
-                    lambda e: (setattr(engine_instance, "waterfall_history_sec", float(e.control.value)), engine_instance.save_config(), on_ui_event(e)))),
                 build_axis_group("Cascada", "spec_wf"),
             ])
         elif idx == 3: tab_content = build_axis_group("Histograma", "stat_hist")

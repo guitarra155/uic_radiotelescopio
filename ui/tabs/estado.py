@@ -161,6 +161,28 @@ def build_estado(page: ft.Page) -> ft.Control:
         ], spacing=10)
     )
 
+    analysis_f = txt_field("Ventana Analisis (s)", f"{engine_instance.analysis_window_sec:.8f}", "e.g. 1.0")
+    waterfall_f = txt_field("Historial Cascada (s)", f"{engine_instance.waterfall_history_sec:.8f}", "e.g. 10.0")
+
+    def on_analysis_change(e):
+        try:
+            val = float(e.control.value)
+            engine_instance.analysis_window_sec = val
+            engine_instance.save_config()
+        except ValueError: pass
+
+    def on_waterfall_change(e):
+        try:
+            val = float(e.control.value)
+            engine_instance.waterfall_history_sec = val
+            engine_instance.save_config()
+        except ValueError: pass
+
+    analysis_f.on_submit = on_analysis_change
+    analysis_f.on_blur = on_analysis_change
+    waterfall_f.on_submit = on_waterfall_change
+    waterfall_f.on_blur = on_waterfall_change
+
     # Tarjeta 2: SDR & Frecuencia
     freq_card = panel(
         content=ft.Column([
@@ -168,6 +190,10 @@ def build_estado(page: ft.Page) -> ft.Control:
             freq_f,
             span_visual_f,
             rate_f,
+            ft.Divider(color=BORDER_COL, height=10),
+            ft.Text("Ventana de Adquisicion", color=ACCENT_AMBER, size=12, weight=ft.FontWeight.W_600),
+            analysis_f,
+            waterfall_f,
         ], spacing=15)
     )
 
