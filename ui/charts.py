@@ -68,10 +68,9 @@ def get_cached_fig(name, figsize=(9.5, 3.0), is_3d=False):
 
 
 def fig_to_b64(fig: Figure) -> str:
-    """Retorna Base64 con resolución optimizada para nitidez (DPI=120)."""
+    """Retorna Base64 crudo. tight_layout ya fue aplicado al crear la figura."""
     buf = io.BytesIO()
-    # Aumentamos de 72 a 120 para evitar que se vea borroso en pantallas modernas
-    fig.savefig(buf, format="png", dpi=360, bbox_inches=None)
+    fig.savefig(buf, format="png", dpi=72, bbox_inches=None)
     buf.seek(0)
     enc = base64.b64encode(buf.read()).decode()
     buf.close()
@@ -211,12 +210,12 @@ def chart_spectrum_raw() -> str:
         )
         (line,) = ax.plot(full_freq, spec, color=ACCENT_CYAN, linewidth=1.0)
         hline = ax.axhline(
-            y=engine_instance.db_noise_floor,
+            y=engine_instance.db_noise_floor_raw,
             color=ACCENT_AMBER,
             linestyle="--",
             linewidth=0.8,
             alpha=0.7,
-            label=f"Piso: {engine_instance.db_noise_floor:.1f} dB",
+            label=f"Piso: {engine_instance.db_noise_floor_raw:.1f} dB",
         )
         leg = ax.legend(
             loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL
@@ -231,7 +230,7 @@ def chart_spectrum_raw() -> str:
         
         line.set_data(full_freq, spec)
         
-        nf = engine_instance.db_noise_floor
+        nf = engine_instance.db_noise_floor_raw
         hline.set_ydata([nf, nf])
         hline.set_label(f"Piso: {nf:.1f} dB")
         if leg.get_texts():

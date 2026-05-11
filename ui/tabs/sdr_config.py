@@ -39,13 +39,18 @@ def build_config(page: ft.Page) -> ft.Control:
 
     def make_toggle(value, on_click):
         """Usa Iconos en lugar de Checkbox para evitar errores de renderizado."""
-        return ft.IconButton(
+        btn = ft.IconButton(
             icon=ft.Icons.CHECK_BOX if value else ft.Icons.CHECK_BOX_OUTLINE_BLANK,
             icon_color=ACCENT_GREEN if value else TEXT_MUTED,
             icon_size=20,
             on_click=on_click,
             visual_density=ft.VisualDensity.COMPACT
         )
+        try:
+            btn.tab_index = -1
+        except:
+            pass
+        return btn
 
     def make_input(value, on_submit):
         return ft.TextField(
@@ -98,45 +103,31 @@ def build_config(page: ft.Page) -> ft.Control:
             ft.Divider(height=20, color="#303030")
         ], spacing=2)
 
-    # Columna principal persistente para mantener el scroll
+    # --- Controles persistentes que se actualizan frecuentemente ---
+    rfi_last_val = ft.Text(engine_instance.rfi_last_time, color=TEXT_MAIN, size=10)
+    rfi_count_val = ft.Text(f"{engine_instance.rfi_event_count}", color=ACCENT_AMBER, size=10, weight=ft.FontWeight.BOLD)
+
+    # Columna principal persistente para mantener el scroll y el foco de los inputs
     main_col = ft.Column(scroll=ft.ScrollMode.AUTO, spacing=10)
 
     def render_panel():
-        """Genera los controles basados en el estado actual del motor."""
+        """Genera la estructura de controles. Solo se llama al cambiar de pestaña."""
         idx = engine_instance.active_tab
         
-        # Pestaña de Comparación (Antes Monitoreo RAW)
         if idx == 1:
             tab_content = ft.Column([
-                ft.Text("🛠️ CONTROLES MA", size=11, weight=ft.FontWeight.BOLD, color=ACCENT_CYAN),
-                row("Filtro MA", make_toggle(engine_instance.ma_enabled, 
-                    lambda e: (setattr(engine_instance, "ma_enabled", not engine_instance.ma_enabled), engine_instance.save_config(), on_ui_event(e)))),
+                ft.Text("🛡️ MONITOREO DUAL", color=ACCENT_CYAN, size=12, weight=ft.FontWeight.BOLD),
+                row("Modo RAW", make_toggle(engine_instance.raw_mode, 
+                    lambda e: (setattr(engine_instance, "raw_mode", not engine_instance.raw_mode), engine_instance.save_config(), on_ui_event(e)))),
                 
-                ft.Row([
-                    ft.Text("Muestras (W):", size=10, color=TEXT_MUTED),
-                    ma_val_text := ft.Text(f"{int(engine_instance.moving_avg_samples)}", size=11, color=ACCENT_CYAN, weight=ft.FontWeight.BOLD),
-                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                
-                ft.Slider(
-                    min=3, max=301, divisions=149,
-                    value=max(3, engine_instance.moving_avg_samples),
-                    label="{value}",
-                    on_change=lambda e: (
-                        setattr(engine_instance, "moving_avg_samples", int(e.control.value)),
-                        setattr(ma_val_text, "value", str(int(e.control.value))),
-                        ma_val_text.update()
-                    ),
-                    on_change_end=lambda e: (engine_instance.save_config(), on_ui_event(e))
-                ),
-
                 ft.Divider(height=10, color=BORDER_COL),
-                ft.Text("🎨 GUÍA VISUAL", size=11, weight=ft.FontWeight.BOLD, color=ACCENT_CYAN),
-                ft.Row([ft.Container(width=10, height=10, bgcolor=ACCENT_CYAN, border_radius=2), ft.Text("Señal Original", size=10)], spacing=5),
-                ft.Row([ft.Container(width=10, height=10, bgcolor=ACCENT_AMBER, border_radius=2), ft.Text("Señal Filtrada", size=10)], spacing=5),
-                
-                ft.Divider(height=20, color=ACCENT_CYAN),
                 build_axis_group("Espectro RAW", "mon_raw_spec"),
                 build_axis_group("Amplitud RAW", "mon_raw_amp"),
+                ft.Divider(height=20, color=ACCENT_AMBER),
+                row("Filtro MA", make_toggle(engine_instance.ma_enabled, 
+                    lambda e: (setattr(engine_instance, "ma_enabled", not engine_instance.ma_enabled), engine_instance.save_config(), on_ui_event(e)))),
+                row("Ventana (muestras)", make_input(f"{int(engine_instance.moving_avg_samples)}", 
+                    lambda e: (setattr(engine_instance, "moving_avg_samples", max(1, int(float(e.control.value)))), engine_instance.save_config(), on_ui_event(e)))),
                 build_axis_group("Espectro Filtrado", "mon_filt_spec"),
                 build_axis_group("Amplitud Filtrada", "mon_filt_amp"),
             ])
@@ -151,34 +142,52 @@ def build_config(page: ft.Page) -> ft.Control:
         elif idx == 3: tab_content = build_axis_group("Histograma", "stat_hist")
         elif idx == 4: tab_content = build_axis_group("Potencia", "pow_time")
         elif idx == 5: tab_content = build_axis_group("SNR", "snr_freq")
-        elif idx == 6: tab_content = ft.Text("Configuración de Algoritmo Activa", color=TEXT_MUTED, size=10)
+        elif idx == 6: tab_content = build_axis_group("Algoritmo", "mon_filt_spec")
         else: tab_content = ft.Text("Configuración general activa", color=TEXT_MUTED, size=10)
 
-        # Actualizar la lista de controles de la columna persistente
+        sync_btn = make_toggle(engine_instance.sync_active, 
+            lambda e: (engine_instance.apply_sync_mode(not engine_instance.sync_active), on_ui_event(e)))
+        
+        reset_btn = ft.ElevatedButton("Reset Global", icon=ft.Icons.RESTART_ALT, 
+            on_click=lambda e: (engine_instance.reset_to_defaults(), on_ui_event(e)),
+            style=ft.ButtonStyle(bgcolor=ft.Colors.RED_900, color=ft.Colors.WHITE, shape=ft.RoundedRectangleBorder(radius=4)))
+        
+        try:
+            reset_btn.tab_index = -1
+        except:
+            pass
+
         main_col.controls = [
             ft.Text("⚙️ CONFIGURACIÓN", size=14, weight=ft.FontWeight.BOLD, color=ACCENT_CYAN),
             ft.Divider(height=10, color=ACCENT_CYAN),
-            
-            row("Sincronización", make_toggle(engine_instance.sync_active, 
-                lambda e: (engine_instance.apply_sync_mode(not engine_instance.sync_active), on_ui_event(e)))),
-            
-            ft.ElevatedButton("Reset Global", icon=ft.Icons.RESTART_ALT, 
-                on_click=lambda e: (engine_instance.reset_to_defaults(), on_ui_event(e)),
-                style=ft.ButtonStyle(bgcolor=ft.Colors.RED_900, color=ft.Colors.WHITE, shape=ft.RoundedRectangleBorder(radius=4))),
-            
+            row("Sincronización", sync_btn),
+            reset_btn,
             ft.Divider(height=20, color=BORDER_COL),
             tab_content
         ]
 
+    def update_stats():
+        """Solo actualiza los valores de los textos, sin recrear controles."""
+        rfi_last_val.value = engine_instance.rfi_last_time
+        rfi_count_val.value = f"{engine_instance.rfi_event_count}"
+        try:
+            if rfi_last_val.page: rfi_last_val.update()
+            if rfi_count_val.page: rfi_count_val.update()
+        except: pass
+
     # --- Suscripción a eventos ---
-    async def _update_tab(msg):
+    async def _update_ui(msg):
         if msg == "tab_changed":
             render_panel()
-            main_col.update()
+            try: main_col.update()
+            except: pass
+        elif msg == "refresh_charts":
+            # Si estamos en la pestaña dual, actualizar SOLO los textos dinámicos
+            if engine_instance.active_tab == 1:
+                update_stats()
 
-    page.pubsub.subscribe(_update_tab)
+    page.pubsub.subscribe(_update_ui)
     
-    # Carga inicial
     render_panel()
     root_container.content = main_col
     

@@ -3,8 +3,7 @@ import flet as ft
 from core.constants import *
 from ui.components.layout import build_header, build_footer
 from ui.tabs.monitoring import build_monitoring
-from ui.tabs.monitoring_filtered import build_monitoring_filtered
-from ui.tabs.comparison import build_comparison
+from ui.tabs.dual_monitoring import build_dual_monitoring
 from ui.tabs.spectrogram import build_spectrogram
 from ui.tabs.statistics import build_statistics
 from ui.tabs.sdr_config import build_config
@@ -50,7 +49,7 @@ def main(page: ft.Page):
 
     tab_labels = [
         "🏠  Inicio & Configuración",    # 0
-        "🌓  Comparación MA (RAW vs Filtrado)", # 1
+        "🌓  Monitoreo Dual (RAW/MA)",   # 1
         "🌈  Espectrograma",             # 2
         "📊  Estadística & Smart Trigger",# 3
         "⚡  Potencia vs. Tiempo",        # 4
@@ -61,7 +60,7 @@ def main(page: ft.Page):
     # Renderizamos los componentes visuales de cada módulo
     tab_contents = [
         build_estado(page),                          # 0
-        build_comparison(page, key_state),           # 1
+        build_dual_monitoring(page, key_state),      # 1
         build_spectrogram(page, key_state),          # 2
         build_statistics(page),                       # 3
         build_signal_analysis(page, key_state),      # 4

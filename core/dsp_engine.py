@@ -153,7 +153,8 @@ class DSPEngine:
         # Rangos de potencia espectro (AUTO-DETECTADOS)
         self.db_min = -90
         self.db_max = -50
-        self.db_noise_floor = -80  # Piso de ruido detectado
+        self.db_noise_floor = -80  # Piso de ruido detectado (filtrado)
+        self.db_noise_floor_raw = -80 # Piso de ruido detectado (RAW)
 
         # Rangos de gráfica Potencia vs Tiempo
         self.power_db_min = -90
@@ -416,22 +417,21 @@ class DSPEngine:
             self.amplitude_data = np.roll(self.amplitude_data, -len(mag_raw))
             self.amplitude_data[-len(mag_raw) :] = mag_raw
 
-        # ── 3. Moving Average Filter (Zero-Phase / Centered) ────────
-        # Lógica matemática requerida por ingeniería:
-        # n_order = (window_length - 1) / 2
-        # for i in range(...): signal_filtered[i + n_order] = np.mean(signal[i : i + window_length])
-        
+        # ── 3. Moving Average Filter (IMPLEMENTACIÓN ULTRA-RÁPIDA) ────────
         win_len = max(1, int(self.moving_avg_samples))
         
         if self.ma_enabled and win_len > 1:
-            # 1. Asegurar que la ventana sea impar (2 * n_order + 1) para un centrado perfecto
-            if win_len % 2 == 0:
-                win_len += 1
-                
-            # 2. Aplicar el filtro. np.convolve con mode='same' es la implementación 
-            # en C (ultra-rápida) del bucle for iterativo mostrado arriba.
-            ma_filter = np.ones(win_len) / win_len
-            iq_f = np.convolve(iq, ma_filter, mode='same')
+            # Optimizamos usando Suma Acumulada para que sea O(N) independientemente de la ventana
+            # Esto es lo mismo que np.convolve pero instantáneo.
+            def fast_ma(x, w):
+                # Padding para mantener modo "same"
+                pad = w // 2
+                x_padded = np.pad(x, (pad, pad), mode='edge')
+                cs = np.cumsum(x_padded, dtype=np.float64)
+                res = (cs[w:] - cs[:-w]) / w
+                return res[:len(x)]
+
+            iq_f = fast_ma(iq.real, win_len) + 1j * fast_ma(iq.imag, win_len)
         else:
             iq_f = iq  # Sin filtrado
 
@@ -449,29 +449,46 @@ class DSPEngine:
             blk = iq[b * self.fft_size : (b + 1) * self.fft_size]
             if len(blk) < self.fft_size:
                 break
-            blk = blk - np.mean(blk) # Remoción de DC
-            fft_c = np.fft.fftshift(np.fft.fft(blk * self.window_raw)) # Ventana Hanning + FFT
+            blk = blk - np.mean(blk)
+            fft_c = np.fft.fftshift(np.fft.fft(blk * self.window_raw))
             pwr_raw_avg += np.abs(fft_c) ** 2
         pwr_raw = 10 * np.log10(pwr_raw_avg / (max(1, batches) * self.window_raw_pwr) + 1e-12)
-        
-        # 🛸 Alpha efectivo: 1.0 en modo RAW (sin suavizado VBW)
+        # 🛸 Alpha efectivo: 1.0 en modo RAW (sin suavizado)
         alpha_eff = 1.0 if self.raw_mode else self.vbw_alpha
+        
         self.spectrum_raw_data = (1 - alpha_eff) * self.spectrum_raw_data + alpha_eff * pwr_raw
 
-        # ── 4. Espectro de Potencia (FFT) sobre señal FILTRADA → solo para Tab 2 ───
-        # Hemos eliminado cualquier otro proceso (como Welch) para garantizar que la 
-        # Pestaña 2 sea una copia exacta de la 1, diferenciándose SOLO por el filtro MA.
-        pwr_avg = np.zeros(self.fft_size)
-        for b in range(batches):
-            block_iq = iq_f[b * self.fft_size : (b + 1) * self.fft_size]
-            if len(block_iq) < self.fft_size:
-                break
-            block_iq = block_iq - np.mean(block_iq) # Mismo proceso de DC que RAW
-            fft_complex = np.fft.fftshift(np.fft.fft(block_iq * self.window_raw)) # Misma ventana Hanning
-            pwr_avg += np.abs(fft_complex) ** 2
-        pwr = 10 * np.log10(pwr_avg / (max(1, batches) * self.window_raw_pwr) + 1e-12)
+        # ── 4. Espectro de Potencia (FFT) sobre señal FILTRADA ───────────────
+        if self.use_welch:
+            from core.advanced_dsp import run_welch
 
-        # Aplicar el mismo suavizado temporal (VBW) que la Pestaña 1
+            welch_res = run_welch(
+                iq_f,
+                fft_size=self.algo_params.get("welch_fft", 1024),
+                overlap=self.algo_params.get("welch_overlap", 0.5),
+                sample_rate=self.sample_rate,
+                center_freq=self.center_freq,
+            )
+            # Interpolar al tamaño de fft_size del engine si difieren
+            if len(welch_res["psd"]) != self.fft_size:
+                idx = np.round(
+                    np.linspace(0, len(welch_res["psd"]) - 1, self.fft_size)
+                ).astype(int)
+                pwr = welch_res["psd"][idx]
+            else:
+                pwr = welch_res["psd"]
+        else:
+            pwr_avg = np.zeros(self.fft_size)
+            for b in range(batches):
+                block_iq = iq_f[b * self.fft_size : (b + 1) * self.fft_size]
+                if len(block_iq) < self.fft_size:
+                    break
+                block_iq = block_iq - np.mean(block_iq)
+                fft_complex = np.fft.fftshift(np.fft.fft(block_iq * self.window_raw))
+                pwr_avg += np.abs(fft_complex) ** 2
+            pwr = 10 * np.log10(pwr_avg / (max(1, batches) * self.window_raw_pwr) + 1e-12)
+
+        # IIR simple sobre el tiempo (suavizado VBW)
         self.spectrum_data = (1 - alpha_eff) * self.spectrum_data + alpha_eff * pwr
 
         # ── 5. Waterfall (Espectrograma) sobre señal filtrada ───────────────
@@ -558,6 +575,7 @@ class DSPEngine:
 
         # 1. Sanitizar datos de entrada para evitar cálculos corruptos
         spec = np.nan_to_num(self.spectrum_data, nan=-100.0)
+        spec_raw = np.nan_to_num(self.spectrum_raw_data, nan=-100.0)
         amp = np.nan_to_num(self.amplitude_data, nan=0.0)
         amp_f = np.nan_to_num(self.amplitude_ma_data, nan=0.0)
         
@@ -565,9 +583,10 @@ class DSPEngine:
         c_start = len(spec) // 4
         c_end = len(spec) - c_start
         valid_spec = spec[c_start:c_end]
+        valid_spec_raw = spec_raw[c_start:c_end]
         
-        noise_floor = float(np.nanmedian(valid_spec))
-        self.db_noise_floor = noise_floor
+        self.db_noise_floor = float(np.nanmedian(valid_spec))
+        self.db_noise_floor_raw = float(np.nanmedian(valid_spec_raw))
         
         fs_mhz = self.sample_rate / 1e6
         # El BB60C tiene un ancho de banda analógico útil de ~75% del sample rate.
@@ -598,9 +617,9 @@ class DSPEngine:
             if cfg.get("auto_y"):
                 if "spec" in chart_id or "wf" in chart_id:
                     p_max = float(np.nanpercentile(valid_spec, 99.9))
+                    altura_senal = max(10.0, p_max - self.db_noise_floor)
                     # Enmarcar la señal real: Piso de ruido abajo, picos arriba.
-                    altura_senal = max(10.0, p_max - noise_floor)
-                    cfg["ymin"] = float(noise_floor - altura_senal * 0.2) # Piso cerca del fondo
+                    cfg["ymin"] = float(self.db_noise_floor - altura_senal * 0.2) # Piso cerca del fondo
                     cfg["ymax"] = float(p_max + altura_senal * 0.3) # Margen sobre los picos
                 elif "amp" in chart_id:
                     data_y = amp_f if "filt" in chart_id else amp
