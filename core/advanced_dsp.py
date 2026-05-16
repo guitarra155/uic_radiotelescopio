@@ -579,53 +579,115 @@ def run_ar_burg_2d(iq: np.ndarray, order: int = 64, n_freqs: int = 512,
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 9. Correlograma 2D — Espectrograma indirecto (ventana deslizante)
+# 9. Correlograma 2D — Método Blackman-Tukey (xcorr biased + Bartlett)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def run_correlogram_2d(iq: np.ndarray, max_lag: int = 256, n_freqs: int = 512,
-                       window_len: int = 512, hop_len: int = 128,
+def run_correlogram_2d(iq: np.ndarray, max_lag: int = 37, n_freqs: int = 1024,
+                       window_len: int = 128, overlap: float = 0.5,
+                       block_size: int = 5000, block_overlap: float = 0.5,
+                       offset_calibracion: float = -120.0,
+                       f_min_visual: float = None,
+                       f_max_visual: float = None,
                        sample_rate: float = 2_400_000,
                        center_freq: float = 1420.40) -> dict:
     """
-    Espectrograma por Correlograma (Wiener-Khinchin): aplica el método
-    indirecto sobre ventanas deslizantes para producir una matriz 2D.
-
-    Args:
-        iq          : Muestras IQ.
-        max_lag     : Máximo retardo de autocorrelación por ventana.
-        n_freqs     : Puntos en el eje de frecuencia.
-        window_len  : Longitud de cada ventana temporal.
-        hop_len     : Paso entre ventanas sucesivas.
-        sample_rate : Tasa de muestreo en Hz.
-        center_freq : Frecuencia central en MHz.
-
-    Returns:
-        dict con 'matrix' (n_windows × n_freqs), 'times_s', 'freqs_mhz'.
+    Espectrograma 2D por Correlograma método Blackman-Tukey.
+    Optimizado para rendimiento en tiempo real: procesa un número fijo
+    de segmentos a lo largo del buffer, independientemente del tamaño.
     """
-    sig = _normalize(_to_complex(iq))
-    N = len(sig)
-    window_len = min(window_len, N)
+    N = len(iq)
 
-    n_windows = max(1, (N - window_len) // hop_len + 1)
-    spec_matrix = np.zeros((n_windows, n_freqs))
+    # 1. Adaptar el tamaño de la ventana al max_lag deseado por el usuario
+    # Para estimar autocorrelación hasta max_lag, necesitamos al menos 2*max_lag + 1 muestras
+    # Ignoramos el window_len hardcodeado para dar prioridad al max_lag elegido en UI
+    window_len_eff = max(int(max_lag * 2.5), 128)
+    lag_eff = min(max_lag, window_len_eff // 2)
 
-    for w in range(n_windows):
-        start = w * hop_len
-        segment = sig[start:start + window_len]
-        spec_matrix[w, :] = _correlogram_psd_1d(
-            segment, min(max_lag, window_len // 2), n_freqs
-        )
+    fs_mhz    = sample_rate / 1_000_000
+    f_vec     = np.arange(-n_freqs // 2, n_freqs // 2) * (sample_rate / n_freqs)
+    freqs_mhz = (center_freq * 1e6 + f_vec) / 1e6   # MHz
 
-    times_s = np.arange(n_windows) * hop_len / sample_rate
-    fs_mhz = sample_rate / 1_000_000
-    freqs_mhz = np.linspace(center_freq - fs_mhz / 2,
-                             center_freq + fs_mhz / 2, n_freqs)
+    if N < window_len_eff:
+        empty = np.full((1, n_freqs), offset_calibracion)
+        return {
+            "matrix": empty, "times_s": np.array([0.0]),
+            "freqs_mhz": freqs_mhz,
+            "v_min": offset_calibracion - 5, "v_max": offset_calibracion + 30,
+            "noise_floor": float(offset_calibracion),
+            "method": "Correlograma 2D (Blackman-Tukey)",
+        }
+
+    t_signal  = np.arange(N) / sample_rate
+
+    # 2. Rendimiento extremo: Extraemos un número fijo de segmentos (resolución vertical)
+    # 150-200 segmentos es ideal para la altura en píxeles del gráfico y procesa en ms.
+    num_segs_target = 150
+    if N - window_len_eff < num_segs_target:
+        # Si la señal es corta, procesamos lo que se pueda con solapamiento
+        step_win = max(1, window_len_eff // 2)
+        seg_starts = np.arange(0, N - window_len_eff + 1, step_win)
+    else:
+        # Tomar muestras equidistantes a lo largo del buffer para mostrar toda la historia
+        seg_starts = np.linspace(0, N - window_len_eff, num_segs_target, dtype=int)
+
+    num_seg = len(seg_starts)
+    if num_seg == 0:
+        empty = np.full((1, n_freqs), offset_calibracion)
+        return {
+            "matrix": empty, "times_s": np.array([0.0]),
+            "freqs_mhz": freqs_mhz,
+            "v_min": offset_calibracion - 5, "v_max": offset_calibracion + 30,
+            "noise_floor": float(offset_calibracion),
+            "method": "Correlograma 2D (Blackman-Tukey)",
+        }
+
+    P_blk = np.zeros((n_freqs, num_seg), dtype=np.float64)
+    t_seg_abs = np.zeros(num_seg)
+
+    # Ventana Bartlett precalculada para los lags
+    w = np.bartlett(2 * lag_eff + 1)
+
+    for i, s0 in enumerate(seg_starts):
+        seg = iq[s0 : s0 + window_len_eff]
+        t_seg_abs[i] = t_signal[s0] + (window_len_eff / 2) / sample_rate
+
+        # xcorr biased
+        R_full = np.correlate(seg, seg, mode='full')
+        mid = len(R_full) // 2
+        R = R_full[mid - lag_eff : mid + lag_eff + 1] / len(seg)
+
+        R_w = R * w
+
+        # FFT -> PSD
+        P_blk[:, i] = np.fft.fftshift(np.abs(np.fft.fft(R_w, n=n_freqs)))
+
+    P_all = 10 * np.log10(P_blk + np.finfo(float).eps) + offset_calibracion
+    t_all = t_seg_abs
+
+    # ── Máscara de frecuencia visual (= mask_vis del script de referencia) ────
+    if f_min_visual is not None and f_max_visual is not None:
+        mask = (freqs_mhz >= f_min_visual) & (freqs_mhz <= f_max_visual)
+        if np.any(mask):
+            freqs_mhz = freqs_mhz[mask]
+            P_all     = P_all[mask, :]
+
+    # ── Auto-escala dinámica ──────────────────────────────────────────────────
+    noise_floor = float(np.median(P_all))
+    v_min = noise_floor - 5.0
+    v_max = float(np.max(P_all)) + 2.0
+    
+    # Garantizar un rango dinámico mínimo para visibilidad
+    if v_max < v_min + 20.0:
+        v_max = v_min + 20.0
 
     return {
-        "matrix": spec_matrix,
-        "times_s": times_s,
+        "matrix": P_all.T,        # (n_segs × n_freqs_vis)
+        "times_s": t_all,
         "freqs_mhz": freqs_mhz,
-        "method": "Correlograma 2D"
+        "v_min": v_min,
+        "v_max": v_max,
+        "noise_floor": noise_floor,
+        "method": "Correlograma 2D (Blackman-Tukey)",
     }
 
 

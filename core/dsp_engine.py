@@ -96,6 +96,13 @@ class DSPEngine:
         # Amplitude buffer — señal filtrada por Moving Average
         self.amplitude_ma_data = np.zeros(2000)
 
+        # Buffer IQ de alta resolución para el Correlograma 2D
+        # Se vincula al 'Historial Cascada' (waterfall_history_sec)
+        self._corr_buf_size  = max(50_000, int(self._sample_rate * self._waterfall_sec))
+        self.corr_iq_buffer  = np.zeros(self._corr_buf_size, dtype=np.complex64)
+        self._corr_buf_idx   = 0            # próximo índice de escritura
+        self._corr_buf_full  = False        # True una vez que el buffer ha sido llenado al menos una vez
+
         # Histogram samples
         self.histogram_data = np.random.normal(0, 1, 1000)
 
@@ -267,9 +274,23 @@ class DSPEngine:
         if self.stream_mode == "sdr":
             self._retune_requested = True
         
+        # Redimensionar buffer del correlograma al nuevo sample rate
+        self._resize_corr_buffer()
+        
         self.metadata_updated = True
         self.save_config()
         print(f"🔄 Sample Rate ajustado a valor nativo BB60C: {self._sample_rate/1e6} MSps (Decimación {self.bb60c_decimation})")
+
+    def _resize_corr_buffer(self):
+        """Redimensiona el buffer IQ del correlograma al sample rate e historial actual."""
+        target_sec  = self.waterfall_history_sec
+        new_size    = max(50_000, int(self._sample_rate * target_sec))
+        if new_size != getattr(self, "_corr_buf_size", 0):
+            self._corr_buf_size = new_size
+            self.corr_iq_buffer = np.zeros(new_size, dtype=np.complex64)
+            self._corr_buf_idx  = 0
+            self._corr_buf_full = False
+            print(f"[Correlograma] Buffer redimensionado: {new_size} muestras = {target_sec:.1f}s @ {self._sample_rate/1e6:.2f} MSps")
 
     @property
     def analysis_window_sec(self):
@@ -287,13 +308,16 @@ class DSPEngine:
 
     @waterfall_history_sec.setter
     def waterfall_history_sec(self, val):
-        self._waterfall_sec = max(self.analysis_window_sec, float(val))
+        self._waterfall_sec = max(0.1, float(val))
         new_steps = int(self._waterfall_sec / self.analysis_window_sec)
         new_steps = max(1, new_steps)
         if new_steps != self.waterfall_steps:
             self.waterfall_steps = new_steps
-            self.waterfall_data = np.zeros((self.waterfall_steps, self.fft_size))
+            self.waterfall_data = np.full((self.waterfall_steps, self.fft_size), -100.0)
             self.waterfall_idx = 0
+        
+        # Redimensionar el buffer del correlograma para que coincida con el nuevo historial
+        self._resize_corr_buffer()
 
     def start_stream(self, mode: str, kwargs: dict):
         """
@@ -408,7 +432,7 @@ class DSPEngine:
                     self.trigger_state = 0
                     self.trigger_active = False # Auto-desarmar tras capturar
 
-        # ── 2. Buffer RAW: Diezmar 1 segundo de datos a 2000 puntos para UI fluida ───────────────
+        # ── 2. Buffer RAW: Diezmar 1 segundo de datos a 2000 puntos para UI fluida ──────────────────
         step = max(1, len(iq) // len(self.amplitude_data))
         mag_raw = np.abs(iq[::step][:len(self.amplitude_data)])
         if len(mag_raw) == len(self.amplitude_data):
@@ -416,6 +440,28 @@ class DSPEngine:
         else:
             self.amplitude_data = np.roll(self.amplitude_data, -len(mag_raw))
             self.amplitude_data[-len(mag_raw) :] = mag_raw
+
+        # ── 2b. Buffer IQ crudo para Correlograma (sin decimación, circular) ────────────────
+        iq_c64  = iq.astype(np.complex64)
+        n_new   = len(iq_c64)
+        buf_sz  = self._corr_buf_size
+        if n_new >= buf_sz:
+            # El bloque es mayor que el buffer: tomar las últimas buf_sz muestras
+            self.corr_iq_buffer[:] = iq_c64[-buf_sz:]
+            self._corr_buf_idx  = 0
+            self._corr_buf_full = True
+        else:
+            end = self._corr_buf_idx + n_new
+            if end <= buf_sz:
+                self.corr_iq_buffer[self._corr_buf_idx:end] = iq_c64
+            else:
+                first = buf_sz - self._corr_buf_idx
+                self.corr_iq_buffer[self._corr_buf_idx:] = iq_c64[:first]
+                self.corr_iq_buffer[:n_new - first]      = iq_c64[first:]
+                self._corr_buf_full = True
+            self._corr_buf_idx = end % buf_sz
+            if end >= buf_sz:
+                self._corr_buf_full = True
 
         # ── 3. Moving Average Filter (IMPLEMENTACIÓN ULTRA-RÁPIDA) ────────
         win_len = max(1, int(self.moving_avg_samples))
@@ -1128,6 +1174,9 @@ class DSPEngine:
                             # Ya NO forzamos False en auto_x/y, permitimos que persista el deseo del usuario
         except Exception as e:
             print("Load Config Error:", e)
+        finally:
+            # Siempre redimensionar el buffer del correlograma al SR restaurado
+            self._resize_corr_buffer()
 
 
 # Instancia global del DSP (Singleton pattern simple)

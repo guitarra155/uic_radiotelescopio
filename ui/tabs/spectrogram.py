@@ -77,7 +77,7 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
         "Orden AR", str(engine_instance.algo_params.get("ar_order", 64)), "16-256"
     )
     corr_lag_f = txt_field(
-        "Max Lag", str(engine_instance.algo_params.get("corr_max_lag", 512)), "128-1024"
+        "Max Lag", str(engine_instance.algo_params.get("corr_max_lag", 37)), "10-256"
     )
 
     ar_order_row = ft.Container(content=ar_order_f, visible=(current_method[0] == "ar_burg_2d"), width=160)
@@ -158,20 +158,41 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
         sr = engine_instance.sample_rate
         fc = engine_instance.center_freq
 
-        # Fuente de datos: usar amplitude_ma_data (senal real diezmada).
-        # Como fallback, usar spectrum_data filas del waterfall (siempre hay datos).
-        iq = engine_instance.amplitude_ma_data.copy()
-        if not np.any(iq != 0):
-            iq = engine_instance.amplitude_data.copy()
-        if not np.any(iq != 0):
-            # Ultimo recurso: extraer fila del waterfall (siempre tiene datos cuando el stream corre)
-            wf = engine_instance.waterfall_data
-            if wf is not None and wf.size > 0:
-                # Usar la fila mas reciente del waterfall como señal proxy
-                row = wf[engine_instance.waterfall_idx, :]
-                if np.any(row != -100.0):
-                    # Convertir de dB a amplitud lineal para que los algos reciban algo util
-                    iq = 10 ** (row / 20.0)
+        # ── Fuente de IQ según el método ─────────────────────────────────────
+        if method == "correlogram_2d":
+            # Usar el buffer circular de alta resolución (50k muestras sin decimar)
+            if engine_instance._corr_buf_full:
+                idx = engine_instance._corr_buf_idx
+                iq = np.roll(engine_instance.corr_iq_buffer, -idx).copy()
+            elif engine_instance._corr_buf_idx > 0:
+                iq = engine_instance.corr_iq_buffer[:engine_instance._corr_buf_idx].copy()
+            else:
+                status_badge.value = "Acumulando muestras... espera unos segundos"
+                status_badge.color = ACCENT_AMBER
+                try:
+                    if status_badge.page: status_badge.update()
+                except Exception:
+                    pass
+                return
+        else:
+            # CWT / AR: fuente original (amplitude_ma_data diezmado)
+            iq = engine_instance.amplitude_ma_data.copy()
+            if not np.any(iq != 0):
+                iq = engine_instance.amplitude_data.copy()
+            if not np.any(iq != 0):
+                wf = engine_instance.waterfall_data
+                if wf is not None and wf.size > 0:
+                    row = wf[engine_instance.waterfall_idx, :]
+                    if np.any(row != -100.0):
+                        iq = 10 ** (row / 20.0)
+                    else:
+                        status_badge.value = "Sin datos — inicia el stream (Play)"
+                        status_badge.color = ACCENT_RED
+                        try:
+                            if status_badge.page: status_badge.update()
+                        except Exception:
+                            pass
+                        return
                 else:
                     status_badge.value = "Sin datos — inicia el stream (Play)"
                     status_badge.color = ACCENT_RED
@@ -180,14 +201,6 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
                     except Exception:
                         pass
                     return
-            else:
-                status_badge.value = "Sin datos — inicia el stream (Play)"
-                status_badge.color = ACCENT_RED
-                try:
-                    if status_badge.page: status_badge.update()
-                except Exception:
-                    pass
-                return
 
         from core.advanced_dsp import run_cwt, run_ar_burg_2d, run_correlogram_2d
         from ui.charts import chart_cwt_map, chart_ar_spectrogram, chart_correlogram_spectrogram
@@ -202,9 +215,25 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
                     run_ar_burg_2d(iq, order=order, sample_rate=sr, center_freq=fc)
                 )
             elif method == "correlogram_2d":
-                max_lag = engine_instance.algo_params.get("corr_max_lag", 512)
+                max_lag    = engine_instance.algo_params.get("corr_max_lag", 37)
+                span_mhz   = getattr(engine_instance, "visual_span_mhz", 2.0)
+                f_min_vis  = fc - span_mhz / 2
+                f_max_vis  = fc + span_mhz / 2
                 return chart_correlogram_spectrogram(
-                    run_correlogram_2d(iq, max_lag=max_lag, sample_rate=sr, center_freq=fc)
+                    run_correlogram_2d(
+                        iq,
+                        max_lag=max_lag,
+                        n_freqs=1024,
+                        window_len=128,
+                        overlap=0.5,
+                        block_size=5000,
+                        block_overlap=0.5,
+                        offset_calibracion=engine_instance.db_noise_floor - 20.0,
+                        f_min_visual=f_min_vis,
+                        f_max_visual=f_max_vis,
+                        sample_rate=sr,
+                        center_freq=fc,
+                    )
                 )
             return None
 

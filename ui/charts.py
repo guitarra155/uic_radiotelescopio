@@ -677,39 +677,73 @@ def chart_ar_spectrogram(result: dict) -> str:
 
 
 def chart_correlogram_spectrogram(result: dict) -> str:
-    """Espectrograma 2D Correlograma (Wiener-Khinchin) ventana deslizante."""
+    """
+    Correlograma 2D — Blackman-Tukey (Wiener-Khinchin).
+    Siempre redibuja desde cero para garantizar que la máscara de frecuencia
+    y el número de filas/columnas se reflejen correctamente.
+    """
     dyn_size = get_dynamic_figsize(12.0, 5.5)
-    fig, ax, is_new = get_cached_fig("corr_spectrogram", figsize=dyn_size)
-    matrix = result["matrix"]
-    times_s = result["times_s"]
-    freqs_mhz = result["freqs_mhz"]
-    t_ms = times_s * 1000
+    name = "corr_spectrogram"
+    fig, ax, _ = get_cached_fig(name, figsize=dyn_size)
 
-    if is_new or "im" not in cache.artists["corr_spectrogram"]:
-        ax.clear()
-        style_ax(ax, "Espectrograma Correlograma (Wiener-Khinchin)", "Frecuencia (MHz)", "Tiempo (ms)")
+    matrix    = result["matrix"]        # (n_segs × n_freqs)
+    times_s   = result["times_s"]       # (n_segs,)
+    freqs_mhz = result["freqs_mhz"]    # (n_freqs,)
+    
+    # Usar percentiles más agresivos para mejorar el contraste inicial
+    v_min     = result.get("v_min", float(np.percentile(matrix, 1)))
+    v_max     = result.get("v_max", float(np.percentile(matrix, 99)))
+    if v_max <= v_min: v_max = v_min + 20.0
+    
+    fc_hi     = engine_instance.center_freq
+
+    # ── Siempre limpiar y redibujar ─────────────────────────────────────────────────
+    ax.clear()
+    history_sec = engine_instance.waterfall_history_sec
+    
+    style_ax(ax,
+             "Correlograma 2D — Blackman-Tukey (Wiener-Khinchin)",
+             "Frecuencia (MHz)", "Tiempo (s)")
+
+    if len(times_s) > 1 and len(freqs_mhz) > 1:
+        # pcolormesh dibuja en las coordenadas reales [0, t_actual]
+        im = ax.pcolormesh(
+            freqs_mhz, times_s, matrix,
+            cmap="jet",
+            vmin=v_min, vmax=v_max,
+            shading="nearest",
+        )
+    else:
+        # Fallback si hay pocos datos
         im = ax.imshow(
             matrix,
-            aspect="auto",
-            origin="lower",
-            extent=[freqs_mhz[0], freqs_mhz[-1], t_ms[0], t_ms[-1]],
-            cmap="viridis",
-            interpolation="bilinear",
+            aspect="auto", origin="lower",
+            extent=[freqs_mhz[0], freqs_mhz[-1], 0, history_sec],
+            cmap="jet",
+            vmin=v_min, vmax=v_max,
+            interpolation="nearest",
         )
-        from mpl_toolkits.axes_grid1 import make_axes_locatable
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="2%", pad=0.05)
-        cbar = fig.colorbar(im, cax=cax)
-        cbar.set_label("PSD (dB)", fontsize=7, color=TEXT_MUTED)
-        cbar.ax.tick_params(labelsize=6, colors=TEXT_MUTED)
-        cbar.outline.set_edgecolor(BORDER_COL)
-        cache.artists["corr_spectrogram"]["im"] = im
-        cache.artists["corr_spectrogram"]["cbar"] = cbar
-    else:
-        im = cache.artists["corr_spectrogram"]["im"]
-        im.set_data(matrix)
-        im.set_extent([freqs_mhz[0], freqs_mhz[-1], t_ms[0], t_ms[-1]])
-        im.set_clim(np.percentile(matrix, 5), np.percentile(matrix, 98))
+
+    ax.axvline(x=fc_hi, color=ACCENT_RED, linestyle="--",
+               linewidth=0.9, alpha=0.8, label=f"HI {fc_hi:.2f} MHz")
+    ax.legend(loc="upper right", fontsize=7,
+              facecolor=MPL_AXBG, edgecolor=BORDER_COL)
+
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="2%", pad=0.05)
+    cbar = fig.colorbar(im, cax=cax)
+    cbar.set_label("Potencia (dBm)", fontsize=7, color=TEXT_MUTED)
+    cbar.ax.tick_params(labelsize=6, colors=TEXT_MUTED)
+    cbar.outline.set_edgecolor(BORDER_COL)
+
+    if len(freqs_mhz) > 1:
+        safe_set_xlim(ax, freqs_mhz[0], freqs_mhz[-1])
+    
+    # Fijar el eje Y al historial total (comportamiento solicitado)
+    ax.set_ylim([0, history_sec])
+
+    # Limpiar artistas cacheados para evitar referencias obsoletas
+    cache.artists[name] = {}
 
     return fig_to_b64(fig)
-
