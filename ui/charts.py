@@ -39,7 +39,7 @@ def get_dynamic_figsize(base_width=9.5, base_height=2.8):
 def get_cached_fig(name, figsize=(9.5, 3.0), is_3d=False):
     """Crea o recupera una figura de la caché para evitar sobrecoste de memoria."""
     if name not in cache.figs:
-        fig = Figure(figsize=figsize, dpi=300)  # 72dpi suficiente para pantalla
+        fig = Figure(figsize=figsize, dpi=96)  # 96dpi estándar de pantalla
         fig.patch.set_facecolor(MPL_BG)
         ax = fig.subplots()
         style_ax(ax)
@@ -56,25 +56,21 @@ def get_cached_fig(name, figsize=(9.5, 3.0), is_3d=False):
     fig = cache.figs[name]
     ax = cache.axes[name]
     
-    # Actualizar dinámicamente si el tamaño cambia
+    # Actualizar tamaño si cambió (sin tight_layout para no bloquear el hilo)
     current_size = fig.get_size_inches()
     if abs(current_size[0] - figsize[0]) > 0.1 or abs(current_size[1] - figsize[1]) > 0.1:
         fig.set_size_inches(figsize)
-        try:
-            fig.tight_layout(pad=0.2)
-        except:
-            pass
     return fig, ax, False
 
 
-def fig_to_b64(fig: Figure) -> str:
-    """Retorna Base64 crudo. tight_layout ya fue aplicado al crear la figura."""
+def fig_to_b64(fig: Figure, dpi: int = 72) -> str:
+    """Retorna Base64 JPEG. dpi configurable por chart para controlar velocidad."""
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=72, bbox_inches=None)
+    fig.savefig(buf, format="jpeg", dpi=dpi, bbox_inches=None)
     buf.seek(0)
     enc = base64.b64encode(buf.read()).decode()
     buf.close()
-    return f"data:image/png;base64,{enc}"
+    return f"data:image/jpeg;base64,{enc}"
 
 
 def safe_set_ylim(ax, ymin, ymax, fallback_span=10.0):
@@ -679,71 +675,78 @@ def chart_ar_spectrogram(result: dict) -> str:
 def chart_correlogram_spectrogram(result: dict) -> str:
     """
     Correlograma 2D — Blackman-Tukey (Wiener-Khinchin).
-    Siempre redibuja desde cero para garantizar que la máscara de frecuencia
-    y el número de filas/columnas se reflejen correctamente.
+    Primer frame: crea imshow + colorbar. Frames posteriores: solo set_data + set_clim.
     """
     dyn_size = get_dynamic_figsize(12.0, 5.5)
     name = "corr_spectrogram"
-    fig, ax, _ = get_cached_fig(name, figsize=dyn_size)
+    fig, ax, is_new = get_cached_fig(name, figsize=dyn_size)
 
     matrix    = result["matrix"]        # (n_segs × n_freqs)
     times_s   = result["times_s"]       # (n_segs,)
     freqs_mhz = result["freqs_mhz"]    # (n_freqs,)
-    
-    # Usar percentiles más agresivos para mejorar el contraste inicial
     v_min     = result.get("v_min", float(np.percentile(matrix, 1)))
     v_max     = result.get("v_max", float(np.percentile(matrix, 99)))
     if v_max <= v_min: v_max = v_min + 20.0
-    
     fc_hi     = engine_instance.center_freq
-
-    # ── Siempre limpiar y redibujar ─────────────────────────────────────────────────
-    ax.clear()
     history_sec = engine_instance.waterfall_history_sec
-    
-    style_ax(ax,
-             "Correlograma 2D — Blackman-Tukey (Wiener-Khinchin)",
-             "Frecuencia (MHz)", "Tiempo (s)")
 
-    if len(times_s) > 1 and len(freqs_mhz) > 1:
-        # pcolormesh dibuja en las coordenadas reales [0, t_actual]
-        im = ax.pcolormesh(
-            freqs_mhz, times_s, matrix,
-            cmap="jet",
-            vmin=v_min, vmax=v_max,
-            shading="nearest",
-        )
-    else:
-        # Fallback si hay pocos datos
+    artists = cache.artists[name]
+
+    # ── Primer frame: construir la figura completa ────────────────────────────
+    if is_new or "im" not in artists:
+        ax.clear()
+        style_ax(ax,
+                 "Correlograma 2D — Blackman-Tukey (Wiener-Khinchin)",
+                 "Frecuencia (MHz)", "Tiempo (s)")
+
+        f0, f1 = freqs_mhz[0], freqs_mhz[-1]
+        t_max = times_s[-1] if len(times_s) > 0 else history_sec
+        
         im = ax.imshow(
             matrix,
             aspect="auto", origin="lower",
-            extent=[freqs_mhz[0], freqs_mhz[-1], 0, history_sec],
-            cmap="jet",
+            extent=[f0, f1, 0.0, t_max],
+            cmap="inferno",
             vmin=v_min, vmax=v_max,
             interpolation="nearest",
         )
+        vline = ax.axvline(x=fc_hi, color=ACCENT_RED, linestyle="--",
+                           linewidth=0.9, alpha=0.8, label=f"HI {fc_hi:.2f} MHz")
+        ax.legend(loc="upper right", fontsize=7,
+                  facecolor=MPL_AXBG, edgecolor=BORDER_COL)
 
-    ax.axvline(x=fc_hi, color=ACCENT_RED, linestyle="--",
-               linewidth=0.9, alpha=0.8, label=f"HI {fc_hi:.2f} MHz")
-    ax.legend(loc="upper right", fontsize=7,
-              facecolor=MPL_AXBG, edgecolor=BORDER_COL)
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="2%", pad=0.05)
+        cbar = fig.colorbar(im, cax=cax)
+        cbar.set_label("Potencia (dBm)", fontsize=7, color=TEXT_MUTED)
+        cbar.ax.tick_params(labelsize=6, colors=TEXT_MUTED)
+        cbar.outline.set_edgecolor(BORDER_COL)
 
-    from mpl_toolkits.axes_grid1 import make_axes_locatable
-    divider = make_axes_locatable(ax)
-    cax = divider.append_axes("right", size="2%", pad=0.05)
-    cbar = fig.colorbar(im, cax=cax)
-    cbar.set_label("Potencia (dBm)", fontsize=7, color=TEXT_MUTED)
-    cbar.ax.tick_params(labelsize=6, colors=TEXT_MUTED)
-    cbar.outline.set_edgecolor(BORDER_COL)
+        artists["im"]    = im
+        artists["cbar"]  = cbar
+        artists["vline"] = vline
 
-    if len(freqs_mhz) > 1:
-        safe_set_xlim(ax, freqs_mhz[0], freqs_mhz[-1])
-    
-    # Fijar el eje Y al historial total (comportamiento solicitado)
-    ax.set_ylim([0, history_sec])
+    # ── Frames posteriores: actualizar SOLO los datos ─────────────────────────
+    else:
+        im   = artists["im"]
+        cbar = artists["cbar"]
+        f0, f1 = freqs_mhz[0], freqs_mhz[-1]
+        t_max = times_s[-1] if len(times_s) > 0 else history_sec
 
-    # Limpiar artistas cacheados para evitar referencias obsoletas
-    cache.artists[name] = {}
+        im.set_data(matrix)
+        im.set_extent([f0, f1, 0.0, t_max])
+        im.set_clim(v_min, v_max)
+        ax.set_ylim([0.0, history_sec])
 
-    return fig_to_b64(fig)
+        # Aplicar límites manuales del panel de configuración
+        cfg = engine_instance.charts_config.get("spec_wf", {})
+        if cfg.get("auto_x", True):
+            safe_set_xlim(ax, f0, f1)
+        else:
+            safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
+        if not cfg.get("auto_y", True):
+            im.set_clim(cfg["ymin"], cfg["ymax"])
+
+    return fig_to_b64(fig, dpi=96)
+

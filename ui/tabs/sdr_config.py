@@ -132,8 +132,22 @@ def build_config(page: ft.Page) -> ft.Control:
                 build_axis_group("Amplitud Filtrada", "mon_filt_amp"),
             ])
         elif idx == 2:
+            cfg_spec = engine_instance.charts_config.get("spec_wf", {})
             tab_content = ft.Column([
-                build_axis_group("Cascada", "spec_wf"),
+                ft.Text("📊 Espectrograma 2D", color=ACCENT_CYAN, size=12, weight=ft.FontWeight.BOLD),
+                row("Auto Eje X", make_toggle(cfg_spec.get("auto_x", True),
+                    lambda e: (cfg_spec.update({"auto_x": not cfg_spec.get("auto_x", True)}), engine_instance.save_config(), on_ui_event(e)))),
+                row("X Mín (MHz)", make_input(f"{cfg_spec.get('xmin', 1419.0):.5f}",
+                    lambda e: (cfg_spec.update({"xmin": float(e.control.value), "auto_x": False}), engine_instance.save_config(), on_ui_event(e)))),
+                row("X Máx (MHz)", make_input(f"{cfg_spec.get('xmax', 1421.0):.5f}",
+                    lambda e: (cfg_spec.update({"xmax": float(e.control.value), "auto_x": False}), engine_instance.save_config(), on_ui_event(e)))),
+                ft.Divider(height=5, color=BORDER_COL),
+                row("Auto Color", make_toggle(cfg_spec.get("auto_y", True),
+                    lambda e: (cfg_spec.update({"auto_y": not cfg_spec.get("auto_y", True)}), engine_instance.save_config(), on_ui_event(e)))),
+                row("Color Mín", make_input(f"{cfg_spec.get('ymin', -100.0):.3f}",
+                    lambda e: (cfg_spec.update({"ymin": float(e.control.value), "auto_y": False}), engine_instance.save_config(), on_ui_event(e)))),
+                row("Color Máx", make_input(f"{cfg_spec.get('ymax', -20.0):.3f}",
+                    lambda e: (cfg_spec.update({"ymax": float(e.control.value), "auto_y": False}), engine_instance.save_config(), on_ui_event(e)))),
             ])
         elif idx == 3: tab_content = build_axis_group("Histograma", "stat_hist")
         elif idx == 4: tab_content = build_axis_group("Potencia", "pow_time")

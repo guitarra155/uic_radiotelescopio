@@ -101,6 +101,7 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
                 
             current_method[0] = val
             engine_instance.algo_params["spec2d_method"] = val
+            engine_instance._active_spec_method = val  # para el panel de configuración
             
             try:
                 engine_instance.save_config()
@@ -118,11 +119,12 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
             ar_order_row.visible = (val == "ar_burg_2d")
             corr_lag_row.visible = (val == "correlogram_2d")
 
-            # Actualizar solo los controles afectados
+            # Actualizar controles afectados y refrescar panel de config lateral
             controls_to_update = [desc_text, status_badge, ar_order_row, corr_lag_row]
             for c in controls_to_update:
                 if c.page:
                     c.update()
+            page.pubsub.send_all("tab_changed")  # refresca el panel de config
             
             # Lanzar tarea pesada
             if val != "waterfall":
@@ -215,26 +217,42 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
                     run_ar_burg_2d(iq, order=order, sample_rate=sr, center_freq=fc)
                 )
             elif method == "correlogram_2d":
+                import time as _time
                 max_lag    = engine_instance.algo_params.get("corr_max_lag", 37)
                 span_mhz   = getattr(engine_instance, "visual_span_mhz", 2.0)
                 f_min_vis  = fc - span_mhz / 2
                 f_max_vis  = fc + span_mhz / 2
-                return chart_correlogram_spectrogram(
-                    run_correlogram_2d(
-                        iq,
-                        max_lag=max_lag,
-                        n_freqs=1024,
-                        window_len=128,
-                        overlap=0.5,
-                        block_size=5000,
-                        block_overlap=0.5,
-                        offset_calibracion=engine_instance.db_noise_floor - 20.0,
-                        f_min_visual=f_min_vis,
-                        f_max_visual=f_max_vis,
-                        sample_rate=sr,
-                        center_freq=fc,
-                    )
+
+                t0 = _time.perf_counter()
+                result = run_correlogram_2d(
+                    iq,
+                    max_lag=max_lag,
+                    n_freqs=1024,
+                    window_len=128,
+                    overlap=0.5,
+                    block_size=5000,
+                    block_overlap=0.5,
+                    offset_calibracion=engine_instance.db_noise_floor - 20.0,
+                    f_min_visual=f_min_vis,
+                    f_max_visual=f_max_vis,
+                    sample_rate=sr,
+                    center_freq=fc,
                 )
+                t_dsp = _time.perf_counter() - t0
+
+                t1 = _time.perf_counter()
+                b64 = chart_correlogram_spectrogram(result)
+                t_chart = _time.perf_counter() - t1
+
+                n_segs = result["matrix"].shape[0]
+                print(
+                    f"[Correlograma] IQ={len(iq)} muestras | "
+                    f"Segs={n_segs} | "
+                    f"DSP={t_dsp*1000:.1f}ms | "
+                    f"Chart={t_chart*1000:.1f}ms | "
+                    f"Total={(t_dsp+t_chart)*1000:.1f}ms"
+                )
+                return b64
             return None
 
         try:
@@ -279,7 +297,11 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
             if method == "waterfall":
                 img.src = await asyncio.to_thread(chart_spectrogram)
                 if img.page: img.update()
+            elif method == "correlogram_2d":
+                # El correlograma es rápido (~150ms) → ejecutar en cada refresco
+                await _render_advanced_method()
             else:
+                # CWT/AR son lentos → throttle cada N frames
                 algo_counter[0] += 1
                 if algo_counter[0] % ALGO_EVERY_N == 0:
                     await _render_advanced_method()

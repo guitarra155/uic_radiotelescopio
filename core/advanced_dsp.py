@@ -642,24 +642,30 @@ def run_correlogram_2d(iq: np.ndarray, max_lag: int = 37, n_freqs: int = 1024,
         }
 
     P_blk = np.zeros((n_freqs, num_seg), dtype=np.float64)
-    t_seg_abs = np.zeros(num_seg)
+    t_seg_abs = t_signal[seg_starts] + (window_len_eff / 2) / sample_rate
 
-    # Ventana Bartlett precalculada para los lags
+    # ── Vectorización total: sin loop Python ─────────────────────────────────
+    # Construir matriz de segmentos (num_seg × window_len_eff) en un solo indexing
+    idx_matrix = seg_starts[:, None] + np.arange(window_len_eff)   # (num_seg, window_len)
+    seg_matrix = iq[idx_matrix].astype(np.complex64)                 # (num_seg, window_len)
+
+    # Autocorrelación batch vía FFT: O(num_seg × N log N)
+    n_fft_ac = 2 ** int(np.ceil(np.log2(2 * window_len_eff - 1)))
+    SEG  = np.fft.fft(seg_matrix, n=n_fft_ac, axis=1)               # (num_seg, n_fft_ac)
+    Rcirc = np.fft.ifft(SEG * np.conj(SEG), axis=1).real            # (num_seg, n_fft_ac)
+
+    # Extraer lags [-lag_eff ... +lag_eff]
     w = np.bartlett(2 * lag_eff + 1)
+    R_neg = Rcirc[:, n_fft_ac - lag_eff:]                           # (num_seg, lag_eff)
+    R_pos = Rcirc[:, :lag_eff + 1]                                  # (num_seg, lag_eff+1)
+    R = np.concatenate([R_neg, R_pos], axis=1) / window_len_eff     # (num_seg, 2*lag+1)
+    R_w = R * w                                                       # broadcast row-wise
 
-    for i, s0 in enumerate(seg_starts):
-        seg = iq[s0 : s0 + window_len_eff]
-        t_seg_abs[i] = t_signal[s0] + (window_len_eff / 2) / sample_rate
-
-        # xcorr biased
-        R_full = np.correlate(seg, seg, mode='full')
-        mid = len(R_full) // 2
-        R = R_full[mid - lag_eff : mid + lag_eff + 1] / len(seg)
-
-        R_w = R * w
-
-        # FFT -> PSD
-        P_blk[:, i] = np.fft.fftshift(np.abs(np.fft.fft(R_w, n=n_freqs)))
+    # PSD batch (num_seg × n_freqs)
+    P_batch = np.fft.fftshift(
+        np.abs(np.fft.fft(R_w, n=n_freqs, axis=1)), axes=1
+    )                                                                 # (num_seg, n_freqs)
+    P_blk = P_batch.T                                                 # (n_freqs, num_seg)
 
     P_all = 10 * np.log10(P_blk + np.finfo(float).eps) + offset_calibracion
     t_all = t_seg_abs
@@ -675,8 +681,6 @@ def run_correlogram_2d(iq: np.ndarray, max_lag: int = 37, n_freqs: int = 1024,
     noise_floor = float(np.median(P_all))
     v_min = noise_floor - 5.0
     v_max = float(np.max(P_all)) + 2.0
-    
-    # Garantizar un rango dinámico mínimo para visibilidad
     if v_max < v_min + 20.0:
         v_max = v_min + 20.0
 

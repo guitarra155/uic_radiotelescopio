@@ -141,7 +141,7 @@ def main(page: ft.Page):
         content=build_config(page),
         border=ft.Border(left=ft.BorderSide(1, BORDER_COL)),
         bgcolor=DARK_BG,
-        expand=35
+        expand= 35
     )
 
     lower_split = ft.Row([left_panel_content, right_panel], expand=True, spacing=0)
