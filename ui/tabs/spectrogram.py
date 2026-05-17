@@ -285,15 +285,14 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
             return
         method = current_method[0]
 
-        if msg == "tab_changed":
-            if method != "waterfall":
-                await _render_advanced_method()
-            return
-
         if is_rendering[0]:
             return
         is_rendering[0] = True
         try:
+            if msg == "tab_changed" and method != "waterfall":
+                await _render_advanced_method()
+                return
+
             if method == "waterfall":
                 img.src = await asyncio.to_thread(chart_spectrogram)
                 if img.page: img.update()

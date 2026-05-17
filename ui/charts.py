@@ -66,7 +66,7 @@ def get_cached_fig(name, figsize=(9.5, 3.0), is_3d=False):
 def fig_to_b64(fig: Figure, dpi: int = 72) -> str:
     """Retorna Base64 JPEG. dpi configurable por chart para controlar velocidad."""
     buf = io.BytesIO()
-    fig.savefig(buf, format="jpeg", dpi=dpi, bbox_inches=None)
+    fig.savefig(buf, format="jpeg", dpi=dpi, bbox_inches=None, facecolor=MPL_BG, edgecolor=MPL_BG)
     buf.seek(0)
     enc = base64.b64encode(buf.read()).decode()
     buf.close()
@@ -701,11 +701,14 @@ def chart_correlogram_spectrogram(result: dict) -> str:
 
         f0, f1 = freqs_mhz[0], freqs_mhz[-1]
         t_max = times_s[-1] if len(times_s) > 0 else history_sec
+        if t_max <= 0.0: t_max = 0.001
         
+        # Invertir para que el dato más nuevo quede arriba
+        matrix_rev = matrix[::-1]
         im = ax.imshow(
-            matrix,
-            aspect="auto", origin="lower",
-            extent=[f0, f1, 0.0, t_max],
+            matrix_rev,
+            aspect="auto", origin="upper",
+            extent=[f0, f1, t_max, 0.0],
             cmap="inferno",
             vmin=v_min, vmax=v_max,
             interpolation="nearest",
@@ -726,6 +729,7 @@ def chart_correlogram_spectrogram(result: dict) -> str:
         artists["im"]    = im
         artists["cbar"]  = cbar
         artists["vline"] = vline
+        ax.set_ylim([history_sec, 0.0])
 
     # ── Frames posteriores: actualizar SOLO los datos ─────────────────────────
     else:
@@ -733,11 +737,13 @@ def chart_correlogram_spectrogram(result: dict) -> str:
         cbar = artists["cbar"]
         f0, f1 = freqs_mhz[0], freqs_mhz[-1]
         t_max = times_s[-1] if len(times_s) > 0 else history_sec
+        if t_max <= 0.0: t_max = 0.001
 
-        im.set_data(matrix)
-        im.set_extent([f0, f1, 0.0, t_max])
+        matrix_rev = matrix[::-1]
+        im.set_data(matrix_rev)
+        im.set_extent([f0, f1, t_max, 0.0])
         im.set_clim(v_min, v_max)
-        ax.set_ylim([0.0, history_sec])
+        ax.set_ylim([history_sec, 0.0])
 
         # Aplicar límites manuales del panel de configuración
         cfg = engine_instance.charts_config.get("spec_wf", {})

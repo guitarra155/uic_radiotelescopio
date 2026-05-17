@@ -619,16 +619,15 @@ def run_correlogram_2d(iq: np.ndarray, max_lag: int = 37, n_freqs: int = 1024,
 
     t_signal  = np.arange(N) / sample_rate
 
-    # 2. Rendimiento extremo: Extraemos un número fijo de segmentos (resolución vertical)
-    # 150-200 segmentos es ideal para la altura en píxeles del gráfico y procesa en ms.
+    # 2. Rendimiento extremo: Extraemos segmentos con un PASO FIJO en el tiempo.
+    # Así la textura de los datos pasados no cambia al añadir datos nuevos.
     num_segs_target = 150
-    if N - window_len_eff < num_segs_target:
-        # Si la señal es corta, procesamos lo que se pueda con solapamiento
-        step_win = max(1, window_len_eff // 2)
-        seg_starts = np.arange(0, N - window_len_eff + 1, step_win)
-    else:
-        # Tomar muestras equidistantes a lo largo del buffer para mostrar toda la historia
-        seg_starts = np.linspace(0, N - window_len_eff, num_segs_target, dtype=int)
+    # Calculamos cuántas muestras representan el avance entre una línea y otra en la pantalla
+    from core.dsp_engine import engine_instance
+    total_samples_in_history = engine_instance.waterfall_history_sec * sample_rate
+    step_win = max(1, int(total_samples_in_history / num_segs_target))
+    
+    seg_starts = np.arange(0, N - window_len_eff + 1, step_win)
 
     num_seg = len(seg_starts)
     if num_seg == 0:
