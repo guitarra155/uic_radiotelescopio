@@ -108,8 +108,8 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
                 return
                 
             current_method[0] = val
+            engine_instance.active_spec_method = val
             engine_instance.algo_params["spec2d_method"] = val
-            engine_instance._active_spec_method = val  # para el panel de configuración
             
             try:
                 engine_instance.save_config()
@@ -363,8 +363,13 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
             return
         is_rendering[0] = True
         try:
-            if msg == "tab_changed" and method != "waterfall":
-                await _render_advanced_method(force_recompute=False)
+            if msg == "tab_changed":
+                # Refresco forzado al cambiar configuración, para cualquier método
+                if method == "waterfall":
+                    img.src = await asyncio.to_thread(chart_spectrogram)
+                    if img.page: img.update()
+                else:
+                    await _render_advanced_method(force_recompute=False)
                 return
 
             if method == "waterfall":

@@ -138,7 +138,7 @@ def build_freq_snr(page: ft.Page, key_state: dict) -> ft.Control:
     is_rendering = [False]
 
     async def on_refresh(msg):
-        if msg != "refresh_charts":
+        if msg not in ("refresh_charts", "tab_changed"):
             return
         if engine_instance.active_tab != 5:
             return  # Solo renderizar si es la pestaña activa

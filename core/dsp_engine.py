@@ -203,7 +203,10 @@ class DSPEngine:
             "mon_raw_amp":  {"xmin": 0.0, "xmax": 1.0, "ymin": 0.0, "ymax": 1.0, "auto_x": False, "auto_y": False},
             "mon_filt_spec": {"xmin": 1419.0, "xmax": 1421.0, "ymin": -100.0, "ymax": -20.0, "auto_x": False, "auto_y": False},
             "mon_filt_amp": {"xmin": 0.0, "xmax": 1.0, "ymin": 0.0, "ymax": 1.0, "auto_x": False, "auto_y": False},
-            "spec_wf":      {"xmin": 1419.0, "xmax": 1421.0, "ymin": -100.0, "ymax": -20.0, "auto_x": False, "auto_y": False},
+            "spec_wf":      {"xmin": 1419.0, "xmax": 1421.0, "ymin": -100.0, "ymax": -20.0, "auto_x": False, "auto_y": True},
+            "spec_cwt":     {"xmin": 1419.0, "xmax": 1421.0, "ymin": -100.0, "ymax": -20.0, "auto_x": False, "auto_y": True},
+            "spec_ar":      {"xmin": 1419.0, "xmax": 1421.0, "ymin": -100.0, "ymax": -20.0, "auto_x": False, "auto_y": True},
+            "spec_corr":    {"xmin": 1419.0, "xmax": 1421.0, "ymin": -100.0, "ymax": -20.0, "auto_x": False, "auto_y": True},
             "stat_hist":    {"xmin": 0.0, "xmax": 1.5, "ymin": 0.0, "ymax": 100.0, "auto_x": False, "auto_y": False},
             "pow_time":     {"xmin": 0.0, "xmax": 20.0, "ymin": -100.0, "ymax": -20.0, "auto_x": False, "auto_y": False},
             "snr_freq":     {"xmin": 1419.0, "xmax": 1421.0, "ymin": -5.0, "ymax": 40.0, "auto_x": False, "auto_y": False},
@@ -234,7 +237,7 @@ class DSPEngine:
         
         # Desplazar los límites X de las gráficas de frecuencia si están en modo manual
         if hasattr(self, "charts_config"):
-            for chart_id in ["mon_raw_spec", "mon_filt_spec", "spec_wf", "snr_freq"]:
+            for chart_id in ["mon_raw_spec", "mon_filt_spec", "spec_wf", "spec_cwt", "spec_ar", "spec_corr", "snr_freq"]:
                 cfg = self.charts_config.get(chart_id)
                 if cfg and not cfg.get("auto_x", False):
                     cfg["xmin"] += delta
@@ -660,7 +663,7 @@ class DSPEngine:
 
             # --- Eje Y (Potencia o Amplitud) ---
             if cfg.get("auto_y"):
-                if "spec" in chart_id or "wf" in chart_id:
+                if chart_id in ["mon_raw_spec", "mon_filt_spec", "spec_wf"]:
                     p_max = float(np.nanpercentile(valid_spec, 99.9))
                     altura_senal = max(10.0, p_max - self.db_noise_floor)
                     # Enmarcar la señal real: Piso de ruido abajo, picos arriba.

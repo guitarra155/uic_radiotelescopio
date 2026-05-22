@@ -287,6 +287,8 @@ def chart_spectrogram() -> str:
     
     im.set_extent([fc - fs / 2, fc + fs / 2, 0, total_secs])
     im.set_clim(cfg["ymin"], cfg["ymax"])
+    if "cbar" in cache.artists["waterfall"]:
+        cache.artists["waterfall"]["cbar"].update_normal(im)
 
     safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
     return fig_to_b64(fig)
@@ -312,6 +314,21 @@ def chart_histogram() -> str:
 
     cfg = engine_instance.charts_config["stat_hist"]
     safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
+
+    # Sincronizar ymin/ymax: auto detecta el rango real de la curva gaussiana
+    if cfg.get("auto_y", True):
+        y_lo, y_hi = ax.get_ylim()
+        cfg["ymin"] = round(y_lo, 5)
+        cfg["ymax"] = round(y_hi, 5)
+    else:
+        safe_set_ylim(ax, cfg["ymin"], cfg["ymax"])
+
+    # Sincronizar xmin/xmax cuando auto_x está activo
+    if cfg.get("auto_x", True):
+        x_lo, x_hi = ax.get_xlim()
+        cfg["xmin"] = round(x_lo, 5)
+        cfg["xmax"] = round(x_hi, 5)
+
     return fig_to_b64(fig)
 
 
@@ -539,13 +556,18 @@ def chart_cwt_map(result: dict) -> str:
     im = cache.artists[name]["im"]
     im.set_extent([f0, f1, 0.0, history_sec])
 
-    cfg = engine_instance.charts_config.get("spec_wf", {})
+    cfg = engine_instance.charts_config.get("spec_cwt", {})
     safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
     
-    if cfg.get("auto_y", True):
+    if cfg.get('auto_y', True):
+        cfg["ymin"] = v_min
+        cfg["ymax"] = v_max
         im.set_clim(v_min, v_max)
     else:
         im.set_clim(cfg["ymin"], cfg["ymax"])
+
+    if "cbar" in cache.artists[name]:
+        cache.artists[name]["cbar"].update_normal(im)
 
     return fig_to_b64(fig, dpi=96)
 
@@ -746,13 +768,18 @@ def chart_ar_spectrogram(result: dict) -> str:
     im = cache.artists[name]["im"]
     im.set_extent([f0, f1, 0.0, history_sec])
 
-    cfg = engine_instance.charts_config.get("spec_wf", {})
+    cfg = engine_instance.charts_config.get("spec_ar", {})
     safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
     
     if cfg.get("auto_y", True):
+        cfg["ymin"] = v_min
+        cfg["ymax"] = v_max
         im.set_clim(v_min, v_max)
     else:
         im.set_clim(cfg["ymin"], cfg["ymax"])
+
+    if "cbar" in cache.artists[name]:
+        cache.artists[name]["cbar"].update_normal(im)
 
     return fig_to_b64(fig, dpi=96)
 
@@ -825,13 +852,18 @@ def chart_correlogram_spectrogram(result: dict) -> str:
     im = cache.artists[name]["im"]
     im.set_extent([f0, f1, 0.0, history_sec])
 
-    cfg = engine_instance.charts_config.get("spec_wf", {})
+    cfg = engine_instance.charts_config.get("spec_corr", {})
     safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
     
-    if cfg.get("auto_y", True):
+    if cfg.get('auto_y', True):
+        cfg["ymin"] = v_min
+        cfg["ymax"] = v_max
         im.set_clim(v_min, v_max)
     else:
         im.set_clim(cfg["ymin"], cfg["ymax"])
+
+    if "cbar" in cache.artists[name]:
+        cache.artists[name]["cbar"].update_normal(im)
 
     return fig_to_b64(fig, dpi=96)
 

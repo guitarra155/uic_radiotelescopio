@@ -76,40 +76,41 @@ def build_statistics(page: ft.Page) -> ft.Control:
 
     is_rendering = [False]
     async def on_refresh(msg):
-        if msg == "refresh_charts":
-            from core.dsp_engine import engine_instance
-            if engine_instance.active_tab != 3: return # Solo renderizar si es la pestaña activa
-            
-            if is_rendering[0]: return
-            is_rendering[0] = True
-            try:
-                from core.dsp_engine import engine_instance # redundante pero seguro
-                import numpy as np
-                samples = engine_instance.histogram_data
-                if len(samples) > 0:
-                    mu, std = np.mean(samples), np.std(samples)
-                    val_media.value = f"{mu:.4f}"
-                    val_std.value = f"{std:.4f}"
-                    
-                    dif = samples - mu
-                    if std > 1e-6:
-                        sesgo = float(np.mean(dif**3) / (std**3))
-                        kurt = float(np.mean(dif**4) / (std**4))
-                        val_sesgo.value = f"{sesgo:.2f}"
-                        val_kur.value = f"{kurt:.2f}"
-                    else:
-                        val_sesgo.value = "0.00"
-                        val_kur.value = "0.00"
-                    
-                    # Actualizar los textos individualmente con validación
-                    for w in [val_media, val_std, val_sesgo, val_kur]:
-                        if w.page: w.update()
+        if msg not in ("refresh_charts", "tab_changed"):
+            return
+        from core.dsp_engine import engine_instance
+        if engine_instance.active_tab != 3: return # Solo renderizar si es la pestaña activa
+        
+        if is_rendering[0]: return
+        is_rendering[0] = True
+        try:
+            from core.dsp_engine import engine_instance # redundante pero seguro
+            import numpy as np
+            samples = engine_instance.histogram_data
+            if len(samples) > 0:
+                mu, std = np.mean(samples), np.std(samples)
+                val_media.value = f"{mu:.4f}"
+                val_std.value = f"{std:.4f}"
+                
+                dif = samples - mu
+                if std > 1e-6:
+                    sesgo = float(np.mean(dif**3) / (std**3))
+                    kurt = float(np.mean(dif**4) / (std**4))
+                    val_sesgo.value = f"{sesgo:.2f}"
+                    val_kur.value = f"{kurt:.2f}"
+                else:
+                    val_sesgo.value = "0.00"
+                    val_kur.value = "0.00"
+                
+                # Actualizar los textos individualmente con validación
+                for w in [val_media, val_std, val_sesgo, val_kur]:
+                    if w.page: w.update()
 
-                import asyncio
-                img.src = await asyncio.to_thread(chart_histogram)
-                if img.page: img.update()
-            finally:
-                is_rendering[0] = False
+            import asyncio
+            img.src = await asyncio.to_thread(chart_histogram)
+            if img.page: img.update()
+        finally:
+            is_rendering[0] = False
             
     page.pubsub.subscribe(on_refresh)
 
