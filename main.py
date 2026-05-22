@@ -1,3 +1,14 @@
+import sys
+if sys.platform.startswith("win"):
+    try:
+        import io
+        if hasattr(sys.stdout, "buffer"):
+            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+        if hasattr(sys.stderr, "buffer"):
+            sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
+    except Exception:
+        pass
+
 import flet as ft
 
 from core.constants import *
@@ -21,6 +32,11 @@ def main(page: ft.Page):
     def on_keyboard(e: ft.KeyboardEvent):
         key_state['ctrl'] = e.ctrl
         key_state['shift'] = e.shift
+        if e.key == "F5":
+            page.pubsub.send_all("toggle_stream")
+        elif e.key == "F11":
+            page.window.full_screen = not page.window.full_screen
+            page.update()
     page.on_keyboard_event = on_keyboard
 
     # Configuración de Ventana

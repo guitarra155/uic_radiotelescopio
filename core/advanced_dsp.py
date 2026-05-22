@@ -84,7 +84,9 @@ def run_ar_burg(iq: np.ndarray, order: int = 64, n_freqs: int = 2048,
         total_err *= (1.0 - abs(km) ** 2)
 
     # PSD a partir de los coeficientes AR
-    freqs_norm = np.linspace(-0.5, 0.5, n_freqs)
+    fs_mhz = sample_rate / 1_000_000
+    f_vec = np.arange(-n_freqs // 2, n_freqs // 2) * (sample_rate / n_freqs)
+    freqs_norm = f_vec / sample_rate
     z = np.exp(2j * np.pi * freqs_norm)
 
     denom = np.ones(n_freqs, dtype=np.complex128)
@@ -92,11 +94,9 @@ def run_ar_burg(iq: np.ndarray, order: int = 64, n_freqs: int = 2048,
         denom += a * z ** (-(k + 1))
 
     psd = total_err / (np.abs(denom) ** 2 + 1e-30)
-    psd_db = 10 * np.log10(np.fft.fftshift(psd) + 1e-30)
+    psd_db = 10 * np.log10(psd + 1e-30)
 
-    fs_mhz = sample_rate / 1_000_000
-    freqs_mhz = np.linspace(center_freq - fs_mhz / 2,
-                             center_freq + fs_mhz / 2, n_freqs)
+    freqs_mhz = (center_freq * 1e6 + f_vec) / 1e6
 
     # Detección de picos por umbral (>10 dB sobre mediana)
     thresh = np.median(psd_db) + 10.0
@@ -121,65 +121,123 @@ def run_ar_burg(iq: np.ndarray, order: int = 64, n_freqs: int = 2048,
 def run_cwt(iq: np.ndarray, sample_rate: float = 2_400_000,
             n_scales: int = 64, max_freq_ratio: float = 0.45) -> dict:
     """
-    Calcula la CWT con wavelet Morlet compleja.
-
-    Args:
-        iq             : Muestras IQ.
-        sample_rate    : Tasa de muestreo en Hz.
-        n_scales       : Número de escalas (resolución tiempo-frecuencia).
-        max_freq_ratio : Fracción de Nyquist para la frecuencia más alta.
-
-    Returns:
-        dict con 'cwt_matrix' (n_scales × n_samples), 'freqs_norm', 'times_s', 'scales'.
+    [Legacy] CWT básica sobre señal corta. Usar run_cwt_2d para el espectrograma completo.
     """
-    sig = _normalize(_to_complex(iq))
+    return run_cwt_2d(iq, sample_rate=sample_rate, n_scales=n_scales,
+                      center_freq=1420.40, block_size=min(5000, len(iq)))
 
-    # Limitar longitud para velocidad (máx 8192 muestras)
-    max_len = 8192
-    if len(sig) > max_len:
-        sig = sig[:max_len]
 
-    N = len(sig)
+def run_cwt_2d(iq: np.ndarray, sample_rate: float = 2_400_000,
+               n_scales: int = 48, center_freq: float = 1420.40,
+               block_size: int = 5000, block_overlap: float = 0.5,
+               f_min_visual: float = None, f_max_visual: float = None,
+               offset_calibracion: float = 0.0) -> dict:
+    """
+    CWT 2D por bloques con Wavelet de Morlet Bilateral Simétrica.
+    Garantiza una alineación perfecta (1:1) de los ejes de frecuencia
+    compleja con el Waterfall FFT y el Correlograma.
+    Procesa tanto frecuencias analíticas (positivas) como anti-analíticas (negativas).
+    """
+    from core.dsp_engine import engine_instance as _eng
+    N = len(iq)
+    iq = iq.astype(np.complex64)
     dt = 1.0 / sample_rate
+    fc_hz = center_freq * 1e6
 
-    # Escalas logarítmicas
-    f_min = sample_rate * 0.005
-    f_max = sample_rate * max_freq_ratio
-    freqs = np.geomspace(f_min, f_max, n_scales)   # Hz
-    scales = sample_rate / freqs                     # escala ∝ 1/f
+    # ── Eje de frecuencias lineal y bilateral (-fs/2 a fs/2) ──────────────────
+    f_lo = -sample_rate * 0.49
+    f_hi = sample_rate * 0.49
+    freqs_hz  = np.linspace(f_lo, f_hi, n_scales).astype(np.float32)
+    freqs_mhz = (fc_hz + freqs_hz) / 1e6   # MHz centradas
 
-    # Wavelet Morlet compleja: ψ(t) = π^{-1/4} * e^{j2πf0t} * e^{-t²/2}
-    f0 = 1.0  # frecuencia central normalizada de Morlet
+    # ── global_step: igual que correlograma → máximo ~150 bloques ─────────────
+    num_segs_target    = 150
+    total_samples_hist = _eng.waterfall_history_sec * sample_rate
+    global_step        = max(block_size, int(total_samples_hist / num_segs_target))
 
-    cwt_matrix = np.zeros((n_scales, N), dtype=np.complex128)
-    for i, sc in enumerate(scales):
-        t_wav = np.arange(-(6 * sc), 6 * sc + 1) * dt
-        morlet = (np.pi ** -0.25) * np.exp(2j * np.pi * f0 * t_wav / sc) \
-                 * np.exp(-0.5 * (t_wav / sc) ** 2)
-        # Convolución mediante correlación cruzada
-        from scipy.signal import fftconvolve
-        conv = fftconvolve(sig, morlet[::-1].conj(), mode="same")
-        # Asegurarnos de que el array tenga exactamente N de tamaño (por seguridad de broadcast)
-        if len(conv) > N:
-            start = (len(conv) - N) // 2
-            conv = conv[start:start+N]
-        elif len(conv) < N:
-            # Padding con ceros si fuera menor (raro en mode="same")
-            conv = np.pad(conv, (0, N - len(conv)))
-            
-        cwt_matrix[i, :] = conv / np.sqrt(abs(sc))
+    # Posiciones de inicio de cada bloque
+    block_starts = np.arange(0, N - block_size + 1, global_step)
+    n_blocks     = len(block_starts)
 
-    times_s = np.arange(N) * dt
-    freqs_mhz_norm = freqs / 1_000_000
+    if n_blocks == 0:
+        empty = np.zeros((1, n_scales), dtype=np.float32) + offset_calibracion
+        return {
+            "matrix": empty, "times_s": np.array([0.0]),
+            "freqs_mhz": freqs_mhz,
+            "v_min": offset_calibracion - 5, "v_max": offset_calibracion + 20,
+            "noise_floor": float(offset_calibracion),
+            "cwt_matrix": empty.T, "freqs_hz": freqs_hz,
+            "freqs_mhz_norm": freqs_mhz, "scales": np.ones(n_scales, dtype=np.float32),
+            "method": "CWT/Morlet 2D",
+        }
+
+    # ── Banco de filtros Morlet en dominio de frecuencia (Bilateral) ──────────
+    n_fft_wav = block_size
+    omega  = 2 * np.pi * np.fft.fftfreq(n_fft_wav, d=dt).astype(np.float32)  # (n_fft,)
+    omega0 = 2 * np.pi * 6.0   # parámetro estándar de Morlet (ω₀ = 6)
+    
+    # Evitar división por cero
+    freqs_hz_safe = np.where(freqs_hz == 0.0, 1e-5, freqs_hz)
+    scales = (omega0 / (2 * np.pi * np.abs(freqs_hz_safe))).astype(np.float32) # (n_scales,)
+
+    sc_col   = scales[:, None]                  # (n_scales, 1)
+    sign_col = np.sign(freqs_hz_safe)[:, None]  # (n_scales, 1)
+
+    # arg = s*omega - sign(f)*omega0
+    arg = sc_col * omega[None, :] - sign_col * omega0 # (n_scales, n_fft)
+    # support: H(omega) para positivas, H(-omega) para negativas
+    support = (sign_col * omega[None, :] > 0).astype(np.float32)
+
+    norms   = (np.pi ** -0.25) * np.sqrt(2 * np.pi * sc_col / dt)
+    psi_hat = (norms * np.exp(-0.5 * arg * arg) * support).astype(np.complex64)
+    # psi_hat: (n_scales, n_fft_wav)
+
+    # ── Procesamiento por bloques: vectorizado sobre n_scales ────────────────
+    spec_matrix = np.zeros((n_blocks, n_scales), dtype=np.float32)
+    times_s     = np.zeros(n_blocks, dtype=np.float32)
+
+    for k, i0 in enumerate(block_starts):
+        blk = iq[i0 : i0 + block_size].copy()
+        blk -= blk.mean()   # eliminar DC
+
+        # FFT del bloque → (n_fft_wav,)
+        BLK = np.fft.fft(blk, n=n_fft_wav).astype(np.complex64)
+
+        # Multiplicar banco de filtros × espectro del bloque de una vez:
+        cfs_batch   = np.fft.ifft(psi_hat * BLK[None, :], axis=1)  # (n_scales, n_fft)
+        spec_matrix[k] = np.mean(np.abs(cfs_batch) ** 2, axis=1).astype(np.float32)
+        times_s[k]     = (i0 + block_size / 2) * dt
+
+    # ── Convertir a dB ────────────────────────────────────────────────────────
+    spec_db = 10.0 * np.log10(spec_matrix + np.finfo(float).eps) + offset_calibracion
+
+    noise_floor = float(np.median(spec_db))
+    v_min = noise_floor - 3.0
+    v_max = float(np.max(spec_db)) + 2.0
+    if v_max < v_min + 10.0:
+        v_max = v_min + 20.0
+
+    # ── Máscara visual ────────────────────────────────────────────────────────
+    if f_min_visual is not None and f_max_visual is not None:
+        mask = (freqs_mhz >= f_min_visual) & (freqs_mhz <= f_max_visual)
+        if np.any(mask):
+            freqs_mhz = freqs_mhz[mask]
+            spec_db   = spec_db[:, mask]
 
     return {
-        "cwt_matrix": np.abs(cwt_matrix) ** 2,   # potencia
-        "freqs_hz": freqs,
-        "freqs_mhz_norm": freqs_mhz_norm,
-        "times_s": times_s,
-        "scales": scales,
-        "method": "CWT/Morlet"
+        "matrix":         spec_db,          # (n_blocks × n_scales_vis)
+        "times_s":        times_s,
+        "freqs_mhz":      freqs_mhz,
+        "v_min":          v_min,
+        "v_max":          v_max,
+        "noise_floor":    noise_floor,
+        "cwt_matrix":     spec_db.T,        # legacy
+        "freqs_hz":       freqs_hz,
+        "freqs_mhz_norm": freqs_mhz,
+        "scales":         scales,
+        "method": "CWT/Morlet 2D",
     }
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -532,50 +590,157 @@ def _correlogram_psd_1d(sig: np.ndarray, max_lag: int, fft_size: int) -> np.ndar
 # 8. AR/Burg 2D — Espectrograma paramétrico (ventana deslizante)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def run_ar_burg_2d(iq: np.ndarray, order: int = 64, n_freqs: int = 512,
-                   window_len: int = 512, hop_len: int = 128,
+def run_ar_burg_2d(iq: np.ndarray, order: int = 20, n_freqs: int = 1024,
+                   window_len: int = 128, overlap: float = 0.5,
+                   block_size: int = 5000, block_overlap: float = 0.5,
                    sample_rate: float = 2_400_000,
-                   center_freq: float = 1420.40) -> dict:
+                   center_freq: float = 1420.40,
+                   offset_calibracion: float = -60.0,
+                   f_min_visual: float = None,
+                   f_max_visual: float = None) -> dict:
     """
-    Espectrograma paramétrico AR/Burg: aplica el método de Burg sobre
-    ventanas deslizantes para producir una matriz 2D tiempo-frecuencia.
+    Espectrograma paramétrico AR/Burg 2D por bloques: replica el main_ar.m de MATLAB.
+    Procesa el buffer IQ completo en bloques de block_size, aplica pyulear equivalente
+    (Burg) sobre ventanas deslizantes dentro de cada bloque, acumulando filas en la
+    matriz 2D tiempo-frecuencia.
+
+    El método de Burg estima los coeficientes AR minimizando simultáneamente el
+    error de predicción hacia adelante y hacia atrás (Burg, 1967).
 
     Args:
-        iq          : Muestras IQ.
-        order       : Orden del modelo AR por ventana.
-        n_freqs     : Puntos en el eje de frecuencia.
-        window_len  : Longitud de cada ventana temporal.
-        hop_len     : Paso entre ventanas sucesivas.
-        sample_rate : Tasa de muestreo en Hz.
-        center_freq : Frecuencia central en MHz.
+        iq               : Muestras IQ (buffer completo).
+        order            : Orden del modelo AR (default=20, igual que MATLAB).
+        n_freqs          : Puntos en el eje de frecuencia (igual que nfft en MATLAB).
+        window_len       : Longitud de ventana interna (igual que window_len MATLAB).
+        overlap          : Fracción de solapamiento de ventana interna.
+        block_size       : Tamaño de bloque externo (igual a blockSize=5000 en MATLAB).
+        block_overlap    : Fracción de solapamiento entre bloques.
+        sample_rate      : Tasa de muestreo en Hz.
+        center_freq      : Frecuencia central en MHz.
+        offset_calibracion: Offset de calibración en dB (igual que MATLAB).
+        f_min_visual     : Frecuencia mínima para máscara visual (MHz).
+        f_max_visual     : Frecuencia máxima para máscara visual (MHz).
 
     Returns:
-        dict con 'matrix' (n_windows × n_freqs), 'times_s', 'freqs_mhz'.
+        dict con 'matrix' (n_segs × n_freqs), 'times_s', 'freqs_mhz',
+        'v_min', 'v_max', 'noise_floor', 'method'.
+
+    Ref: J. P. Burg, "Maximum entropy spectral analysis", Ph.D. Dissertation,
+         Stanford University, 1975.
     """
-    sig = _normalize(_to_complex(iq))
-    N = len(sig)
-    window_len = min(window_len, N)
-    order = min(order, window_len // 2 - 1)
+    N = len(iq)
+    iq = iq.astype(np.complex64)
+    fc_hz  = center_freq * 1e6
+    fs_mhz = sample_rate / 1e6
 
-    n_windows = max(1, (N - window_len) // hop_len + 1)
-    spec_matrix = np.zeros((n_windows, n_freqs))
+    # Vector de frecuencia: centrado en fc (igual que f_abs = fc + f_vec en MATLAB)
+    f_vec     = np.arange(-n_freqs // 2, n_freqs // 2) * (sample_rate / n_freqs)
+    freqs_mhz = (fc_hz + f_vec) / 1e6
 
-    for w in range(n_windows):
-        start = w * hop_len
-        segment = sig[start:start + window_len]
-        spec_matrix[w, :] = _burg_psd_1d(segment, order, n_freqs)
+    overlap_samples   = int(window_len * overlap)
+    step_win          = window_len - overlap_samples
+    block_overlap_len = int(block_size * block_overlap)
+    step_block        = block_size - block_overlap_len
+    n_blocks          = max(1, (N - block_overlap_len) // step_block)
 
-    times_s = np.arange(n_windows) * hop_len / sample_rate
-    fs_mhz = sample_rate / 1_000_000
-    freqs_mhz = np.linspace(center_freq - fs_mhz / 2,
-                             center_freq + fs_mhz / 2, n_freqs)
+    # Limitar el número máximo de segmentos para rendimiento (≈150 filas en pantalla)
+    from core.dsp_engine import engine_instance as _eng
+    total_segs_target = 150
+    total_samples_history = _eng.waterfall_history_sec * sample_rate
+    global_step = max(1, int(total_samples_history / total_segs_target))
+
+    seg_starts_global = np.arange(0, N - window_len + 1, global_step)
+    num_seg = len(seg_starts_global)
+    if num_seg == 0:
+        empty = np.full((1, n_freqs), offset_calibracion)
+        return {
+            "matrix": empty, "times_s": np.array([0.0]),
+            "freqs_mhz": freqs_mhz,
+            "v_min": offset_calibracion - 5, "v_max": offset_calibracion + 30,
+            "noise_floor": float(offset_calibracion),
+            "method": "AR/Burg 2D",
+        }
+
+    t_signal = np.arange(N, dtype=np.float32) / sample_rate
+    t_seg_abs = t_signal[seg_starts_global] + (window_len / 2) / sample_rate
+
+    # ── Pre-calcular ventana de Hanning ───────────────────────────────────────
+    hann_win = np.hanning(window_len).astype(np.float32)
+
+    # ── Construir todos los segmentos de una vez (vectorizado) ────────────────
+    idx_matrix = seg_starts_global[:, None] + np.arange(window_len)  # (num_seg, window_len)
+    seg_matrix = iq[idx_matrix].astype(np.complex64)                  # (num_seg, window_len)
+
+    # Eliminar DC + aplicar ventana
+    seg_matrix = (seg_matrix - seg_matrix.mean(axis=1, keepdims=True)) * hann_win
+
+    # ── PSD por Burg/AR vectorizado ───────────────────────────────────────────
+    # Estrategia: autocorrelación batch vía FFT (igual que correlograma),
+    # luego resolver ecuaciones de Yule-Walker por scipy para AR order.
+    # Equivalente al pyulear() de MATLAB para señales complejas.
+    eff_order = min(order, window_len // 2 - 1)
+
+    # 1. Autocorrelación batch: R[k] = E[x[n]*conj(x[n-k])]  para k=0..order
+    n_fft_ac = 2 ** int(np.ceil(np.log2(2 * window_len - 1)))
+    SEG_F    = np.fft.fft(seg_matrix, n=n_fft_ac, axis=1)             # (num_seg, n_fft_ac)
+    R_full   = np.fft.ifft(SEG_F * np.conj(SEG_F), axis=1)           # (num_seg, n_fft_ac) (Complejo)
+    R_lags   = R_full[:, :eff_order + 1] / window_len                 # (num_seg, order+1) lags 0..order
+
+    # 2. Resolver Yule-Walker: R·a = -r  usando scipy (vectorizado por segmento)
+    #    Toeplitz(R[0..order-1]) · a = -R[1..order]
+    from scipy.linalg import solve_toeplitz
+    spec_matrix = np.zeros((num_seg, n_freqs), dtype=np.float32)
+    freqs_eval  = (f_vec / sample_rate).astype(np.float64)
+    z_eval      = np.exp(2j * np.pi * freqs_eval)                     # (n_freqs,)
+
+    for w_idx in range(num_seg):
+        r0  = R_lags[w_idx, 0]
+        if r0 < 1e-30:
+            continue
+        r   = R_lags[w_idx]
+        try:
+            a_ar = solve_toeplitz(r[:-1], -r[1:])  # (order,)
+        except Exception:
+            continue
+
+        sigma2 = max(r0 + float(np.real(np.dot(a_ar, r[1:]))), 1e-30)
+
+        # Vectorized AR polynomial: denom[f] = 1 + sum_k( a[k] * z[f]^{-(k+1)} )
+        # k_idx: (order,)   z_eval: (n_freqs,)
+        # powers[k, f] = z_eval[f]^{-(k+1)}  → matrix (order, n_freqs)
+        k_idx  = np.arange(1, eff_order + 1, dtype=np.float64)
+        # z_eval[:, None] ** (-k_idx[None, :])  → (n_freqs, order)
+        powers = z_eval[:, None] ** (-k_idx[None, :])           # (n_freqs, order)
+        denom  = 1.0 + powers @ a_ar.astype(np.complex128)      # (n_freqs,)
+        psd    = sigma2 / (np.abs(denom) ** 2 + 1e-30)
+        spec_matrix[w_idx] = (10 * np.log10(psd.real + 1e-30)).astype(np.float32)
+
+
+    # ── Calibración y máscara ─────────────────────────────────────────────────
+    P_dBm = spec_matrix + offset_calibracion
+    noise_floor = float(np.median(P_dBm))
+
+    if f_min_visual is not None and f_max_visual is not None:
+        mask = (freqs_mhz >= f_min_visual) & (freqs_mhz <= f_max_visual)
+        if np.any(mask):
+            freqs_mhz = freqs_mhz[mask]
+            P_dBm = P_dBm[:, mask]
+
+    v_min = noise_floor - 5.0
+    v_max = float(np.max(P_dBm)) + 2.0
+    if v_max < v_min + 10.0:
+        v_max = v_min + 20.0
 
     return {
-        "matrix": spec_matrix,
-        "times_s": times_s,
-        "freqs_mhz": freqs_mhz,
-        "method": "AR/Burg 2D"
+        "matrix":      P_dBm,
+        "times_s":     t_seg_abs,
+        "freqs_mhz":   freqs_mhz,
+        "v_min":       v_min,
+        "v_max":       v_max,
+        "noise_floor": noise_floor,
+        "method":      "AR/Burg 2D",
     }
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -651,13 +816,13 @@ def run_correlogram_2d(iq: np.ndarray, max_lag: int = 37, n_freqs: int = 1024,
     # Autocorrelación batch vía FFT: O(num_seg × N log N)
     n_fft_ac = 2 ** int(np.ceil(np.log2(2 * window_len_eff - 1)))
     SEG  = np.fft.fft(seg_matrix, n=n_fft_ac, axis=1)               # (num_seg, n_fft_ac)
-    Rcirc = np.fft.ifft(SEG * np.conj(SEG), axis=1).real            # (num_seg, n_fft_ac)
+    Rcirc = np.fft.ifft(SEG * np.conj(SEG), axis=1)                 # (num_seg, n_fft_ac) (Complejo)
 
     # Extraer lags [-lag_eff ... +lag_eff]
     w = np.bartlett(2 * lag_eff + 1)
     R_neg = Rcirc[:, n_fft_ac - lag_eff:]                           # (num_seg, lag_eff)
     R_pos = Rcirc[:, :lag_eff + 1]                                  # (num_seg, lag_eff+1)
-    R = np.concatenate([R_neg, R_pos], axis=1) / window_len_eff     # (num_seg, 2*lag+1)
+    R = np.concatenate([R_neg, R_pos], axis=1) * (n_fft_ac / window_len_eff) # (num_seg, 2*lag+1)
     R_w = R * w                                                       # broadcast row-wise
 
     # PSD batch (num_seg × n_freqs)

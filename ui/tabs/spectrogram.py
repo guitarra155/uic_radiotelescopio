@@ -42,7 +42,9 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
     is_rendering = [False]
     algo_counter = [0]
     algo_gen = [0]
-    ALGO_EVERY_N = 25
+    ALGO_EVERY_N = 10  # Reducido para mayor fluidez
+    _last_dsp_results = {}
+    _last_dsp_params = {}
 
     img = ft.Image(
         src=chart_spectrogram(),
@@ -126,11 +128,11 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
                     c.update()
             page.pubsub.send_all("tab_changed")  # refresca el panel de config
             
-            # Lanzar tarea pesada
+            # Lanzar tarea pesada usando la caché si ya existe una anterior
             if val != "waterfall":
                 if e.page:
                     async def _run_it(*args):
-                        await _render_advanced_method()
+                        await _render_advanced_method(force_recompute=False)
                     e.page.run_task(_run_it)
         except Exception as ex:
             print(f"Error UI fatal: {ex}")
@@ -153,77 +155,129 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
     corr_lag_f.on_submit = _save_params
     corr_lag_f.on_blur = _save_params
 
-    async def _render_advanced_method():
+    async def _render_advanced_method(force_recompute=False):
         """Ejecuta CWT/AR/Correlogram 2D en hilo secundario."""
         my_gen = algo_gen[0]
         method = current_method[0]
         sr = engine_instance.sample_rate
         fc = engine_instance.center_freq
 
-        # ── Fuente de IQ según el método ─────────────────────────────────────
-        if method == "correlogram_2d":
-            # Usar el buffer circular de alta resolución (50k muestras sin decimar)
-            if engine_instance._corr_buf_full:
-                idx = engine_instance._corr_buf_idx
-                iq = np.roll(engine_instance.corr_iq_buffer, -idx).copy()
-            elif engine_instance._corr_buf_idx > 0:
-                iq = engine_instance.corr_iq_buffer[:engine_instance._corr_buf_idx].copy()
-            else:
-                status_badge.value = "Acumulando muestras... espera unos segundos"
-                status_badge.color = ACCENT_AMBER
-                try:
-                    if status_badge.page: status_badge.update()
-                except Exception:
-                    pass
-                return
+        # ── Todos los métodos 2D usan el buffer IQ circular de alta resolución ──
+        if engine_instance._corr_buf_full:
+            buf_idx = engine_instance._corr_buf_idx
+            iq = np.roll(engine_instance.corr_iq_buffer, -buf_idx).copy()
+        elif engine_instance._corr_buf_idx > 0:
+            iq = engine_instance.corr_iq_buffer[:engine_instance._corr_buf_idx].copy()
         else:
-            # CWT / AR: fuente original (amplitude_ma_data diezmado)
-            iq = engine_instance.amplitude_ma_data.copy()
-            if not np.any(iq != 0):
-                iq = engine_instance.amplitude_data.copy()
-            if not np.any(iq != 0):
-                wf = engine_instance.waterfall_data
-                if wf is not None and wf.size > 0:
-                    row = wf[engine_instance.waterfall_idx, :]
-                    if np.any(row != -100.0):
-                        iq = 10 ** (row / 20.0)
-                    else:
-                        status_badge.value = "Sin datos — inicia el stream (Play)"
-                        status_badge.color = ACCENT_RED
-                        try:
-                            if status_badge.page: status_badge.update()
-                        except Exception:
-                            pass
-                        return
-                else:
-                    status_badge.value = "Sin datos — inicia el stream (Play)"
-                    status_badge.color = ACCENT_RED
-                    try:
-                        if status_badge.page: status_badge.update()
-                    except Exception:
-                        pass
-                    return
+            status_badge.value = "Acumulando muestras... espera unos segundos"
+            status_badge.color = ACCENT_AMBER
+            try:
+                if status_badge.page: status_badge.update()
+            except Exception:
+                pass
+            return
 
-        from core.advanced_dsp import run_cwt, run_ar_burg_2d, run_correlogram_2d
+        from core.advanced_dsp import run_cwt_2d, run_ar_burg_2d, run_correlogram_2d
         from ui.charts import chart_cwt_map, chart_ar_spectrogram, chart_correlogram_spectrogram
 
-        def _compute():
-            if method == "cwt":
-                iq_cwt = iq[:512] if len(iq) > 512 else iq
-                return chart_cwt_map(run_cwt(iq_cwt, sample_rate=sr, n_scales=32))
-            elif method == "ar_burg_2d":
-                order = engine_instance.algo_params.get("ar_order", 64)
-                return chart_ar_spectrogram(
-                    run_ar_burg_2d(iq, order=order, sample_rate=sr, center_freq=fc)
-                )
-            elif method == "correlogram_2d":
-                import time as _time
-                max_lag    = engine_instance.algo_params.get("corr_max_lag", 37)
-                span_mhz   = getattr(engine_instance, "visual_span_mhz", 2.0)
-                f_min_vis  = fc - span_mhz / 2
-                f_max_vis  = fc + span_mhz / 2
+        cfg_spec = engine_instance.charts_config.get("spec_wf", {})
+        f_min_vis = cfg_spec.get("xmin", fc - 1.0)
+        f_max_vis = cfg_spec.get("xmax", fc + 1.0)
+        span_mhz  = f_max_vis - f_min_vis
+        offset    = engine_instance.db_noise_floor - 20.0
 
-                t0 = _time.perf_counter()
+        current_params = {
+            "ar_order": engine_instance.algo_params.get("ar_order", 64),
+            "corr_max_lag": engine_instance.algo_params.get("corr_max_lag", 37),
+            "sample_rate": sr,
+            "center_freq": fc,
+            "iq_len": len(iq),
+            "span_mhz": span_mhz
+        }
+
+        # Intentar renderizado instantáneo usando la caché
+        if not force_recompute and method in _last_dsp_results:
+            cached_params = _last_dsp_params.get(method, {})
+            if cached_params == current_params:
+                result = _last_dsp_results[method]
+                def _replot():
+                    if method == "cwt":
+                        return chart_cwt_map(result)
+                    elif method == "ar_burg_2d":
+                        return chart_ar_spectrogram(result)
+                    elif method == "correlogram_2d":
+                        return chart_correlogram_spectrogram(result)
+                    return None
+                
+                try:
+                    b64 = await asyncio.to_thread(_replot)
+                    if algo_gen[0] != my_gen:
+                        return
+                    if b64:
+                        img.src = b64
+                        status_badge.value = f"OK — {dict(_METHODS).get(method, method)} (Renderizado Rápido)"
+                        status_badge.color = _METHOD_COLORS.get(method, ACCENT_CYAN)
+                        if img.page: img.update()
+                        if status_badge.page: status_badge.update()
+                except Exception as ex:
+                    print(f"Error replotting cached {method}: {ex}")
+                return
+
+        def _compute():
+            import time as _time
+            t0 = _time.perf_counter()
+
+            if method == "cwt":
+                result = run_cwt_2d(
+                    iq,
+                    sample_rate=sr,
+                    n_scales=48,
+                    center_freq=fc,
+                    block_size=5000,
+                    block_overlap=0.5,
+                    f_min_visual=f_min_vis,
+                    f_max_visual=f_max_vis,
+                    offset_calibracion=offset,
+                )
+                b64 = chart_cwt_map(result)
+                t_total = _time.perf_counter() - t0
+                n_blocks = result["matrix"].shape[0]
+                print(
+                    f"[CWT 2D] IQ={len(iq)} muestras | "
+                    f"Bloques={n_blocks} | "
+                    f"Total={t_total*1000:.1f}ms"
+                )
+                return result, b64
+
+            elif method == "ar_burg_2d":
+                order = engine_instance.algo_params.get("ar_order", 20)
+                result = run_ar_burg_2d(
+                    iq,
+                    order=order,
+                    n_freqs=1024,
+                    window_len=128,
+                    overlap=0.5,
+                    block_size=5000,
+                    block_overlap=0.5,
+                    sample_rate=sr,
+                    center_freq=fc,
+                    offset_calibracion=offset,
+                    f_min_visual=f_min_vis,
+                    f_max_visual=f_max_vis,
+                )
+                b64 = chart_ar_spectrogram(result)
+                t_total = _time.perf_counter() - t0
+                n_segs = result["matrix"].shape[0]
+                print(
+                    f"[AR/Burg 2D] IQ={len(iq)} muestras | "
+                    f"Segs={n_segs} | "
+                    f"Total={t_total*1000:.1f}ms"
+                )
+                return result, b64
+
+            elif method == "correlogram_2d":
+                max_lag = engine_instance.algo_params.get("corr_max_lag", 37)
+                t0_c = _time.perf_counter()
                 result = run_correlogram_2d(
                     iq,
                     max_lag=max_lag,
@@ -232,18 +286,16 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
                     overlap=0.5,
                     block_size=5000,
                     block_overlap=0.5,
-                    offset_calibracion=engine_instance.db_noise_floor - 20.0,
+                    offset_calibracion=offset,
                     f_min_visual=f_min_vis,
                     f_max_visual=f_max_vis,
                     sample_rate=sr,
                     center_freq=fc,
                 )
-                t_dsp = _time.perf_counter() - t0
-
+                t_dsp = _time.perf_counter() - t0_c
                 t1 = _time.perf_counter()
                 b64 = chart_correlogram_spectrogram(result)
                 t_chart = _time.perf_counter() - t1
-
                 n_segs = result["matrix"].shape[0]
                 print(
                     f"[Correlograma] IQ={len(iq)} muestras | "
@@ -252,14 +304,20 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
                     f"Chart={t_chart*1000:.1f}ms | "
                     f"Total={(t_dsp+t_chart)*1000:.1f}ms"
                 )
-                return b64
-            return None
+                return result, b64
+            return None, None
+
 
         try:
-            b64 = await asyncio.to_thread(_compute)
+            res_tuple = await asyncio.to_thread(_compute)
             if algo_gen[0] != my_gen:
                 return  # El usuario cambio de metodo durante el calculo
-            if b64:
+            result, b64 = res_tuple
+            if result is not None and b64:
+                # Guardar en la caché
+                _last_dsp_results[method] = result
+                _last_dsp_params[method]  = current_params
+
                 img.src = b64
                 status_badge.value = f"OK — {dict(_METHODS).get(method, method)}"
                 status_badge.color = _METHOD_COLORS.get(method, ACCENT_CYAN)
@@ -290,20 +348,18 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
         is_rendering[0] = True
         try:
             if msg == "tab_changed" and method != "waterfall":
-                await _render_advanced_method()
+                await _render_advanced_method(force_recompute=False)
                 return
 
             if method == "waterfall":
                 img.src = await asyncio.to_thread(chart_spectrogram)
                 if img.page: img.update()
             elif method == "correlogram_2d":
-                # El correlograma es rápido (~150ms) → ejecutar en cada refresco
-                await _render_advanced_method()
+                await _render_advanced_method(force_recompute=True)
             else:
-                # CWT/AR son lentos → throttle cada N frames
                 algo_counter[0] += 1
                 if algo_counter[0] % ALGO_EVERY_N == 0:
-                    await _render_advanced_method()
+                    await _render_advanced_method(force_recompute=True)
         finally:
             is_rendering[0] = False
 

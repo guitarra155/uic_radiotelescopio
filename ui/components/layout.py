@@ -21,12 +21,14 @@ def build_header(page: ft.Page) -> ft.Control:
 
     async def on_header_msg(msg):
         if msg == "stream_stopped":
-            play_btn.content = "▶ Iniciar Adquisición"
+            play_btn.content.value = "▶ Iniciar Adquisición"
             play_btn.bgcolor = ACCENT_GREEN
             sdr_dot.color = ACCENT_RED
             sdr_lbl.value = "Estado SDR: Finalizado"
             sdr_lbl.color = ACCENT_RED
             page.update()
+        elif msg == "toggle_stream":
+            toggle_stream(None)
         elif msg == "refresh_charts":
             # Actualizar el título con la frecuencia real
             header_title.value = f"Radiotelescopio ({engine_instance.center_freq:.2f} MHz)"
@@ -61,22 +63,23 @@ def build_header(page: ft.Page) -> ft.Control:
             else:
                 engine_instance.start_stream('sdr', {})
                 
-            play_btn.content = "⏸ Detener Adquisición"
+            play_btn.content.value = "⏸ Detener Adquisición"
             play_btn.bgcolor = ACCENT_AMBER
             sdr_dot.color = ACCENT_AMBER
             sdr_lbl.value = "Streaming Activo..."
             sdr_lbl.color = ACCENT_AMBER
         else:
             engine_instance.stop_stream()
-            play_btn.content = "▶ Iniciar Adquisición"
+            play_btn.content.value = "▶ Iniciar Adquisición"
             play_btn.bgcolor = ACCENT_GREEN
             sdr_dot.color = ACCENT_RED
             sdr_lbl.value = "Estado SDR: Detenido"
             sdr_lbl.color = ACCENT_RED
         page.update()
 
-    play_btn = ft.Button(
-        content="▶ Iniciar Adquisición", bgcolor=ACCENT_GREEN, color=DARK_BG,
+    play_btn = ft.ElevatedButton(
+        content=ft.Text("▶ Iniciar Adquisición", color=DARK_BG, weight=ft.FontWeight.BOLD),
+        bgcolor=ACCENT_GREEN,
         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
         on_click=toggle_stream
     )
@@ -84,8 +87,8 @@ def build_header(page: ft.Page) -> ft.Control:
     # --- Botón de Emergencia ---
     def on_emergency(e):
         engine_instance.stop_stream()
-        if hasattr(play_btn, 'content') and "Detener" in play_btn.content:
-            play_btn.content = "▶ Iniciar Adquisición"
+        if hasattr(play_btn, 'content') and hasattr(play_btn.content, 'value') and "Detener" in play_btn.content.value:
+            play_btn.content.value = "▶ Iniciar Adquisición"
             play_btn.bgcolor = ACCENT_GREEN
             sdr_dot.color = ACCENT_RED
             sdr_lbl.value = "EMERGENCIA DETENIDA"
@@ -101,9 +104,9 @@ def build_header(page: ft.Page) -> ft.Control:
         sb.open = True
         page.update()
 
-    emg_btn = ft.Button(
-        content="⛔  Stop",
-        bgcolor=ACCENT_RED, color="#FFFFFF",
+    emg_btn = ft.ElevatedButton(
+        content=ft.Text("⛔  Stop", color="#FFFFFF", weight=ft.FontWeight.BOLD),
+        bgcolor=ACCENT_RED,
         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
         on_click=on_emergency,
     )

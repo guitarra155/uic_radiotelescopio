@@ -1063,13 +1063,7 @@ class DSPEngine:
         # No guardar durante la inicialización
         if getattr(self, "_initializing", False):
             return
-        # Debounce: cancelar el timer anterior y programar uno nuevo en 1s
-        # Esto evita escribir a disco en cada tecla pulsada
-        if hasattr(self, "_save_timer") and self._save_timer is not None:
-            self._save_timer.cancel()
-        self._save_timer = threading.Timer(1.0, self._do_save_config)
-        self._save_timer.daemon = True
-        self._save_timer.start()
+        self._do_save_config()
 
     def _do_save_config(self):
         conf = {

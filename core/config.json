@@ -1,6 +1,6 @@
 {
     "center_freq": 1420.40575,
-    "sample_rate": 1250000,
+    "sample_rate": 2500000,
     "trigger_high": 15.0,
     "trigger_low": 5.0,
     "db_min": -90,
@@ -14,20 +14,20 @@
     "amp_min": 0.0,
     "amp_max": 0.3,
     "waterfall": 10.0,
-    "iq_filename": "C:/uic_radiotelescopio/data/test_signal_1.iq",
+    "iq_filename": "C:/SignalHound/ArchivosIQ/IQREC_Milk2025-02-12_11h32m56s_1.iq",
     "iq_format": "uint8",
     "stream_mode": "file",
     "algo_params": {
-        "ar_order": 64,
+        "ar_order": 1024,
         "n_signals": 3,
-        "method": "AR/Burg",
+        "method": "Correlograma",
         "welch_fft": 1024,
         "welch_overlap": 0.5,
-        "corr_max_lag": 2048,
-        "spec2d_method": "correlogram_2d"
+        "corr_max_lag": 1024,
+        "spec2d_method": "ar_burg_2d"
     },
     "analysis_window_sec": 0.1,
-    "moving_avg_samples": 2,
+    "moving_avg_samples": 3,
     "bb60c_ref_level": -30.0,
     "bb60c_iq_bw": 20.0,
     "vbw_alpha": 0.3,
@@ -37,42 +37,42 @@
     "visual_span_mhz": 2.4,
     "charts_config": {
         "mon_raw_spec": {
-            "xmin": 1420.0,
-            "xmax": 1420.8,
-            "ymin": -0.7421001478247655,
-            "ymax": 11.445376328754438,
+            "xmin": 1419.2057499999999,
+            "xmax": 1421.60575,
+            "ymin": -100.0,
+            "ymax": -20.0,
             "auto_x": 0,
-            "auto_y": 1
+            "auto_y": 0
         },
         "mon_raw_amp": {
             "xmin": 0.0,
-            "xmax": 0.1,
-            "ymin": 0.9548425912857056,
-            "ymax": 1.4912068367004394,
-            "auto_x": 1,
-            "auto_y": 1
+            "xmax": 1.0,
+            "ymin": 0.0,
+            "ymax": 1.0,
+            "auto_x": 0,
+            "auto_y": 0
         },
         "mon_filt_spec": {
-            "xmin": 1420.0,
-            "xmax": 1420.8,
-            "ymin": -0.7421001478247655,
-            "ymax": 11.445376328754438,
+            "xmin": 1419.2057499999999,
+            "xmax": 1421.60575,
+            "ymin": -100.0,
+            "ymax": -20.0,
             "auto_x": 0,
-            "auto_y": 1
+            "auto_y": 0
         },
         "mon_filt_amp": {
             "xmin": 0.0,
-            "xmax": 0.1,
+            "xmax": 1.0,
             "ymin": 0.0,
-            "ymax": 1.687115841689968,
-            "auto_x": 1,
-            "auto_y": 1
+            "ymax": 1.0,
+            "auto_x": 0,
+            "auto_y": 0
         },
         "spec_wf": {
-            "xmin": 1420.0,
-            "xmax": 1420.8,
-            "ymin": -20.0,
-            "ymax": 4.0,
+            "xmin": 1419.0057499999998,
+            "xmax": 1421.0057499999998,
+            "ymin": -100.0,
+            "ymax": -20.0,
             "auto_x": 0,
             "auto_y": 0
         },
