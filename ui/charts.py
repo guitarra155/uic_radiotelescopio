@@ -477,14 +477,7 @@ def chart_cwt_map(result: dict) -> str:
     """
     dyn_size = get_dynamic_figsize(12.0, 5.5)
     name = "cwt_map"
-    fig, _, _ = get_cached_fig(name, figsize=dyn_size)
-
-    # Limpieza absoluta de la figura para evitar acumulación de ejes y ticks rotos
-    fig.clear()
-    ax = fig.subplots()
-    style_ax(ax, "Escalograma CWT/Morlet 2D", "Frecuencia (MHz)", "Tiempo (s)")
-    ax.xaxis.get_major_formatter().set_useOffset(False)
-    ax.xaxis.get_major_formatter().set_scientific(False)
+    fig, ax, is_new = get_cached_fig(name, figsize=dyn_size)
 
     matrix    = result["matrix"]          # (n_blocks × n_scales_vis)
     times_s   = result["times_s"]         # (n_blocks,)
@@ -498,28 +491,53 @@ def chart_cwt_map(result: dict) -> str:
     f0 = freqs_mhz[0] if len(freqs_mhz) > 0 else fc_hi - 1.0
     f1 = freqs_mhz[-1] if len(freqs_mhz) > 0 else fc_hi + 1.0
 
-    im = ax.imshow(
-        matrix,
-        aspect="auto", origin="lower",
-        extent=[f0, f1, 0.0, history_sec],
-        cmap="inferno",
-        vmin=v_min, vmax=v_max,
-        interpolation="nearest",
-    )
-    ax.axvline(x=fc_hi, color=ACCENT_RED, linestyle="--",
-               linewidth=0.9, alpha=0.8, label=f"HI {fc_hi:.2f} MHz")
-    ax.legend(loc="upper right", fontsize=7,
-              facecolor=MPL_AXBG, edgecolor=BORDER_COL)
+    if is_new or "im" not in cache.artists[name]:
+        ax.clear()
+        style_ax(ax, "Escalograma CWT/Morlet 2D", "Frecuencia (MHz)", "Tiempo (s)")
+        ax.xaxis.get_major_formatter().set_useOffset(False)
+        ax.xaxis.get_major_formatter().set_scientific(False)
+        im = ax.imshow(
+            matrix,
+            aspect="auto", origin="lower",
+            extent=[f0, f1, 0.0, history_sec],
+            cmap="inferno",
+            vmin=v_min, vmax=v_max,
+            interpolation="nearest",
+        )
+        vline = ax.axvline(x=fc_hi, color=ACCENT_RED, linestyle="--",
+                   linewidth=0.9, alpha=0.8, label=f"HI {fc_hi:.2f} MHz")
+        legend = ax.legend(loc="upper right", fontsize=7,
+                  facecolor=MPL_AXBG, edgecolor=BORDER_COL)
 
-    from mpl_toolkits.axes_grid1 import make_axes_locatable
-    divider = make_axes_locatable(ax)
-    cax = divider.append_axes("right", size="2%", pad=0.05)
-    cbar = fig.colorbar(im, cax=cax)
-    cbar.set_label("PSD (dBm)", fontsize=7, color=TEXT_MUTED)
-    cbar.ax.tick_params(labelsize=6, colors=TEXT_MUTED)
-    cbar.outline.set_edgecolor(BORDER_COL)
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="2%", pad=0.05)
+        cbar = fig.colorbar(im, cax=cax)
+        cbar.set_label("PSD (dBm)", fontsize=7, color=TEXT_MUTED)
+        cbar.ax.tick_params(labelsize=6, colors=TEXT_MUTED)
+        cbar.outline.set_edgecolor(BORDER_COL)
+        
+        cache.artists[name]["im"] = im
+        cache.artists[name]["vline"] = vline
+        cache.artists[name]["legend"] = legend
+        cache.artists[name]["cbar"] = cbar
+        
+        try:
+            fig.tight_layout(pad=0.2)
+        except:
+            pass
+    else:
+        im = cache.artists[name]["im"]
+        im.set_data(matrix)
+        vline = cache.artists[name]["vline"]
+        vline.set_xdata([fc_hi, fc_hi])
+        vline.set_label(f"HI {fc_hi:.2f} MHz")
+        legend = cache.artists[name]["legend"]
+        legend.get_texts()[0].set_text(f"HI {fc_hi:.2f} MHz")
 
     ax.set_ylim([0.0, history_sec])
+    im = cache.artists[name]["im"]
+    im.set_extent([f0, f1, 0.0, history_sec])
 
     cfg = engine_instance.charts_config.get("spec_wf", {})
     safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
@@ -528,11 +546,6 @@ def chart_cwt_map(result: dict) -> str:
         im.set_clim(v_min, v_max)
     else:
         im.set_clim(cfg["ymin"], cfg["ymax"])
-
-    try:
-        fig.tight_layout(pad=0.2)
-    except:
-        pass
 
     return fig_to_b64(fig, dpi=96)
 
@@ -671,14 +684,7 @@ def chart_ar_spectrogram(result: dict) -> str:
     """
     dyn_size = get_dynamic_figsize(12.0, 5.5)
     name = "ar_spectrogram"
-    fig, _, _ = get_cached_fig(name, figsize=dyn_size)
-
-    # Limpieza absoluta de la figura para evitar acumulación de ejes y ticks rotos
-    fig.clear()
-    ax = fig.subplots()
-    style_ax(ax, "Espectrograma AR/Burg 2D (Paramétrico)", "Frecuencia (MHz)", "Tiempo (s)")
-    ax.xaxis.get_major_formatter().set_useOffset(False)
-    ax.xaxis.get_major_formatter().set_scientific(False)
+    fig, ax, is_new = get_cached_fig(name, figsize=dyn_size)
 
     matrix    = result["matrix"]          # (n_segs × n_freqs_vis)
     times_s   = result["times_s"]         # (n_segs,)
@@ -692,28 +698,53 @@ def chart_ar_spectrogram(result: dict) -> str:
     f0 = freqs_mhz[0] if len(freqs_mhz) > 0 else fc_hi - 1.0
     f1 = freqs_mhz[-1] if len(freqs_mhz) > 0 else fc_hi + 1.0
 
-    im = ax.imshow(
-        matrix,
-        aspect="auto", origin="lower",
-        extent=[f0, f1, 0.0, history_sec],
-        cmap="inferno",
-        vmin=v_min, vmax=v_max,
-        interpolation="nearest",
-    )
-    ax.axvline(x=fc_hi, color=ACCENT_RED, linestyle="--",
-               linewidth=0.9, alpha=0.8, label=f"HI {fc_hi:.2f} MHz")
-    ax.legend(loc="upper right", fontsize=7,
-              facecolor=MPL_AXBG, edgecolor=BORDER_COL)
+    if is_new or "im" not in cache.artists[name]:
+        ax.clear()
+        style_ax(ax, "Espectrograma AR/Burg 2D (Paramétrico)", "Frecuencia (MHz)", "Tiempo (s)")
+        ax.xaxis.get_major_formatter().set_useOffset(False)
+        ax.xaxis.get_major_formatter().set_scientific(False)
+        im = ax.imshow(
+            matrix,
+            aspect="auto", origin="lower",
+            extent=[f0, f1, 0.0, history_sec],
+            cmap="inferno",
+            vmin=v_min, vmax=v_max,
+            interpolation="nearest",
+        )
+        vline = ax.axvline(x=fc_hi, color=ACCENT_RED, linestyle="--",
+                   linewidth=0.9, alpha=0.8, label=f"HI {fc_hi:.2f} MHz")
+        legend = ax.legend(loc="upper right", fontsize=7,
+                  facecolor=MPL_AXBG, edgecolor=BORDER_COL)
 
-    from mpl_toolkits.axes_grid1 import make_axes_locatable
-    divider = make_axes_locatable(ax)
-    cax = divider.append_axes("right", size="2%", pad=0.05)
-    cbar = fig.colorbar(im, cax=cax)
-    cbar.set_label("PSD (dBm)", fontsize=7, color=TEXT_MUTED)
-    cbar.ax.tick_params(labelsize=6, colors=TEXT_MUTED)
-    cbar.outline.set_edgecolor(BORDER_COL)
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="2%", pad=0.05)
+        cbar = fig.colorbar(im, cax=cax)
+        cbar.set_label("PSD (dBm)", fontsize=7, color=TEXT_MUTED)
+        cbar.ax.tick_params(labelsize=6, colors=TEXT_MUTED)
+        cbar.outline.set_edgecolor(BORDER_COL)
+        
+        cache.artists[name]["im"] = im
+        cache.artists[name]["vline"] = vline
+        cache.artists[name]["legend"] = legend
+        cache.artists[name]["cbar"] = cbar
+        
+        try:
+            fig.tight_layout(pad=0.2)
+        except:
+            pass
+    else:
+        im = cache.artists[name]["im"]
+        im.set_data(matrix)
+        vline = cache.artists[name]["vline"]
+        vline.set_xdata([fc_hi, fc_hi])
+        vline.set_label(f"HI {fc_hi:.2f} MHz")
+        legend = cache.artists[name]["legend"]
+        legend.get_texts()[0].set_text(f"HI {fc_hi:.2f} MHz")
 
     ax.set_ylim([0.0, history_sec])
+    im = cache.artists[name]["im"]
+    im.set_extent([f0, f1, 0.0, history_sec])
 
     cfg = engine_instance.charts_config.get("spec_wf", {})
     safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
@@ -722,11 +753,6 @@ def chart_ar_spectrogram(result: dict) -> str:
         im.set_clim(v_min, v_max)
     else:
         im.set_clim(cfg["ymin"], cfg["ymax"])
-
-    try:
-        fig.tight_layout(pad=0.2)
-    except:
-        pass
 
     return fig_to_b64(fig, dpi=96)
 
@@ -737,14 +763,7 @@ def chart_correlogram_spectrogram(result: dict) -> str:
     """
     dyn_size = get_dynamic_figsize(12.0, 5.5)
     name = "corr_spectrogram"
-    fig, _, _ = get_cached_fig(name, figsize=dyn_size)
-
-    # Limpieza absoluta de la figura para evitar acumulación de ejes y ticks rotos
-    fig.clear()
-    ax = fig.subplots()
-    style_ax(ax, "Correlograma 2D — Blackman-Tukey (Wiener-Khinchin)", "Frecuencia (MHz)", "Tiempo (s)")
-    ax.xaxis.get_major_formatter().set_useOffset(False)
-    ax.xaxis.get_major_formatter().set_scientific(False)
+    fig, ax, is_new = get_cached_fig(name, figsize=dyn_size)
 
     matrix    = result["matrix"]        # (n_segs × n_freqs)
     times_s   = result["times_s"]       # (n_segs,)
@@ -758,28 +777,53 @@ def chart_correlogram_spectrogram(result: dict) -> str:
     f0 = freqs_mhz[0] if len(freqs_mhz) > 0 else fc_hi - 1.0
     f1 = freqs_mhz[-1] if len(freqs_mhz) > 0 else fc_hi + 1.0
 
-    im = ax.imshow(
-        matrix,
-        aspect="auto", origin="lower",
-        extent=[f0, f1, 0.0, history_sec],
-        cmap="inferno",
-        vmin=v_min, vmax=v_max,
-        interpolation="nearest",
-    )
-    ax.axvline(x=fc_hi, color=ACCENT_RED, linestyle="--",
-               linewidth=0.9, alpha=0.8, label=f"HI {fc_hi:.2f} MHz")
-    ax.legend(loc="upper right", fontsize=7,
-              facecolor=MPL_AXBG, edgecolor=BORDER_COL)
+    if is_new or "im" not in cache.artists[name]:
+        ax.clear()
+        style_ax(ax, "Correlograma 2D — Blackman-Tukey (Wiener-Khinchin)", "Frecuencia (MHz)", "Tiempo (s)")
+        ax.xaxis.get_major_formatter().set_useOffset(False)
+        ax.xaxis.get_major_formatter().set_scientific(False)
+        im = ax.imshow(
+            matrix,
+            aspect="auto", origin="lower",
+            extent=[f0, f1, 0.0, history_sec],
+            cmap="inferno",
+            vmin=v_min, vmax=v_max,
+            interpolation="nearest",
+        )
+        vline = ax.axvline(x=fc_hi, color=ACCENT_RED, linestyle="--",
+                   linewidth=0.9, alpha=0.8, label=f"HI {fc_hi:.2f} MHz")
+        legend = ax.legend(loc="upper right", fontsize=7,
+                  facecolor=MPL_AXBG, edgecolor=BORDER_COL)
 
-    from mpl_toolkits.axes_grid1 import make_axes_locatable
-    divider = make_axes_locatable(ax)
-    cax = divider.append_axes("right", size="2%", pad=0.05)
-    cbar = fig.colorbar(im, cax=cax)
-    cbar.set_label("PSD (dBm)", fontsize=7, color=TEXT_MUTED)
-    cbar.ax.tick_params(labelsize=6, colors=TEXT_MUTED)
-    cbar.outline.set_edgecolor(BORDER_COL)
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="2%", pad=0.05)
+        cbar = fig.colorbar(im, cax=cax)
+        cbar.set_label("PSD (dBm)", fontsize=7, color=TEXT_MUTED)
+        cbar.ax.tick_params(labelsize=6, colors=TEXT_MUTED)
+        cbar.outline.set_edgecolor(BORDER_COL)
+        
+        cache.artists[name]["im"] = im
+        cache.artists[name]["vline"] = vline
+        cache.artists[name]["legend"] = legend
+        cache.artists[name]["cbar"] = cbar
+        
+        try:
+            fig.tight_layout(pad=0.2)
+        except:
+            pass
+    else:
+        im = cache.artists[name]["im"]
+        im.set_data(matrix)
+        vline = cache.artists[name]["vline"]
+        vline.set_xdata([fc_hi, fc_hi])
+        vline.set_label(f"HI {fc_hi:.2f} MHz")
+        legend = cache.artists[name]["legend"]
+        legend.get_texts()[0].set_text(f"HI {fc_hi:.2f} MHz")
 
     ax.set_ylim([0.0, history_sec])
+    im = cache.artists[name]["im"]
+    im.set_extent([f0, f1, 0.0, history_sec])
 
     cfg = engine_instance.charts_config.get("spec_wf", {})
     safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
@@ -788,11 +832,6 @@ def chart_correlogram_spectrogram(result: dict) -> str:
         im.set_clim(v_min, v_max)
     else:
         im.set_clim(cfg["ymin"], cfg["ymax"])
-
-    try:
-        fig.tight_layout(pad=0.2)
-    except:
-        pass
 
     return fig_to_b64(fig, dpi=96)
 

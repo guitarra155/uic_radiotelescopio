@@ -140,7 +140,6 @@ def run_cwt_2d(iq: np.ndarray, sample_rate: float = 2_400_000,
     """
     from core.dsp_engine import engine_instance as _eng
     N = len(iq)
-    iq = iq.astype(np.complex64)
     dt = 1.0 / sample_rate
     fc_hz = center_freq * 1e6
 
@@ -635,7 +634,6 @@ def run_ar_burg_2d(iq: np.ndarray, order: int = 20, n_freqs: int = 1024,
          Stanford University, 1975.
     """
     N = len(iq)
-    iq = iq.astype(np.complex64)
     fc_hz  = center_freq * 1e6
     fs_mhz = sample_rate / 1e6
 
@@ -672,15 +670,18 @@ def run_ar_burg_2d(iq: np.ndarray, order: int = 20, n_freqs: int = 1024,
 
     # ── Pre-calcular ventana de Hanning ───────────────────────────────────────
     hann_win = np.hanning(window_len).astype(np.float32)
-
-    # ── Construir segmentos promediados en autocorrelación (100% cobertura) ───
     eff_order = min(order, window_len // 2 - 1)
-    n_fft_ac = 2 ** int(np.ceil(np.log2(2 * window_len - 1)))
+
+    # Pre-calcular la matriz de Vandermonde para la evaluación del polinomio AR
+    freqs_eval = (f_vec / sample_rate).astype(np.float64)
+    z_eval     = np.exp(2j * np.pi * freqs_eval)                      # (n_freqs,)
+    k_idx      = np.arange(1, eff_order + 1, dtype=np.float64)
+    powers     = (z_eval[:, None] ** (-k_idx[None, :])).astype(np.complex64) # (n_freqs, eff_order)
 
     # Promediar n_sub sub-ventanas por cada intervalo de global_step para consistencia absoluta
-    n_sub = 5
+    n_sub = 1
     sub_offsets = np.linspace(0, max(0, global_step - window_len), n_sub, dtype=int)
-    R_lags_accum = np.zeros((num_seg, eff_order + 1), dtype=np.complex64)
+    spec_matrix_accum = np.zeros((num_seg, n_freqs), dtype=np.float32)
 
     for offset_val in sub_offsets:
         starts_shifted = np.clip(seg_starts_global + offset_val, 0, N - window_len).astype(np.int64)
@@ -690,40 +691,37 @@ def run_ar_burg_2d(iq: np.ndarray, order: int = 20, n_freqs: int = 1024,
         # Eliminar DC + aplicar ventana de Hanning
         seg_matrix = (seg_matrix - seg_matrix.mean(axis=1, keepdims=True)) * hann_win
 
-        # Calcular autocorrelación batch para este offset
-        SEG_F  = np.fft.fft(seg_matrix, n=n_fft_ac, axis=1)
-        R_full = np.fft.ifft(SEG_F * np.conj(SEG_F), axis=1)
-        R_lags_accum += R_full[:, :eff_order + 1] / window_len
+        # ── Algoritmo de Burg vectorizado por lote (lotes de todos los segmentos) ──
+        ef = seg_matrix[:, 1:].copy()       # error hacia adelante (num_seg, window_len - 1)
+        eb = seg_matrix[:, :-1].copy()      # error hacia atrás (num_seg, window_len - 1)
+        ar_coeffs = np.zeros((num_seg, eff_order), dtype=np.complex64)
+        total_err = np.sum(np.abs(seg_matrix) ** 2, axis=1) / window_len  # (num_seg,)
 
-    R_lags = R_lags_accum / n_sub
+        for m in range(eff_order):
+            # Coeficiente de reflexión (km) de Burg vectorizado para todos los segmentos
+            num = -2.0 * np.sum(ef * np.conj(eb), axis=1) # (num_seg,)
+            den = np.sum(np.abs(ef) ** 2, axis=1) + np.sum(np.abs(eb) ** 2, axis=1) # (num_seg,)
+            km = num / (den + 1e-30) # (num_seg,)
 
-    # 2. Resolver Yule-Walker: R·a = -r  usando scipy (vectorizado por segmento)
-    #    Toeplitz(R[0..order-1]) · a = -R[1..order]
-    from scipy.linalg import solve_toeplitz
-    spec_matrix = np.zeros((num_seg, n_freqs), dtype=np.float32)
-    freqs_eval  = (f_vec / sample_rate).astype(np.float64)
-    z_eval      = np.exp(2j * np.pi * freqs_eval)                     # (n_freqs,)
+            # Actualización de Levinson-Durbin vectorizada
+            ar_new = ar_coeffs[:, :m].copy()
+            ar_coeffs[:, :m] = ar_new + km[:, None] * np.conj(ar_new[:, ::-1])
+            ar_coeffs[:, m] = km
 
-    # Pre-calcular potencias de z para evitar exponenciación compleja costosa en el bucle temporal
-    k_idx  = np.arange(1, eff_order + 1, dtype=np.float64)
-    powers = (z_eval[:, None] ** (-k_idx[None, :])).astype(np.complex128) # (n_freqs, eff_order)
+            # Actualización de errores hacia adelante y hacia atrás
+            ef_new = ef[:, 1:] + km[:, None] * eb[:, 1:]
+            eb_new = eb[:, :-1] + np.conj(km[:, None]) * ef[:, :-1]
+            ef, eb = ef_new, eb_new
 
-    for w_idx in range(num_seg):
-        r0  = R_lags[w_idx, 0]
-        if r0 < 1e-30:
-            continue
-        r   = R_lags[w_idx]
-        try:
-            a_ar = solve_toeplitz(r[:-1], -r[1:])  # (order,)
-        except Exception:
-            continue
+            total_err *= (1.0 - np.abs(km) ** 2)
 
-        sigma2 = max(r0 + float(np.real(np.dot(a_ar, r[1:]))), 1e-30)
+        # Denominador vectorizado utilizando el producto matricial (Vandermonde x coeficientes)
+        # powers: (n_freqs, eff_order), ar_coeffs: (num_seg, eff_order) -> denom: (num_seg, n_freqs)
+        denom = 1.0 + ar_coeffs @ powers.T
+        psd = total_err[:, None] / (np.abs(denom) ** 2 + 1e-30)
+        spec_matrix_accum += psd.real
 
-        # Polinomio AR vectorizado utilizando la matriz de Vandermonde precalculada
-        denom  = 1.0 + powers @ a_ar.astype(np.complex128)      # (n_freqs,)
-        psd    = sigma2 / (np.abs(denom) ** 2 + 1e-30)
-        spec_matrix[w_idx] = (10 * np.log10(psd.real + 1e-30)).astype(np.float32)
+    spec_matrix = 10 * np.log10(spec_matrix_accum / n_sub + 1e-30)
 
 
     # ── Calibración y máscara ─────────────────────────────────────────────────

@@ -13,7 +13,7 @@
     "snr_db_max": 30,
     "amp_min": 0.0,
     "amp_max": 0.3,
-    "waterfall": 1.0,
+    "waterfall": 10.0,
     "iq_filename": "C:/SignalHound/ArchivosIQ/IQREC_Milk2025-02-12_11h39m03s_1.iq",
     "iq_format": "uint8",
     "stream_mode": "file",
@@ -25,7 +25,7 @@
         "welch_overlap": 0.5,
         "corr_max_lag": 1024,
         "ar_n_freqs": 1024,
-        "cwt_n_scales": 1024,
+        "cwt_n_scales": 516,
         "spec2d_method": "ar_burg_2d"
     },
     "analysis_window_sec": 0.1,
@@ -71,11 +71,11 @@
             "auto_y": 0
         },
         "spec_wf": {
-            "xmin": 1420.2,
-            "xmax": 1420.6,
-            "ymin": -2.2245991567670944,
-            "ymax": 6.356293334965807,
-            "auto_x": 0,
+            "xmin": 1419.46825,
+            "xmax": 1421.34325,
+            "ymin": -2.4183875912091795,
+            "ymax": 12.32705055394594,
+            "auto_x": 1,
             "auto_y": 1
         },
         "stat_hist": {
@@ -95,12 +95,12 @@
             "auto_y": 0
         },
         "snr_freq": {
-            "xmin": 1419.46825,
-            "xmax": 1421.34325,
-            "ymin": -15.203349729465046,
-            "ymax": 15.203349729465046,
-            "auto_x": 1,
-            "auto_y": 1
+            "xmin": 1419.0057499999998,
+            "xmax": 1421.0057499999998,
+            "ymin": -5.0,
+            "ymax": 40.0,
+            "auto_x": 0,
+            "auto_y": 0
         }
     }
 }
