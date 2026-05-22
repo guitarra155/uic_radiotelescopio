@@ -81,17 +81,23 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
     corr_lag_f = txt_field(
         "Max Lag", str(engine_instance.algo_params.get("corr_max_lag", 37)), "10-256"
     )
+    cwt_scales_f = txt_field(
+        "Escalas CWT", str(engine_instance.algo_params.get("cwt_n_scales", 64)), "12-256"
+    )
 
     ar_order_row = ft.Container(content=ar_order_f, visible=(current_method[0] == "ar_burg_2d"), width=160)
     corr_lag_row = ft.Container(content=corr_lag_f, visible=(current_method[0] == "correlogram_2d"), width=160)
+    cwt_scales_row = ft.Container(content=cwt_scales_f, visible=(current_method[0] == "cwt"), width=160)
 
     def _update_param_visibility():
         m = current_method[0]
         ar_order_row.visible = (m == "ar_burg_2d")
         corr_lag_row.visible = (m == "correlogram_2d")
+        cwt_scales_row.visible = (m == "cwt")
         try:
             if ar_order_row.page: ar_order_row.update()
             if corr_lag_row.page: corr_lag_row.update()
+            if cwt_scales_row.page: cwt_scales_row.update()
         except Exception:
             pass
 
@@ -120,9 +126,10 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
             
             ar_order_row.visible = (val == "ar_burg_2d")
             corr_lag_row.visible = (val == "correlogram_2d")
+            cwt_scales_row.visible = (val == "cwt")
 
             # Actualizar controles afectados y refrescar panel de config lateral
-            controls_to_update = [desc_text, status_badge, ar_order_row, corr_lag_row]
+            controls_to_update = [desc_text, status_badge, ar_order_row, corr_lag_row, cwt_scales_row]
             for c in controls_to_update:
                 if c.page:
                     c.update()
@@ -148,12 +155,18 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
             engine_instance.algo_params["corr_max_lag"] = int(corr_lag_f.value or 512)
         except Exception:
             pass
+        try:
+            engine_instance.algo_params["cwt_n_scales"] = int(cwt_scales_f.value or 64)
+        except Exception:
+            pass
         engine_instance.save_config()
 
     ar_order_f.on_submit = _save_params
     ar_order_f.on_blur = _save_params
     corr_lag_f.on_submit = _save_params
     corr_lag_f.on_blur = _save_params
+    cwt_scales_f.on_submit = _save_params
+    cwt_scales_f.on_blur = _save_params
 
     async def _render_advanced_method(force_recompute=False):
         """Ejecuta CWT/AR/Correlogram 2D en hilo secundario."""
@@ -189,6 +202,7 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
         current_params = {
             "ar_order": engine_instance.algo_params.get("ar_order", 64),
             "corr_max_lag": engine_instance.algo_params.get("corr_max_lag", 37),
+            "cwt_n_scales": engine_instance.algo_params.get("cwt_n_scales", 64),
             "sample_rate": sr,
             "center_freq": fc,
             "iq_len": len(iq),
@@ -228,10 +242,11 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
             t0 = _time.perf_counter()
 
             if method == "cwt":
+                n_scales = engine_instance.algo_params.get("cwt_n_scales", 64)
                 result = run_cwt_2d(
                     iq,
                     sample_rate=sr,
-                    n_scales=48,
+                    n_scales=n_scales,
                     center_freq=fc,
                     block_size=5000,
                     block_overlap=0.5,
@@ -251,10 +266,11 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
 
             elif method == "ar_burg_2d":
                 order = engine_instance.algo_params.get("ar_order", 20)
+                n_freqs = engine_instance.algo_params.get("ar_n_freqs", 1024)
                 result = run_ar_burg_2d(
                     iq,
                     order=order,
-                    n_freqs=1024,
+                    n_freqs=n_freqs,
                     window_len=128,
                     overlap=0.5,
                     block_size=5000,
@@ -425,6 +441,7 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
                         size=14,
                     ),
                     method_radio,
+                    cwt_scales_row,
                     ar_order_row,
                     corr_lag_row,
                     ft.TextButton(

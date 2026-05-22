@@ -172,7 +172,7 @@ def run_cwt_2d(iq: np.ndarray, sample_rate: float = 2_400_000,
         }
 
     # ── Banco de filtros Morlet en dominio de frecuencia (Bilateral) ──────────
-    n_fft_wav = block_size
+    n_fft_wav = 2 ** int(np.round(np.log2(block_size)))
     omega  = 2 * np.pi * np.fft.fftfreq(n_fft_wav, d=dt).astype(np.float32)  # (n_fft,)
     omega0 = 2 * np.pi * 6.0   # parámetro estándar de Morlet (ω₀ = 6)
     
@@ -185,6 +185,7 @@ def run_cwt_2d(iq: np.ndarray, sample_rate: float = 2_400_000,
 
     # arg = s*omega - sign(f)*omega0
     arg = sc_col * omega[None, :] - sign_col * omega0 # (n_scales, n_fft)
+    
     # support: H(omega) para positivas, H(-omega) para negativas
     support = (sign_col * omega[None, :] > 0).astype(np.float32)
 
@@ -192,21 +193,26 @@ def run_cwt_2d(iq: np.ndarray, sample_rate: float = 2_400_000,
     psi_hat = (norms * np.exp(-0.5 * arg * arg) * support).astype(np.complex64)
     # psi_hat: (n_scales, n_fft_wav)
 
-    # ── Procesamiento por bloques: vectorizado sobre n_scales ────────────────
-    spec_matrix = np.zeros((n_blocks, n_scales), dtype=np.float32)
-    times_s     = np.zeros(n_blocks, dtype=np.float32)
+    # ── Procesamiento por bloques vectorial ultrarrápido (Teorema de Parseval) ──
+    # Precalcular potencia de la respuesta al impulso en frecuencia (Parseval)
+    psi_hat_power = (np.abs(psi_hat) ** 2).astype(np.float32)  # (n_scales, n_fft_wav)
 
-    for k, i0 in enumerate(block_starts):
-        blk = iq[i0 : i0 + block_size].copy()
-        blk -= blk.mean()   # eliminar DC
+    # Construir matriz de segmentos (n_blocks × block_size) en un solo indexado
+    idx_matrix = block_starts[:, None] + np.arange(block_size)   # (n_blocks, block_size)
+    seg_matrix = iq[idx_matrix].astype(np.complex64)             # (n_blocks, block_size)
 
-        # FFT del bloque → (n_fft_wav,)
-        BLK = np.fft.fft(blk, n=n_fft_wav).astype(np.complex64)
+    # Eliminar DC por fila
+    seg_matrix = seg_matrix - seg_matrix.mean(axis=1, keepdims=True)
 
-        # Multiplicar banco de filtros × espectro del bloque de una vez:
-        cfs_batch   = np.fft.ifft(psi_hat * BLK[None, :], axis=1)  # (n_scales, n_fft)
-        spec_matrix[k] = np.mean(np.abs(cfs_batch) ** 2, axis=1).astype(np.float32)
-        times_s[k]     = (i0 + block_size / 2) * dt
+    # FFT de todos los bloques en un solo paso
+    BLK = np.fft.fft(seg_matrix, n=n_fft_wav, axis=1).astype(np.complex64)
+    BLK_power = np.abs(BLK) ** 2  # (n_blocks, n_fft_wav)
+
+    # Parseval en lote: multiplicación de matrices ultrarrápida
+    spec_matrix = (BLK_power @ psi_hat_power.T) / (n_fft_wav ** 2)
+    spec_matrix = spec_matrix.astype(np.float32)
+
+    times_s = (block_starts + block_size / 2) * dt
 
     # ── Convertir a dB ────────────────────────────────────────────────────────
     spec_db = 10.0 * np.log10(spec_matrix + np.finfo(float).eps) + offset_calibracion
@@ -595,7 +601,7 @@ def run_ar_burg_2d(iq: np.ndarray, order: int = 20, n_freqs: int = 1024,
                    block_size: int = 5000, block_overlap: float = 0.5,
                    sample_rate: float = 2_400_000,
                    center_freq: float = 1420.40,
-                   offset_calibracion: float = -60.0,
+                    offset_calibracion: float = -60.0,
                    f_min_visual: float = None,
                    f_max_visual: float = None) -> dict:
     """
@@ -667,24 +673,29 @@ def run_ar_burg_2d(iq: np.ndarray, order: int = 20, n_freqs: int = 1024,
     # ── Pre-calcular ventana de Hanning ───────────────────────────────────────
     hann_win = np.hanning(window_len).astype(np.float32)
 
-    # ── Construir todos los segmentos de una vez (vectorizado) ────────────────
-    idx_matrix = seg_starts_global[:, None] + np.arange(window_len)  # (num_seg, window_len)
-    seg_matrix = iq[idx_matrix].astype(np.complex64)                  # (num_seg, window_len)
-
-    # Eliminar DC + aplicar ventana
-    seg_matrix = (seg_matrix - seg_matrix.mean(axis=1, keepdims=True)) * hann_win
-
-    # ── PSD por Burg/AR vectorizado ───────────────────────────────────────────
-    # Estrategia: autocorrelación batch vía FFT (igual que correlograma),
-    # luego resolver ecuaciones de Yule-Walker por scipy para AR order.
-    # Equivalente al pyulear() de MATLAB para señales complejas.
+    # ── Construir segmentos promediados en autocorrelación (100% cobertura) ───
     eff_order = min(order, window_len // 2 - 1)
-
-    # 1. Autocorrelación batch: R[k] = E[x[n]*conj(x[n-k])]  para k=0..order
     n_fft_ac = 2 ** int(np.ceil(np.log2(2 * window_len - 1)))
-    SEG_F    = np.fft.fft(seg_matrix, n=n_fft_ac, axis=1)             # (num_seg, n_fft_ac)
-    R_full   = np.fft.ifft(SEG_F * np.conj(SEG_F), axis=1)           # (num_seg, n_fft_ac) (Complejo)
-    R_lags   = R_full[:, :eff_order + 1] / window_len                 # (num_seg, order+1) lags 0..order
+
+    # Promediar n_sub sub-ventanas por cada intervalo de global_step para consistencia absoluta
+    n_sub = 5
+    sub_offsets = np.linspace(0, max(0, global_step - window_len), n_sub, dtype=int)
+    R_lags_accum = np.zeros((num_seg, eff_order + 1), dtype=np.complex64)
+
+    for offset_val in sub_offsets:
+        starts_shifted = np.clip(seg_starts_global + offset_val, 0, N - window_len).astype(np.int64)
+        idx_matrix = starts_shifted[:, None] + np.arange(window_len)  # (num_seg, window_len)
+        seg_matrix = iq[idx_matrix].astype(np.complex64)              # (num_seg, window_len)
+
+        # Eliminar DC + aplicar ventana de Hanning
+        seg_matrix = (seg_matrix - seg_matrix.mean(axis=1, keepdims=True)) * hann_win
+
+        # Calcular autocorrelación batch para este offset
+        SEG_F  = np.fft.fft(seg_matrix, n=n_fft_ac, axis=1)
+        R_full = np.fft.ifft(SEG_F * np.conj(SEG_F), axis=1)
+        R_lags_accum += R_full[:, :eff_order + 1] / window_len
+
+    R_lags = R_lags_accum / n_sub
 
     # 2. Resolver Yule-Walker: R·a = -r  usando scipy (vectorizado por segmento)
     #    Toeplitz(R[0..order-1]) · a = -R[1..order]
@@ -692,6 +703,10 @@ def run_ar_burg_2d(iq: np.ndarray, order: int = 20, n_freqs: int = 1024,
     spec_matrix = np.zeros((num_seg, n_freqs), dtype=np.float32)
     freqs_eval  = (f_vec / sample_rate).astype(np.float64)
     z_eval      = np.exp(2j * np.pi * freqs_eval)                     # (n_freqs,)
+
+    # Pre-calcular potencias de z para evitar exponenciación compleja costosa en el bucle temporal
+    k_idx  = np.arange(1, eff_order + 1, dtype=np.float64)
+    powers = (z_eval[:, None] ** (-k_idx[None, :])).astype(np.complex128) # (n_freqs, eff_order)
 
     for w_idx in range(num_seg):
         r0  = R_lags[w_idx, 0]
@@ -705,12 +720,7 @@ def run_ar_burg_2d(iq: np.ndarray, order: int = 20, n_freqs: int = 1024,
 
         sigma2 = max(r0 + float(np.real(np.dot(a_ar, r[1:]))), 1e-30)
 
-        # Vectorized AR polynomial: denom[f] = 1 + sum_k( a[k] * z[f]^{-(k+1)} )
-        # k_idx: (order,)   z_eval: (n_freqs,)
-        # powers[k, f] = z_eval[f]^{-(k+1)}  → matrix (order, n_freqs)
-        k_idx  = np.arange(1, eff_order + 1, dtype=np.float64)
-        # z_eval[:, None] ** (-k_idx[None, :])  → (n_freqs, order)
-        powers = z_eval[:, None] ** (-k_idx[None, :])           # (n_freqs, order)
+        # Polinomio AR vectorizado utilizando la matriz de Vandermonde precalculada
         denom  = 1.0 + powers @ a_ar.astype(np.complex128)      # (n_freqs,)
         psd    = sigma2 / (np.abs(denom) ** 2 + 1e-30)
         spec_matrix[w_idx] = (10 * np.log10(psd.real + 1e-30)).astype(np.float32)
