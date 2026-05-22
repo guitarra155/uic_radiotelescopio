@@ -23,7 +23,7 @@ class DSPEngine:
         self.filename = None
         self._center_freq = 1420.40
         self._sample_rate = 2_400_000
-        self.data_format = "uint8"
+        self.data_format = "int16"
         self.fft_size = 4096
         
         # Parámetros básicos (Definir antes de cualquier setter)
@@ -34,7 +34,7 @@ class DSPEngine:
         self.trigger_high = 15.0
         self.trigger_low = 5.0
         self.iq_filename = ""
-        self.iq_format = "uint8"
+        self.iq_format = "int16"
         self.algo_params = {}
         self.moving_avg_samples = 240
         self._analysis_window_sec = 1.0
@@ -91,10 +91,9 @@ class DSPEngine:
         )
         self.waterfall_data = np.full((self.waterfall_steps, self.fft_size), -100.0)
 
-        # Amplitude buffer — señal RAW (sin filtrar), solo para comparación visual
-        self.amplitude_data = np.zeros(2000)
+        self.amplitude_data = np.zeros(8000)
         # Amplitude buffer — señal filtrada por Moving Average
-        self.amplitude_ma_data = np.zeros(2000)
+        self.amplitude_ma_data = np.zeros(8000)
 
         # Buffer IQ de alta resolución para el Correlograma 2D
         # Se vincula al 'Historial Cascada' (waterfall_history_sec)
@@ -155,7 +154,7 @@ class DSPEngine:
         self.iq_filename = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "test_signal.iq"
         )
-        self.iq_format = "uint8"
+        self.iq_format = "int16"
 
         # Rangos de potencia espectro (AUTO-DETECTADOS)
         self.db_min = -90
@@ -333,7 +332,7 @@ class DSPEngine:
 
         if mode == "file":
             self.filename = kwargs.get("filename")
-            self.data_format = kwargs.get("format", "uint8")
+            self.data_format = kwargs.get("format", "int16")
             self.worker_thread = threading.Thread(
                 target=self._process_file_loop, daemon=True
             )
@@ -809,7 +808,7 @@ class DSPEngine:
                 self._process_dsp_core(iq, batches=None)
 
         except Exception as e:
-            print(f"SDR Hardware Error: {e}")
+            print(f"SDR Hardware Error: {e}", flush=True)
         finally:
             self.stop_stream()
 
@@ -903,7 +902,7 @@ class DSPEngine:
                         time.sleep(sleep_time)
 
         except Exception as e:
-            print(f"File Stream Error: {e}")
+            print(f"File Stream Error: {e}", flush=True)
             self.is_playing = False
 
     def _try_load_metadata(self, filename):
@@ -973,15 +972,15 @@ class DSPEngine:
         peak_idx = np.argmax(spec)
         
         if spec[peak_idx] > noise_floor + 10:
-            print(f"🎯 Pico detectado en bin {peak_idx}. Posible señal de interés.")
+            print(f"🎯 Pico detectado en bin {peak_idx}. Posible señal de interés.", flush=True)
             
             # Solo auto-calibrar si no estamos ya cerca de la frecuencia de Hidrógeno
             if abs(self.center_freq - 1420.40575) > 0.5:
                 self.center_freq = 1420.40575
                 self.metadata_updated = True
-                print("✨ Auto-calibrado a Línea de Hidrógeno (1420.4 MHz)")
+                print("✨ Auto-calibrado a Línea de Hidrógeno (1420.4 MHz)", flush=True)
             else:
-                print("✅ Ya sintonizado en la banda de interés.")
+                print("✅ Ya sintonizado en la banda de interés.", flush=True)
 
     def update_visual_span(self, span_mhz: float):
         """Ajusta el zoom visual de las gráficas de espectro."""
