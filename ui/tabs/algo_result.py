@@ -67,7 +67,7 @@ def build_algo_result(page: ft.Page) -> ft.Control:
     # Imagen del resultado — inicia con placeholder válido
     img = ft.Image(
         src=chart_algo_placeholder(),
-        fit=ft.BoxFit.FILL,
+        fit=ft.BoxFit.CONTAIN,
         gapless_playback=True,
         border_radius=10,
         expand=True,
@@ -345,7 +345,7 @@ def build_algo_result(page: ft.Page) -> ft.Control:
     )
 
     return ft.Container(
-        content=ft.Row([chart_container, side], spacing=10, expand=True),
+        content=ft.Row([chart_container, side], spacing=10, expand=True, vertical_alignment=ft.CrossAxisAlignment.STRETCH),
         expand=True,
         padding=ft.Padding(left=14, top=14, right=14, bottom=14),
     )

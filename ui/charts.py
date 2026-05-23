@@ -116,7 +116,9 @@ def style_ax(ax, title="", xlabel="", ylabel=""):
 
 
 def chart_amplitude() -> str:
-    dyn_size = get_dynamic_figsize(9.5, 2.8)
+    is_max = getattr(engine_instance, "maximized_dual_chart", None) == "mon_raw_amp"
+    bw, bh = (19.0, 5.6) if is_max else (9.5, 2.8)
+    dyn_size = get_dynamic_figsize(bw, bh)
     fig, ax, is_new = get_cached_fig("amplitude", figsize=dyn_size)
     sig = engine_instance.amplitude_data
     n = len(sig)
@@ -145,7 +147,9 @@ def chart_amplitude() -> str:
 
 
 def chart_spectrum() -> str:
-    dyn_size = get_dynamic_figsize(9.5, 2.8)
+    is_max = getattr(engine_instance, "maximized_dual_chart", None) == "mon_filt_spec"
+    bw, bh = (19.0, 5.6) if is_max else (9.5, 2.8)
+    dyn_size = get_dynamic_figsize(bw, bh)
     fig, ax, is_new = get_cached_fig("spectrum", figsize=dyn_size)
     spec = engine_instance.spectrum_data
     fc = engine_instance.center_freq
@@ -193,7 +197,9 @@ def chart_spectrum() -> str:
 
 def chart_spectrum_raw() -> str:
     """Espectro FFT desde señal RAW (sin filtro MA) — exclusivo Tab 1."""
-    dyn_size = get_dynamic_figsize(9.5, 2.8)
+    is_max = getattr(engine_instance, "maximized_dual_chart", None) == "mon_raw_spec"
+    bw, bh = (19.0, 5.6) if is_max else (9.5, 2.8)
+    dyn_size = get_dynamic_figsize(bw, bh)
     fig, ax, is_new = get_cached_fig("spectrum_raw", figsize=dyn_size)
     spec = engine_instance.spectrum_raw_data
     fc = engine_instance.center_freq
@@ -602,7 +608,9 @@ def chart_music_spectrum(result: dict) -> str:
 
 def chart_amplitude_ma() -> str:
     """Gráfica de amplitud post-Moving Average para comparación con la señal cruda."""
-    dyn_size = get_dynamic_figsize(9.5, 2.8)
+    is_max = getattr(engine_instance, "maximized_dual_chart", None) == "mon_filt_amp"
+    bw, bh = (19.0, 5.6) if is_max else (9.5, 2.8)
+    dyn_size = get_dynamic_figsize(bw, bh)
     fig, ax, is_new = get_cached_fig("amplitude_ma", figsize=dyn_size)
     sig = engine_instance.amplitude_ma_data
     n = len(sig)

@@ -48,7 +48,7 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
 
     img = ft.Image(
         src=chart_spectrogram(),
-        fit=ft.BoxFit.FILL,
+        fit=ft.BoxFit.CONTAIN,
         border_radius=10,
         expand=True,
         gapless_playback=True,
@@ -479,4 +479,4 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
         expand=True,
         spacing=8,
     )
-    return main_container
+    return ft.Container(content=main_container, expand=True)

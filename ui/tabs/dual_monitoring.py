@@ -108,6 +108,10 @@ def build_dual_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
                 if box.visible:
                     btn.icon = ft.Icons.FULLSCREEN_EXIT
                     
+        # Avisar al backend para ajustar resoluciones SVG
+        from core.dsp_engine import engine_instance
+        engine_instance.maximized_dual_chart = maximized_chart[0]
+        e.control.page.pubsub.send_all("refresh_charts")
         e.control.page.update()
 
     def _chart_box(img, chart_id, title, accent):

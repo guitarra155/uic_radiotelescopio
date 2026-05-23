@@ -34,6 +34,8 @@ def main(page: ft.Page):
         key_state['shift'] = e.shift
         if e.key == "F5":
             page.pubsub.send_all("toggle_stream")
+        elif e.key == "F8":
+            page.pubsub.send_all("emergency_stop")
         elif e.key == "F11":
             page.window.full_screen = not page.window.full_screen
             page.update()
@@ -81,11 +83,13 @@ def main(page: ft.Page):
 
     # Capturar y sincronizar las dimensiones de la ventana con el renderizador de gráficas
     def on_page_resize(e):
-        engine_instance.window_width = page.window.width
-        engine_instance.window_height = page.window.height
-    page.on_resize = on_page_resize
-    engine_instance.window_width = page.window.width
-    engine_instance.window_height = page.window.height
+        engine_instance.window_width = page.width
+        engine_instance.window_height = page.height
+        # Avisar a todos que los charts deben recalcular su escala base
+        page.pubsub.send_all("refresh_charts")
+    page.on_resized = on_page_resize  # Flet event is on_resized, not on_resize!
+    engine_instance.window_width = page.width or 1280
+    engine_instance.window_height = page.height or 720
 
     # Componentes de Layout Base
     header = build_header(page)
@@ -174,25 +178,25 @@ def main(page: ft.Page):
 
     import asyncio
 
-    # Panel Izquierdo (Contenido de la pestaña, 72% del ancho)
+    # Panel Izquierdo (Contenido de la pestaña, toma el espacio sobrante)
     left_panel_content = ft.Container(
         content=tab_body,
-        expand=100,
+        expand=True,
         padding=ft.Padding(top=5, left=0, right=0, bottom=0)
     )
 
-    # Panel Derecho: Configuración Fija (28% del ancho)
+    # Panel Derecho: Configuración Fija (ancho dinámico)
     right_panel = ft.Container(
         content=build_config(page),
         border=ft.Border(left=ft.BorderSide(1, BORDER_COL)),
         bgcolor=DARK_BG,
-        expand= 35,
+        expand=False,
         visible=False
     )
 
-    lower_split = ft.Row([left_panel_content, right_panel], expand=True, spacing=0)
+    lower_split = ft.Row([left_panel_content, right_panel], expand=True, spacing=0, vertical_alignment=ft.CrossAxisAlignment.STRETCH)
 
-    main_view = ft.Column([custom_tab_bar, lower_split], expand=True, spacing=0)
+    main_view = ft.Column([custom_tab_bar, lower_split], expand=True, spacing=0, horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
 
     # ── Manejo de Reset de Configuración ───────────────────────
     def on_config_reset(msg):
@@ -231,7 +235,7 @@ def main(page: ft.Page):
         header,
         main_view,
         footer,
-    ], expand=True, spacing=0))
+    ], expand=True, spacing=0, horizontal_alignment=ft.CrossAxisAlignment.STRETCH))
 
 
 if __name__ == "__main__":

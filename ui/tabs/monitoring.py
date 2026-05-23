@@ -33,9 +33,9 @@ def build_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
 
     rfi_switch.on_change = on_rfi
 
-    img_spec = ft.Image(src=chart_spectrum_raw(), fit=ft.BoxFit.FILL,
+    img_spec = ft.Image(src=chart_spectrum_raw(), fit=ft.BoxFit.CONTAIN,
                         gapless_playback=True, border_radius=8, expand=True)
-    img_amp  = ft.Image(src=chart_amplitude(),   fit=ft.BoxFit.FILL,
+    img_amp  = ft.Image(src=chart_amplitude(),   fit=ft.BoxFit.CONTAIN,
                         gapless_playback=True, border_radius=8, expand=True)
 
     is_rendering = [False]

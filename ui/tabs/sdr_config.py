@@ -280,12 +280,41 @@ def build_config(page: ft.Page) -> ft.Control:
     wrapper = ft.Container(
         content=root_container,
         width=300,
-        expand=True,
         bgcolor=PANEL_BG if engine_instance.active_tab != 0 else ft.Colors.TRANSPARENT,
         padding=15 if engine_instance.active_tab != 0 else 5,
     )
     
+    is_collapsed = [False]
+    
+    def toggle_collapse(e):
+        is_collapsed[0] = not is_collapsed[0]
+        wrapper.visible = not is_collapsed[0]
+        collapse_btn.icon = ft.Icons.KEYBOARD_ARROW_RIGHT if is_collapsed[0] else ft.Icons.KEYBOARD_ARROW_LEFT
+        e.control.page.update()
+
+    collapse_btn = ft.IconButton(
+        icon=ft.Icons.KEYBOARD_ARROW_LEFT,
+        icon_color=ACCENT_CYAN,
+        icon_size=20,
+        on_click=toggle_collapse,
+        tooltip="Minimizar/Expandir Panel",
+        padding=0,
+        width=24,
+    )
+    
+    collapsed_col = ft.Column([
+        ft.Container(
+            content=collapse_btn,
+            alignment=ft.alignment.Alignment(-1.0, -1.0)
+        )
+    ], width=24, alignment=ft.MainAxisAlignment.START)
+    
+    final_row = ft.Row([
+        collapsed_col,
+        wrapper
+    ], spacing=0, vertical_alignment=ft.CrossAxisAlignment.START)
+    
     # Re-asignar para poder actualizarlo desde _update_ui
     page.pubsub.subscribe(lambda msg: wrapper.update() if msg == "tab_changed" else None)
     
-    return wrapper
+    return final_row

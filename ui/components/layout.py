@@ -29,6 +29,8 @@ def build_header(page: ft.Page) -> ft.Control:
             page.update()
         elif msg == "toggle_stream":
             toggle_stream(None)
+        elif msg == "emergency_stop":
+            on_emergency(None)
         elif msg == "refresh_charts":
             # Actualizar el título con la frecuencia real
             header_title.value = f"Radiotelescopio ({engine_instance.center_freq:.2f} MHz)"
