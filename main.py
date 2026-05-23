@@ -198,12 +198,26 @@ def main(page: ft.Page):
 
     main_view = ft.Column([custom_tab_bar, lower_split], expand=True, spacing=0, horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
 
-    # ── Manejo de Reset de Configuración ───────────────────────
-    def on_config_reset(msg):
+    # ── Manejo de Reset de Configuración y Fullscreen ───────────────────────
+    def on_main_pubsub(msg):
         if msg == "config_reset":
             right_panel.content = build_config(page)
             page.update()
-    page.pubsub.subscribe(on_config_reset)
+        elif msg == "toggle_fullscreen_chart":
+            is_fs = getattr(engine_instance, "chart_fullscreen_active", False)
+            header.visible = not is_fs
+            footer.visible = not is_fs
+            custom_tab_bar.visible = not is_fs
+            
+            if is_fs:
+                page.pubsub.send_all("force_collapse")
+                
+            right_panel.visible = (engine_instance.active_tab != 0)
+            
+            page.update()
+            page.pubsub.send_all("refresh_charts")
+            
+    page.pubsub.subscribe(on_main_pubsub)
 
     # ── Tarea de Refresco de Interfaz ──────────────
     async def refresh_loop():

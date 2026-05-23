@@ -14,7 +14,7 @@
     "amp_min": 0.0,
     "amp_max": 0.3,
     "waterfall": 10.0,
-    "iq_filename": "C:/SignalHound/ArchivosIQ/IQREC_Milk2025-02-12_11h32m56s_1.iq",
+    "iq_filename": "C:/uic_radiotelescopio/data/test_signal_1.iq",
     "iq_format": "int16",
     "stream_mode": "file",
     "algo_params": {
@@ -39,12 +39,12 @@
     "visual_span_mhz": 2.4,
     "charts_config": {
         "mon_raw_spec": {
-            "xmin": 1419.2057499999999,
-            "xmax": 1421.60575,
+            "xmin": 1419.46825,
+            "xmax": 1421.34325,
             "ymin": -100.0,
             "ymax": -20.0,
-            "auto_x": 0,
-            "auto_y": 0
+            "auto_x": 1,
+            "auto_y": 1
         },
         "mon_raw_amp": {
             "xmin": 0.0,
@@ -73,8 +73,8 @@
         "spec_wf": {
             "xmin": 1419.0057499999998,
             "xmax": 1421.0057499999998,
-            "ymin": -100.0,
-            "ymax": -20.0,
+            "ymin": -56.157590502009114,
+            "ymax": -23.741343653018944,
             "auto_x": 0,
             "auto_y": 1
         },

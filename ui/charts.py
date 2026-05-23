@@ -35,17 +35,27 @@ def get_dynamic_figsize(base_width=9.5, base_height=2.8):
     win_w = getattr(engine_instance, "window_width", 1280)
     win_h = getattr(engine_instance, "window_height", 720)
     
-    # Alto real del contenedor Flet (sin pestañas, header, footer)
-    avail_h = win_h - 140
+    is_fs = getattr(engine_instance, "chart_fullscreen_active", False)
     
-    # Ancho real del contenedor (sin panel derecho si está cerrado, estimamos 40px padding)
-    is_collapsed = getattr(engine_instance, "is_config_collapsed", False)
-    avail_w = win_w - 40 if is_collapsed else win_w - 340
+    if is_fs:
+        avail_h = win_h - 40
+        avail_w = win_w - 40
+    else:
+        # Alto real del contenedor Flet (sin pestañas, header, footer)
+        avail_h = win_h - 140
+        
+        # Ancho real del contenedor (sin panel derecho si está cerrado, estimamos 40px padding)
+        is_collapsed = getattr(engine_instance, "is_config_collapsed", False)
+        avail_w = win_w - 40 if is_collapsed else win_w - 340
     
     # Determinar qué fracción de pantalla ocupa esta gráfica según sus parámetros base
     # (19.0 y 5.6 eran los valores de pantalla completa originales)
     frac_w = base_width / 19.0
     frac_h = base_height / 5.6
+    
+    if is_fs:
+        frac_w = 1.0
+        frac_h = 1.0
     
     fig_w = (avail_w * frac_w) / 100.0
     fig_h = (avail_h * frac_h) / 100.0

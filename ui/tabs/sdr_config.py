@@ -271,6 +271,17 @@ def build_config(page: ft.Page) -> ft.Control:
             if engine_instance.active_tab == 1:
                 update_stats()
             _sync_auto_fields()
+            
+        elif msg == "force_collapse":
+            if not is_collapsed[0]:
+                is_collapsed[0] = True
+                wrapper.visible = False
+                collapse_btn.icon = ft.Icons.KEYBOARD_ARROW_LEFT
+                engine_instance.is_config_collapsed = True
+                try: wrapper.update()
+                except: pass
+                try: collapse_btn.update()
+                except: pass
 
     page.pubsub.subscribe(_update_ui)
     

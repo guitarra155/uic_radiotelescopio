@@ -114,6 +114,23 @@ def build_dual_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
         e.control.page.pubsub.send_all("refresh_charts")
         e.control.page.update()
 
+    def on_fullscreen_global(e, chart_id):
+        from core.dsp_engine import engine_instance
+        is_fs = getattr(engine_instance, "chart_fullscreen_active", False)
+        engine_instance.chart_fullscreen_active = not is_fs
+        
+        # Ocultar lo que no se necesita (las otras gráficas del tab) si entramos en FS
+        if engine_instance.chart_fullscreen_active:
+            # Forzar maximize de este chart
+            if maximized_chart[0] != chart_id:
+                on_maximize(e, chart_id)
+        else:
+            # Restaurar
+            if maximized_chart[0] == chart_id:
+                on_maximize(e, chart_id)
+
+        e.control.page.pubsub.send_all("toggle_fullscreen_chart")
+
     def _chart_box(img, chart_id, title, accent):
         btn = ft.IconButton(
             icon=ft.Icons.FULLSCREEN,
@@ -125,11 +142,24 @@ def build_dual_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
             width=24,
             height=24
         )
+        btn_fs = ft.IconButton(
+            icon=ft.Icons.ASPECT_RATIO,
+            icon_color=ACCENT_AMBER,
+            icon_size=18,
+            style=ft.ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=4)
+            ),
+            on_click=lambda e: on_fullscreen_global(e, chart_id),
+            tooltip="Pantalla Completa (Global)",
+            padding=0,
+            width=26,
+            height=26
+        )
         return ft.Container(
             content=ft.Column([
                 ft.Row([
                     ft.Text(title, color=accent, size=10, weight=ft.FontWeight.BOLD),
-                    btn
+                    ft.Row([btn, btn_fs], spacing=0)
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                 ft.GestureDetector(
                     mouse_cursor=ft.MouseCursor.ZOOM_IN,
