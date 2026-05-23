@@ -7,6 +7,14 @@ Usa una caché persistente de figuras para permitir refrescos de 10ms sin satura
 import math
 import io
 import base64
+import matplotlib as mpl
+mpl.use('Agg') # Backend ultra-rápido sin UI
+
+# Optimizaciones extremas para gráficas muy densas (evita cuello de botella SVG)
+mpl.rcParams['path.simplify'] = True
+mpl.rcParams['path.simplify_threshold'] = 1.0  # Simplifica todo lo que caiga en el mismo pixel
+mpl.rcParams['agg.path.chunksize'] = 10000
+
 import numpy as np
 import matplotlib
 from matplotlib.figure import Figure
