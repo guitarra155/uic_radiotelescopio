@@ -186,7 +186,7 @@ def build_monitoring_filtered(page: ft.Page, key_state: dict) -> ft.Control:
     )
 
     return ft.Container(
-        content=ft.Row([graphs, side], spacing=12, expand=True),
+        content=ft.Row([graphs, side], spacing=12, expand=True, vertical_alignment=ft.CrossAxisAlignment.STRETCH),
         expand=True,
         padding=ft.Padding(left=14, top=14, right=14, bottom=14),
     )

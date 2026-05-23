@@ -88,11 +88,11 @@ def build_dual_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
         ft.Row([
             _chart_box(img_spec_raw,  "mon_raw_spec",  "ESPECTRO ORIGINAL",  ACCENT_CYAN),
             _chart_box(img_spec_filt, "mon_filt_spec", "ESPECTRO FILTRADO", ACCENT_GREEN),
-        ], expand=True, spacing=10),
+        ], expand=True, spacing=10, vertical_alignment=ft.CrossAxisAlignment.STRETCH),
         ft.Row([
             _chart_box(img_amp_raw,   "mon_raw_amp",   "AMPLITUD ORIGINAL",  ACCENT_CYAN),
             _chart_box(img_amp_filt,  "mon_filt_amp",  "AMPLITUD FILTRADA (MA)", ACCENT_AMBER),
-        ], expand=True, spacing=10),
+        ], expand=True, spacing=10, vertical_alignment=ft.CrossAxisAlignment.STRETCH),
     ], expand=True, spacing=10)
 
     return ft.Container(

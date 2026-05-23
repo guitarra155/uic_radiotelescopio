@@ -29,7 +29,7 @@
         "spec2d_method": "waterfall"
     },
     "analysis_window_sec": 0.1,
-    "moving_avg_samples": 3,
+    "moving_avg_samples": 4,
     "bb60c_ref_level": -30.0,
     "bb60c_iq_bw": 20.0,
     "vbw_alpha": 0.3,
@@ -39,43 +39,43 @@
     "visual_span_mhz": 2.4,
     "charts_config": {
         "mon_raw_spec": {
-            "xmin": 1419.2057499999999,
-            "xmax": 1421.60575,
-            "ymin": -100.0,
-            "ymax": -20.0,
-            "auto_x": 0,
-            "auto_y": 0
+            "xmin": 1419.46825,
+            "xmax": 1421.34325,
+            "ymin": -43.0639524272363,
+            "ymax": -29.515463748293158,
+            "auto_x": 1,
+            "auto_y": 1
         },
         "mon_raw_amp": {
             "xmin": 0.0,
-            "xmax": 1.0,
+            "xmax": 0.1,
             "ymin": 0.0,
-            "ymax": 1.0,
-            "auto_x": 0,
-            "auto_y": 0
+            "ymax": 0.0332696692130412,
+            "auto_x": 1,
+            "auto_y": 1
         },
         "mon_filt_spec": {
-            "xmin": 1419.2057499999999,
-            "xmax": 1421.60575,
-            "ymin": -100.0,
-            "ymax": -20.0,
-            "auto_x": 0,
-            "auto_y": 0
+            "xmin": 1419.46825,
+            "xmax": 1421.34325,
+            "ymin": -43.0639524272363,
+            "ymax": -29.515463748293158,
+            "auto_x": 1,
+            "auto_y": 1
         },
         "mon_filt_amp": {
             "xmin": 0.0,
-            "xmax": 1.0,
+            "xmax": 0.1,
             "ymin": 0.0,
-            "ymax": 1.0,
-            "auto_x": 0,
-            "auto_y": 0
+            "ymax": 0.025597018276331054,
+            "auto_x": 1,
+            "auto_y": 1
         },
         "spec_wf": {
             "xmin": 1419.0057499999998,
             "xmax": 1421.0057499999998,
-            "ymin": -100.0,
-            "ymax": -20.0,
-            "auto_x": 0,
+            "ymin": -43.0639524272363,
+            "ymax": -29.515463748293158,
+            "auto_x": 1,
             "auto_y": 1
         },
         "spec_cwt": {
@@ -106,9 +106,9 @@
             "xmin": 0.0,
             "xmax": 1.5,
             "ymin": 0.0,
-            "ymax": 100.0,
-            "auto_x": 0,
-            "auto_y": 0
+            "ymax": 168.632,
+            "auto_x": 1,
+            "auto_y": 1
         },
         "pow_time": {
             "xmin": 0.0,

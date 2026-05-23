@@ -66,7 +66,7 @@ def get_cached_fig(name, figsize=(9.5, 3.0), is_3d=False):
 def fig_to_b64(fig: Figure, dpi: int = 72) -> str:
     """Retorna Base64 JPEG. dpi configurable por chart para controlar velocidad."""
     buf = io.BytesIO()
-    fig.savefig(buf, format="jpeg", dpi=dpi, bbox_inches=None, facecolor=MPL_BG, edgecolor=MPL_BG)
+    fig.savefig(buf, format="jpeg", dpi=dpi, bbox_inches='tight', facecolor=MPL_BG, edgecolor=MPL_BG)
     buf.seek(0)
     enc = base64.b64encode(buf.read()).decode()
     buf.close()

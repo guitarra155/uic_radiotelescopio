@@ -147,6 +147,6 @@ def build_statistics(page: ft.Page) -> ft.Control:
         ft.Container(content=img, expand=True, bgcolor=PANEL_BG,
                      border_radius=10, border=border_all(), padding=6),
         side,
-    ], spacing=12, expand=True)
+    ], spacing=12, expand=True, vertical_alignment=ft.CrossAxisAlignment.STRETCH)
 
     return main_container

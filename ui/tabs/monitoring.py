@@ -151,7 +151,7 @@ def build_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
     )
 
     return ft.Container(
-        content=ft.Row([graphs, side], spacing=12, expand=True),
+        content=ft.Row([graphs, side], spacing=12, expand=True, vertical_alignment=ft.CrossAxisAlignment.STRETCH),
         expand=75,
         padding=ft.Padding(left=5, top=0, right=0, bottom=0),
     )

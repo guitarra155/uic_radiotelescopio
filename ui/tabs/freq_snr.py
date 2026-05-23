@@ -283,7 +283,7 @@ def build_freq_snr(page: ft.Page, key_state: dict) -> ft.Control:
     )
 
     return ft.Container(
-        content=ft.Row([chart_container, side], spacing=10, expand=True),
+        content=ft.Row([chart_container, side], spacing=10, expand=True, vertical_alignment=ft.CrossAxisAlignment.STRETCH),
         expand=True,
         padding=ft.Padding(left=14, top=14, right=14, bottom=14),
     )
