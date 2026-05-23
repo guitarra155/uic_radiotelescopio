@@ -143,9 +143,42 @@ def build_statistics(page: ft.Page) -> ft.Control:
         ], spacing=8),
     )
 
+    def on_fullscreen_global(e):
+        from core.dsp_engine import engine_instance
+        is_fs = getattr(engine_instance, "chart_fullscreen_active", False)
+        engine_instance.chart_fullscreen_active = not is_fs
+        
+        is_fs = engine_instance.chart_fullscreen_active
+        side.visible = not is_fs
+            
+        e.control.page.pubsub.send_all("toggle_fullscreen_chart")
+
+    btn_fs = ft.IconButton(
+        icon=ft.Icons.ASPECT_RATIO,
+        icon_color=ACCENT_AMBER,
+        icon_size=18,
+        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4)),
+        on_click=on_fullscreen_global,
+        tooltip="Pantalla Completa (Global)",
+        padding=0,
+        width=26,
+        height=26
+    )
+
+    chart_area = ft.Container(
+        content=ft.Column([
+            ft.Row([
+                ft.Text("HISTOGRAMA / DISTRIBUCIÓN", color=ACCENT_CYAN, size=10, weight=ft.FontWeight.BOLD),
+                btn_fs
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+            ft.Container(content=img, expand=True)
+        ], spacing=2, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
+        expand=True, bgcolor=PANEL_BG,
+        border_radius=10, border=border_all(), padding=6
+    )
+
     main_container.content = ft.Row([
-        ft.Container(content=img, expand=True, bgcolor=PANEL_BG,
-                     border_radius=10, border=border_all(), padding=6),
+        chart_area,
         side,
     ], spacing=12, expand=True, vertical_alignment=ft.CrossAxisAlignment.STRETCH)
 

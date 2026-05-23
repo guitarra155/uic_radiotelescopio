@@ -26,7 +26,7 @@
         "corr_max_lag": 1024,
         "ar_n_freqs": 1024,
         "cwt_n_scales": 2048,
-        "spec2d_method": "cwt"
+        "spec2d_method": "waterfall"
     },
     "analysis_window_sec": 0.1,
     "moving_avg_samples": 3,
@@ -39,12 +39,12 @@
     "visual_span_mhz": 2.4,
     "charts_config": {
         "mon_raw_spec": {
-            "xmin": 1419.46825,
-            "xmax": 1421.34325,
+            "xmin": 1419.2057499999999,
+            "xmax": 1421.60575,
             "ymin": -100.0,
             "ymax": -20.0,
-            "auto_x": 1,
-            "auto_y": 1
+            "auto_x": 0,
+            "auto_y": 0
         },
         "mon_raw_amp": {
             "xmin": 0.0,
@@ -73,8 +73,8 @@
         "spec_wf": {
             "xmin": 1419.0057499999998,
             "xmax": 1421.0057499999998,
-            "ymin": -56.157590502009114,
-            "ymax": -23.741343653018944,
+            "ymin": -56.81139823567569,
+            "ymax": -31.899608212868042,
             "auto_x": 0,
             "auto_y": 1
         },
@@ -104,11 +104,11 @@
         },
         "stat_hist": {
             "xmin": 0.0,
-            "xmax": 1.5,
+            "xmax": 0.02,
             "ymin": 0.0,
-            "ymax": 100.0,
+            "ymax": 643.46683,
             "auto_x": 0,
-            "auto_y": 0
+            "auto_y": 1
         },
         "pow_time": {
             "xmin": 0.0,

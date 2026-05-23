@@ -314,8 +314,36 @@ def build_algo_result(page: ft.Page) -> ft.Control:
         left=ft.BorderSide(1, BORDER_COL),
     )
 
+    def on_fullscreen_global(e):
+        from core.dsp_engine import engine_instance
+        is_fs = getattr(engine_instance, "chart_fullscreen_active", False)
+        engine_instance.chart_fullscreen_active = not is_fs
+        
+        is_fs = engine_instance.chart_fullscreen_active
+        side.visible = not is_fs
+            
+        e.control.page.pubsub.send_all("toggle_fullscreen_chart")
+
+    btn_fs = ft.IconButton(
+        icon=ft.Icons.ASPECT_RATIO,
+        icon_color=ACCENT_AMBER,
+        icon_size=18,
+        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4)),
+        on_click=on_fullscreen_global,
+        tooltip="Pantalla Completa (Global)",
+        padding=0,
+        width=26,
+        height=26
+    )
+
     chart_container = ft.Container(
-        content=img,
+        content=ft.Column([
+            ft.Row([
+                ft.Text("ALGORITMO DSP", color=ACCENT_CYAN, size=10, weight=ft.FontWeight.BOLD),
+                btn_fs
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+            img
+        ], spacing=2, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
         expand=True,
         bgcolor=PANEL_BG,
         border_radius=10,

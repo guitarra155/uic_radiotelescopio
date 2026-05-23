@@ -435,39 +435,73 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
         padding=ft.Padding(left=14, top=14, right=14, bottom=14),
     )
 
+    def on_fullscreen_global(e):
+        is_fs = getattr(engine_instance, "chart_fullscreen_active", False)
+        engine_instance.chart_fullscreen_active = not is_fs
+        
+        is_fs = engine_instance.chart_fullscreen_active
+        header_row1.visible = not is_fs
+        header_row2.visible = not is_fs
+        legend.visible = not is_fs
+            
+        e.control.page.pubsub.send_all("toggle_fullscreen_chart")
+
+    btn_fs = ft.IconButton(
+        icon=ft.Icons.ASPECT_RATIO,
+        icon_color=ACCENT_AMBER,
+        icon_size=18,
+        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4)),
+        on_click=on_fullscreen_global,
+        tooltip="Pantalla Completa (Global)",
+        padding=0,
+        width=26,
+        height=26
+    )
+
+    header_row1 = ft.Row(
+        [
+            ft.Text(
+                "Espectrograma 2D",
+                color=ACCENT_CYAN,
+                weight=ft.FontWeight.BOLD,
+                size=14,
+            ),
+            method_radio,
+            cwt_scales_row,
+            ar_order_row,
+            corr_lag_row,
+            ft.TextButton(
+                "Restaurar",
+                on_click=reset_defaults,
+                style=ft.ButtonStyle(color=ACCENT_CYAN),
+            ),
+            ft.Container(expand=True)
+        ],
+        alignment=ft.MainAxisAlignment.START,
+        spacing=12,
+        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+    )
+    
+    header_row2 = ft.Row([desc_text, ft.Container(expand=True), status_badge], spacing=8)
+
     main_container.content = ft.Column(
         [
-            ft.Row(
-                [
-                    ft.Text(
-                        "Espectrograma 2D",
-                        color=ACCENT_CYAN,
-                        weight=ft.FontWeight.BOLD,
-                        size=14,
-                    ),
-                    method_radio,
-                    cwt_scales_row,
-                    ar_order_row,
-                    corr_lag_row,
-                    ft.TextButton(
-                        "Restaurar",
-                        on_click=reset_defaults,
-                        style=ft.ButtonStyle(color=ACCENT_CYAN),
-                    ),
-                ],
-                alignment=ft.MainAxisAlignment.START,
-                spacing=12,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            ),
-            ft.Row([desc_text, ft.Container(expand=True), status_badge], spacing=8),
+            header_row1,
+            header_row2,
             ft.Container(
-                content=ft.GestureDetector(
-                    mouse_cursor=ft.MouseCursor.ZOOM_IN,
-                    on_scroll=on_zoom_scroll,
-                    drag_interval=0,
-                    content=img,
-                    expand=True,
-                ),
+                content=ft.Column([
+                    ft.Row([
+                        ft.Text("ESPECTROGRAMA", color=ACCENT_CYAN, size=10, weight=ft.FontWeight.BOLD),
+                        btn_fs
+                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                    ft.GestureDetector(
+                        mouse_cursor=ft.MouseCursor.ZOOM_IN,
+                        on_scroll=on_zoom_scroll,
+                        drag_interval=0,
+                        content=img,
+                        expand=True,
+                    )
+                ], spacing=2, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
                 expand=True,
                 bgcolor=PANEL_BG,
                 border_radius=10,

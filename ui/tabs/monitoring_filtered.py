@@ -84,15 +84,50 @@ def build_monitoring_filtered(page: ft.Page, key_state: dict) -> ft.Control:
             cfg["auto_x"] = False
             engine_instance.save_config()
 
-    def _chart_box(img, chart_id, accent=BORDER_COL):
+    box_spec = ft.Container(content=None, expand=1)
+    box_amp = ft.Container(content=None, expand=1)
+
+    def on_fullscreen_global(e, chart_id):
+        is_fs = getattr(engine_instance, "chart_fullscreen_active", False)
+        engine_instance.chart_fullscreen_active = not is_fs
+        
+        if engine_instance.chart_fullscreen_active:
+            box_spec.visible = (chart_id == "mon_filt_spec")
+            box_amp.visible = (chart_id == "mon_filt_amp")
+            side.visible = False
+        else:
+            box_spec.visible = True
+            box_amp.visible = True
+            side.visible = True
+            
+        e.control.page.pubsub.send_all("toggle_fullscreen_chart")
+
+    def _chart_box(img, chart_id, title, accent=BORDER_COL):
+        btn_fs = ft.IconButton(
+            icon=ft.Icons.ASPECT_RATIO,
+            icon_color=ACCENT_AMBER,
+            icon_size=18,
+            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4)),
+            on_click=lambda e: on_fullscreen_global(e, chart_id),
+            tooltip="Pantalla Completa (Global)",
+            padding=0,
+            width=26,
+            height=26
+        )
         return ft.Container(
-            content=ft.GestureDetector(
-                mouse_cursor=ft.MouseCursor.ZOOM_IN,
-                on_scroll=lambda e: on_zoom_scroll(e, chart_id),
-                drag_interval=0,
-                content=img,
-                expand=True,
-            ),
+            content=ft.Column([
+                ft.Row([
+                    ft.Text(title, color=accent, size=10, weight=ft.FontWeight.BOLD),
+                    btn_fs
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                ft.GestureDetector(
+                    mouse_cursor=ft.MouseCursor.ZOOM_IN,
+                    on_scroll=lambda e: on_zoom_scroll(e, chart_id),
+                    drag_interval=0,
+                    content=img,
+                    expand=True,
+                )
+            ], spacing=2, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
             expand=True,
             bgcolor=PANEL_BG,
             border_radius=8,
@@ -105,14 +140,13 @@ def build_monitoring_filtered(page: ft.Page, key_state: dict) -> ft.Control:
             padding=4,
         )
 
-    graphs = ft.Column(
-        [
-            ft.Container(content=_chart_box(img_spec, "mon_filt_spec", ACCENT_GREEN), expand=1),
-            ft.Container(content=_chart_box(img_amp, "mon_filt_amp", ACCENT_AMBER), expand=1),
-        ],
-        expand=True,
-        spacing=10,
-    )
+    box_spec.content = _chart_box(img_spec, "mon_filt_spec", "ESPECTRO FILTRADO", ACCENT_GREEN)
+    box_amp.content = _chart_box(img_amp, "mon_filt_amp", "AMPLITUD FILTRADA", ACCENT_AMBER)
+
+    graphs = ft.Column([
+        box_spec,
+        box_amp,
+    ], expand=True, spacing=10, horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
 
     side = panel(
         width=230,
