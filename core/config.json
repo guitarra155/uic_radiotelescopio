@@ -26,7 +26,7 @@
         "corr_max_lag": 1024,
         "ar_n_freqs": 1024,
         "cwt_n_scales": 2048,
-        "spec2d_method": "waterfall"
+        "spec2d_method": "cwt"
     },
     "analysis_window_sec": 0.1,
     "moving_avg_samples": 3,
@@ -44,15 +44,15 @@
             "ymin": -100.0,
             "ymax": -20.0,
             "auto_x": 0,
-            "auto_y": 0
+            "auto_y": 1
         },
         "mon_raw_amp": {
             "xmin": 0.0,
             "xmax": 1.0,
             "ymin": 0.0,
             "ymax": 1.0,
-            "auto_x": 0,
-            "auto_y": 0
+            "auto_x": 1,
+            "auto_y": 1
         },
         "mon_filt_spec": {
             "xmin": 1419.2057499999999,
@@ -60,54 +60,54 @@
             "ymin": -100.0,
             "ymax": -20.0,
             "auto_x": 0,
-            "auto_y": 0
+            "auto_y": 1
         },
         "mon_filt_amp": {
             "xmin": 0.0,
             "xmax": 1.0,
             "ymin": 0.0,
             "ymax": 1.0,
-            "auto_x": 0,
-            "auto_y": 0
+            "auto_x": 1,
+            "auto_y": 1
         },
         "spec_wf": {
-            "xmin": 1419.0057499999998,
-            "xmax": 1421.0057499999998,
-            "ymin": -56.81139823567569,
-            "ymax": -31.899608212868042,
-            "auto_x": 0,
+            "xmin": 1419.0,
+            "xmax": 1421.0,
+            "ymin": -100.0,
+            "ymax": -20.0,
+            "auto_x": 1,
             "auto_y": 1
         },
         "spec_cwt": {
-            "xmin": 1419.0057499999998,
-            "xmax": 1421.0057499999998,
+            "xmin": 1419.0,
+            "xmax": 1421.0,
             "ymin": -100.0,
             "ymax": -20.0,
-            "auto_x": 0,
+            "auto_x": 1,
             "auto_y": 1
         },
         "spec_ar": {
-            "xmin": 1419.0057499999998,
-            "xmax": 1421.0057499999998,
+            "xmin": 1419.0,
+            "xmax": 1421.0,
             "ymin": -100.0,
             "ymax": -20.0,
-            "auto_x": 0,
+            "auto_x": 1,
             "auto_y": 1
         },
         "spec_corr": {
-            "xmin": 1419.0057499999998,
-            "xmax": 1421.0057499999998,
+            "xmin": 1419.0,
+            "xmax": 1421.0,
             "ymin": -100.0,
             "ymax": -20.0,
-            "auto_x": 0,
+            "auto_x": 1,
             "auto_y": 1
         },
         "stat_hist": {
             "xmin": 0.0,
-            "xmax": 0.02,
+            "xmax": 1.5,
             "ymin": 0.0,
-            "ymax": 643.46683,
-            "auto_x": 0,
+            "ymax": 100.0,
+            "auto_x": 1,
             "auto_y": 1
         },
         "pow_time": {
@@ -115,16 +115,16 @@
             "xmax": 20.0,
             "ymin": -100.0,
             "ymax": -20.0,
-            "auto_x": 0,
-            "auto_y": 0
+            "auto_x": 1,
+            "auto_y": 1
         },
         "snr_freq": {
-            "xmin": 1419.0057499999998,
-            "xmax": 1421.0057499999998,
+            "xmin": 1419.0,
+            "xmax": 1421.0,
             "ymin": -5.0,
             "ymax": 40.0,
-            "auto_x": 0,
-            "auto_y": 0
+            "auto_x": 1,
+            "auto_y": 1
         }
     },
     "window_res": "1366x768",

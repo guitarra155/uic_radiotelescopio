@@ -8,7 +8,7 @@ from core.constants import *
 from ui.charts import chart_histogram
 from ui.components.shared import panel, border_all
 
-def build_statistics(page: ft.Page) -> ft.Control:
+def build_statistics(page: ft.Page, key_state: dict) -> ft.Control:
     thresh_high = ft.TextField(
         label="Umbral Alto (Energía)", value="15.0",
         color=TEXT_MAIN, bgcolor=DARK_BG,
@@ -165,13 +165,47 @@ def build_statistics(page: ft.Page) -> ft.Control:
         height=26
     )
 
+    def on_zoom_scroll(e: ft.ScrollEvent):
+        from core.dsp_engine import engine_instance
+        ctrl = key_state.get("ctrl", False)
+        shift = key_state.get("shift", False)
+        if not ctrl and not shift:
+            return
+            
+        d = 1 if e.scroll_delta_y > 0 else -1
+        factor = 0.2 * d
+        
+        cfg = engine_instance.charts_config.get("stat_hist", {})
+        
+        if ctrl:
+            s_y = cfg.get("ymax", 100) - cfg.get("ymin", 0)
+            cfg["ymin"] = max(0.0, cfg.get("ymin", 0) - s_y * factor)
+            cfg["ymax"] = cfg.get("ymax", 100) + s_y * factor
+            cfg["auto_y"] = False
+        elif shift:
+            s_x = cfg.get("xmax", 1.5) - cfg.get("xmin", 0.0)
+            cfg["xmin"] = max(0.0, cfg.get("xmin", 0.0) - s_x * factor)
+            cfg["xmax"] = cfg.get("xmax", 1.5) + s_x * factor
+            cfg["auto_x"] = False
+            
+        engine_instance.save_config()
+
     chart_area = ft.Container(
         content=ft.Column([
             ft.Row([
                 ft.Text("HISTOGRAMA / DISTRIBUCIÓN", color=ACCENT_CYAN, size=10, weight=ft.FontWeight.BOLD),
                 btn_fs
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-            ft.Container(content=img, expand=True)
+            ft.Container(
+                content=ft.GestureDetector(
+                    mouse_cursor=ft.MouseCursor.ZOOM_IN,
+                    on_scroll=on_zoom_scroll,
+                    drag_interval=0,
+                    content=img,
+                    expand=True,
+                ),
+                expand=True
+            )
         ], spacing=2, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
         expand=True, bgcolor=PANEL_BG,
         border_radius=10, border=border_all(), padding=6

@@ -82,11 +82,11 @@ class DSPEngine:
         self.data_ready = False     # Flag para notificar a la UI que un bloque de 1s está listo
         self._initializing = False  # Bandera para evitar guardados accidentales
         
-        # Forzar que los switches de auto-escala inicien desactivados por defecto
+        # Por defecto, los switches de auto-escala inician activados
         if hasattr(self, "charts_config"):
             for k in self.charts_config:
-                self.charts_config[k]["auto_x"] = False
-                self.charts_config[k]["auto_y"] = False
+                self.charts_config[k]["auto_x"] = True
+                self.charts_config[k]["auto_y"] = True
         self.spectrum_data = np.zeros(self.fft_size)  # FFT sobre señal FILTRADA
         self.spectrum_raw_data = np.zeros(self.fft_size)  # FFT sobre señal RAW
 
@@ -206,17 +206,17 @@ class DSPEngine:
         # NUEVO: Configuración granular por gráfica
         # Estructura: xmin, xmax, ymin, ymax, auto_x, auto_y
         self.charts_config = {
-            "mon_raw_spec": {"xmin": 1419.0, "xmax": 1421.0, "ymin": -100.0, "ymax": -20.0, "auto_x": False, "auto_y": False},
-            "mon_raw_amp":  {"xmin": 0.0, "xmax": 1.0, "ymin": 0.0, "ymax": 1.0, "auto_x": False, "auto_y": False},
-            "mon_filt_spec": {"xmin": 1419.0, "xmax": 1421.0, "ymin": -100.0, "ymax": -20.0, "auto_x": False, "auto_y": False},
-            "mon_filt_amp": {"xmin": 0.0, "xmax": 1.0, "ymin": 0.0, "ymax": 1.0, "auto_x": False, "auto_y": False},
-            "spec_wf":      {"xmin": 1419.0, "xmax": 1421.0, "ymin": -100.0, "ymax": -20.0, "auto_x": False, "auto_y": True},
-            "spec_cwt":     {"xmin": 1419.0, "xmax": 1421.0, "ymin": -100.0, "ymax": -20.0, "auto_x": False, "auto_y": True},
-            "spec_ar":      {"xmin": 1419.0, "xmax": 1421.0, "ymin": -100.0, "ymax": -20.0, "auto_x": False, "auto_y": True},
-            "spec_corr":    {"xmin": 1419.0, "xmax": 1421.0, "ymin": -100.0, "ymax": -20.0, "auto_x": False, "auto_y": True},
-            "stat_hist":    {"xmin": 0.0, "xmax": 1.5, "ymin": 0.0, "ymax": 100.0, "auto_x": False, "auto_y": False},
-            "pow_time":     {"xmin": 0.0, "xmax": 20.0, "ymin": -100.0, "ymax": -20.0, "auto_x": False, "auto_y": False},
-            "snr_freq":     {"xmin": 1419.0, "xmax": 1421.0, "ymin": -5.0, "ymax": 40.0, "auto_x": False, "auto_y": False},
+            "mon_raw_spec": {"xmin": 1419.0, "xmax": 1421.0, "ymin": -100.0, "ymax": -20.0, "auto_x": True, "auto_y": True},
+            "mon_raw_amp":  {"xmin": 0.0, "xmax": 1.0, "ymin": 0.0, "ymax": 1.0, "auto_x": True, "auto_y": True},
+            "mon_filt_spec": {"xmin": 1419.0, "xmax": 1421.0, "ymin": -100.0, "ymax": -20.0, "auto_x": True, "auto_y": True},
+            "mon_filt_amp": {"xmin": 0.0, "xmax": 1.0, "ymin": 0.0, "ymax": 1.0, "auto_x": True, "auto_y": True},
+            "spec_wf":      {"xmin": 1419.0, "xmax": 1421.0, "ymin": -100.0, "ymax": -20.0, "auto_x": True, "auto_y": True},
+            "spec_cwt":     {"xmin": 1419.0, "xmax": 1421.0, "ymin": -100.0, "ymax": -20.0, "auto_x": True, "auto_y": True},
+            "spec_ar":      {"xmin": 1419.0, "xmax": 1421.0, "ymin": -100.0, "ymax": -20.0, "auto_x": True, "auto_y": True},
+            "spec_corr":    {"xmin": 1419.0, "xmax": 1421.0, "ymin": -100.0, "ymax": -20.0, "auto_x": True, "auto_y": True},
+            "stat_hist":    {"xmin": 0.0, "xmax": 1.5, "ymin": 0.0, "ymax": 100.0, "auto_x": True, "auto_y": True},
+            "pow_time":     {"xmin": 0.0, "xmax": 20.0, "ymin": -100.0, "ymax": -20.0, "auto_x": True, "auto_y": True},
+            "snr_freq":     {"xmin": 1419.0, "xmax": 1421.0, "ymin": -5.0, "ymax": 40.0, "auto_x": True, "auto_y": True},
         }
 
         # ── Variables para Smart Trigger / Recorte Automático ──

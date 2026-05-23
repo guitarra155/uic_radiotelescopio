@@ -18,7 +18,7 @@ def build_config(page: ft.Page) -> ft.Control:
         page.pubsub.send_all("tab_changed")
 
     LABEL_WIDTH = 100
-    INPUT_WIDTH = 145
+    INPUT_WIDTH = 130
     ROW_HEIGHT = 35
 
     def prop_row(label: str, control: ft.Control, tooltip: str = "") -> ft.Row:
@@ -71,7 +71,7 @@ def build_config(page: ft.Page) -> ft.Control:
         return ft.Row([
             ft.Text(label, color=TEXT_MUTED, size=11, width=120),
             control
-        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+        ], alignment=ft.MainAxisAlignment.START, spacing=10)
 
     # --- Funciones de construcción dinámica ---
     _live_fields = {}
@@ -290,9 +290,9 @@ def build_config(page: ft.Page) -> ft.Control:
     
     wrapper = ft.Container(
         content=root_container,
-        width=300,
+        width=315,
         bgcolor=PANEL_BG if engine_instance.active_tab != 0 else ft.Colors.TRANSPARENT,
-        padding=15 if engine_instance.active_tab != 0 else 5,
+        padding=ft.Padding(left=15, top=15, right=20, bottom=15) if engine_instance.active_tab != 0 else 5,
     )
     
     is_collapsed = [False]

@@ -110,7 +110,7 @@ def main(page: ft.Page):
         build_estado(page),                          # 0
         build_dual_monitoring(page, key_state),      # 1
         build_spectrogram(page, key_state),          # 2
-        build_statistics(page),                       # 3
+        build_statistics(page, key_state),            # 3
         build_signal_analysis(page, key_state),      # 4
         build_freq_snr(page, key_state),             # 5
         build_algo_result(page),                     # 6
