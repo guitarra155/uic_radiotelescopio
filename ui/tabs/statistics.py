@@ -61,7 +61,7 @@ def build_statistics(page: ft.Page) -> ft.Control:
     trigger_btn.on_click = on_trigger
     trigger_btn.content = "⚡  Armar Auto-Recorte (±1.5s)"
 
-    img = ft.Image(src=chart_histogram(), fit=ft.BoxFit.CONTAIN,
+    img = ft.Image(src=chart_histogram(), fit=ft.BoxFit.FILL,
                    gapless_playback=True, border_radius=8, expand=True)
 
     main_container = ft.Container(

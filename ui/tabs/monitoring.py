@@ -33,9 +33,9 @@ def build_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
 
     rfi_switch.on_change = on_rfi
 
-    img_spec = ft.Image(src=chart_spectrum_raw(), fit=ft.BoxFit.CONTAIN,
+    img_spec = ft.Image(src=chart_spectrum_raw(), fit=ft.BoxFit.FILL,
                         gapless_playback=True, border_radius=8, expand=True)
-    img_amp  = ft.Image(src=chart_amplitude(),   fit=ft.BoxFit.CONTAIN,
+    img_amp  = ft.Image(src=chart_amplitude(),   fit=ft.BoxFit.FILL,
                         gapless_playback=True, border_radius=8, expand=True)
 
     is_rendering = [False]
@@ -116,7 +116,7 @@ def build_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
     graphs = ft.Column([
         ft.Container(content=_chart_box(img_spec, "mon_raw_spec", ACCENT_CYAN), expand=1),
         ft.Container(content=_chart_box(img_amp,  "mon_raw_amp", ACCENT_CYAN), expand=1),
-    ], expand=True, spacing=10)
+    ], expand=True, spacing=10, horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
 
     side = panel(
         width=230,

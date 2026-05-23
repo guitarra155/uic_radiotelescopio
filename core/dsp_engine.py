@@ -31,8 +31,11 @@ class DSPEngine:
         self.db_max = 0.0
         self.f_min = 1420.0
         self.f_max = 1421.0
-        self.window_width = 1920
-        self.window_height = 1080
+        self.window_width = 1280
+        self.window_height = 720
+        self.is_config_collapsed = False
+        
+        # Opciones de Ventana y Visualización
         self.window_res = "Auto-Detect (Pantalla Actual)"
         self.window_mode = "Normal"
         self.trigger_high = 15.0

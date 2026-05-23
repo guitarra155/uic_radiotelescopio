@@ -108,7 +108,7 @@ def build_algo_tab(page: ft.Page, algo_key: str,
     # Imagen principal del resultado
     img = ft.Image(
         src=None,
-        fit=ft.BoxFit.CONTAIN,
+        fit=ft.BoxFit.FILL,
         gapless_playback=True,
         border_radius=10,
         expand=True,

@@ -289,11 +289,13 @@ def build_config(page: ft.Page) -> ft.Control:
     def toggle_collapse(e):
         is_collapsed[0] = not is_collapsed[0]
         wrapper.visible = not is_collapsed[0]
-        collapse_btn.icon = ft.Icons.KEYBOARD_ARROW_RIGHT if is_collapsed[0] else ft.Icons.KEYBOARD_ARROW_LEFT
+        collapse_btn.icon = ft.Icons.KEYBOARD_ARROW_LEFT if is_collapsed[0] else ft.Icons.KEYBOARD_ARROW_RIGHT
+        engine_instance.is_config_collapsed = is_collapsed[0]
+        e.control.page.pubsub.send_all("refresh_charts")
         e.control.page.update()
 
     collapse_btn = ft.IconButton(
-        icon=ft.Icons.KEYBOARD_ARROW_LEFT,
+        icon=ft.Icons.KEYBOARD_ARROW_RIGHT,
         icon_color=ACCENT_CYAN,
         icon_size=20,
         on_click=toggle_collapse,

@@ -15,14 +15,14 @@ def build_monitoring_filtered(page: ft.Page, key_state: dict) -> ft.Control:
 
     img_spec = ft.Image(
         src=chart_spectrum(),
-        fit=ft.BoxFit.CONTAIN,
+        fit=ft.BoxFit.FILL,
         gapless_playback=True,
         border_radius=8,
         expand=True,
     )
     img_amp = ft.Image(
         src=chart_amplitude_ma(),
-        fit=ft.BoxFit.CONTAIN,
+        fit=ft.BoxFit.FILL,
         gapless_playback=True,
         border_radius=8,
         expand=True,

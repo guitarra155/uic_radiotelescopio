@@ -14,7 +14,7 @@ def build_signal_analysis(page: ft.Page, key_state: dict) -> ft.Control:
     from core.dsp_engine import engine_instance
     import numpy as np
 
-    img = ft.Image(src=chart_power_time(), fit=ft.BoxFit.CONTAIN,
+    img = ft.Image(src=chart_power_time(), fit=ft.BoxFit.FILL,
                    gapless_playback=True, border_radius=10, expand=True)
 
     # ── Métricas ─────────────────────────────────────────────────────────────
