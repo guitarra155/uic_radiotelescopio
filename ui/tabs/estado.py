@@ -306,12 +306,86 @@ def build_estado(page: ft.Page) -> ft.Control:
         ], spacing=15)
     )
 
-    info_col = ft.Column([
+    import asyncio
+    import threading
+    res_opts = [ft.dropdown.Option(o) for o in ["Auto-Detect (Pantalla Actual)", "1920x1080", "1600x900", "1366x768", "1280x720", "2560x1440"]]
+    res_dd = ft.Dropdown(label="Resolución Inicial", value=getattr(engine_instance, "window_res", "Auto-Detect (Pantalla Actual)"), options=res_opts, text_size=12, color=TEXT_MAIN, bgcolor=DARK_BG, border_color=BORDER_COL)
+    
+    mode_opts = [ft.dropdown.Option(o) for o in ["Normal", "Maximizada", "Pantalla Completa"]]
+    mode_dd = ft.Dropdown(label="Modo Ventana", value=getattr(engine_instance, "window_mode", "Normal"), options=mode_opts, text_size=12, color=TEXT_MAIN, bgcolor=DARK_BG, border_color=BORDER_COL)
+    
+    def apply_window_config(e):
+        engine_instance.window_res = res_dd.value
+        engine_instance.window_mode = mode_dd.value
+        engine_instance.save_config()
+        
+        page = e.control.page
+        if res_dd.value == "Auto-Detect (Pantalla Actual)":
+            import tkinter as tk
+            root = tk.Tk()
+            w, h = root.winfo_screenwidth(), root.winfo_screenheight()
+            root.destroy()
+        else:
+            parts = res_dd.value.split("x")
+            w, h = int(parts[0]), int(parts[1])
+            
+        if mode_dd.value == "Pantalla Completa":
+            page.window.full_screen = True
+            page.window.maximized = False
+        elif mode_dd.value == "Maximizada":
+            page.window.full_screen = False
+            page.window.maximized = True
+            page.window.width = w
+            page.window.height = h
+        else:
+            page.window.full_screen = False
+            page.window.maximized = False
+            page.window.width = w
+            page.window.height = h
+        page.update()
+
+        btn = e.control
+        btn.text = "¡Guardado!"
+        btn.bgcolor = ACCENT_GREEN
+        btn.update()
+        async def revert():
+            await asyncio.sleep(1.5)
+            btn.text = "🖥️ Aplicar y Guardar"
+            btn.bgcolor = ACCENT_CYAN
+            try: btn.update()
+            except: pass
+        threading.Thread(target=lambda: asyncio.run(revert())).start()
+
+    apply_btn = ft.ElevatedButton("🖥️ Aplicar y Guardar", on_click=apply_window_config, style=ft.ButtonStyle(bgcolor=ACCENT_CYAN, color=DARK_BG, shape=ft.RoundedRectangleBorder(radius=4)))
+
+    window_card = panel(
+        content=ft.Column([
+            ft.Text("🖥️ PANTALLA Y VENTANA", size=14, weight=ft.FontWeight.BOLD, color="#B380FF"),
+            ft.Divider(height=10, color="#B380FF"),
+            res_dd, 
+            ft.Container(height=5),
+            mode_dd, 
+            ft.Container(height=10),
+            apply_btn
+        ], spacing=5)
+    )
+
+    left_col = ft.Column([
+        data_source_card,
+    ], spacing=20, expand=4, scroll=ft.ScrollMode.AUTO)
+
+    mid_col = ft.Column([
+        freq_card,
+        hw_card,
+    ], spacing=20, expand=4, scroll=ft.ScrollMode.AUTO)
+
+    right_col = ft.Column([
+        window_card,
         info_card
     ], spacing=20, expand=4, scroll=ft.ScrollMode.AUTO)
 
     return ft.Container(
-        content=ft.Row([config_col, info_col], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.START, spacing=30, expand=True),
+        content=ft.Row([left_col, mid_col, right_col], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.START, spacing=30, expand=True),
         expand=True,
         padding=ft.Padding(left=30, top=20, right=30, bottom=40),
     )

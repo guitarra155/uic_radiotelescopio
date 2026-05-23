@@ -31,6 +31,10 @@ class DSPEngine:
         self.db_max = 0.0
         self.f_min = 1420.0
         self.f_max = 1421.0
+        self.window_width = 1920
+        self.window_height = 1080
+        self.window_res = "Auto-Detect (Pantalla Actual)"
+        self.window_mode = "Normal"
         self.trigger_high = 15.0
         self.trigger_low = 5.0
         self.iq_filename = ""
@@ -1098,6 +1102,8 @@ class DSPEngine:
             "use_welch": self.use_welch,
             "visual_span_mhz": self.visual_span_mhz,
             "charts_config": self.charts_config,
+            "window_res": getattr(self, "window_res", "Auto-Detect (Pantalla Actual)"),
+            "window_mode": getattr(self, "window_mode", "Normal"),
         }
         try:
             import json, os
@@ -1138,6 +1144,8 @@ class DSPEngine:
 
                 self.snr_db_min = conf.get("snr_db_min", self.snr_db_min)
                 self.snr_db_max = conf.get("snr_db_max", self.snr_db_max)
+                self.window_res = conf.get("window_res", getattr(self, "window_res", "Auto-Detect (Pantalla Actual)"))
+                self.window_mode = conf.get("window_mode", getattr(self, "window_mode", "Normal"))
 
                 ap = conf.get("algo_params")
                 if ap and isinstance(ap, dict):

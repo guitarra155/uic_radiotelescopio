@@ -64,13 +64,15 @@ def get_cached_fig(name, figsize=(9.5, 3.0), is_3d=False):
 
 
 def fig_to_b64(fig: Figure, dpi: int = 72) -> str:
-    """Retorna Base64 JPEG. dpi configurable por chart para controlar velocidad."""
+    """Retorna Base64 SVG para que los ejes tengan resolución vectorial perfecta, 
+    mientras los rasterizados (gráficas 2D) quedan incrustados."""
     buf = io.BytesIO()
-    fig.savefig(buf, format="jpeg", dpi=dpi, bbox_inches='tight', facecolor=MPL_BG, edgecolor=MPL_BG)
+    # SVG garantiza resolución infinita en las etiquetas y ejes de Flet sin pixelarse.
+    fig.savefig(buf, format="svg", bbox_inches='tight', facecolor=MPL_BG, edgecolor=MPL_BG)
     buf.seek(0)
     enc = base64.b64encode(buf.read()).decode()
     buf.close()
-    return f"data:image/jpeg;base64,{enc}"
+    return f"data:image/svg+xml;base64,{enc}"
 
 
 def safe_set_ylim(ax, ymin, ymax, fallback_span=10.0):

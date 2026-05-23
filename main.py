@@ -43,8 +43,36 @@ def main(page: ft.Page):
     page.title      = "Plataforma DSP"
     page.theme_mode = ft.ThemeMode.DARK
     page.bgcolor    = DARK_BG
-    page.window.width     = 1920    
-    page.window.height    = 1080
+    # Leer configuración guardada de ventana
+    saved_res = getattr(engine_instance, "window_res", "Auto-Detect (Pantalla Actual)")
+    saved_mode = getattr(engine_instance, "window_mode", "Normal")
+
+    if saved_res and saved_res != "Auto-Detect (Pantalla Actual)":
+        try:
+            parts = saved_res.split("x")
+            page.window.width = int(parts[0])
+            page.window.height = int(parts[1])
+        except:
+            page.window.width = 1920
+            page.window.height = 1080
+    elif saved_res == "Auto-Detect (Pantalla Actual)":
+        try:
+            import tkinter as tk
+            root = tk.Tk()
+            page.window.width = root.winfo_screenwidth()
+            page.window.height = root.winfo_screenheight()
+            root.destroy()
+        except:
+            page.window.width = 1920
+            page.window.height = 1080
+    else:
+        page.window.width = 1920    
+        page.window.height = 1080
+        
+    if saved_mode == "Pantalla Completa":
+        page.window.full_screen = True
+    elif saved_mode == "Maximizada":
+        page.window.maximized = True
     page.window.min_width = 900
     page.window.min_height= 620
     page.padding = 0
@@ -112,6 +140,7 @@ def main(page: ft.Page):
             engine_instance.active_tab = idx
             
             tab_body.content = tab_contents[idx]
+            right_panel.visible = (idx != 0)
             
             tab_btns[idx].content.color = ACCENT_CYAN
             indicators[idx].bgcolor = ACCENT_CYAN
@@ -157,7 +186,8 @@ def main(page: ft.Page):
         content=build_config(page),
         border=ft.Border(left=ft.BorderSide(1, BORDER_COL)),
         bgcolor=DARK_BG,
-        expand= 35
+        expand= 35,
+        visible=False
     )
 
     lower_split = ft.Row([left_panel_content, right_panel], expand=True, spacing=0)

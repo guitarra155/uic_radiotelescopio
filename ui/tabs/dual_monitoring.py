@@ -64,17 +64,76 @@ def build_dual_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
             cfg["auto_x"] = False
             engine_instance.save_config()
 
+    maximized_chart = [None]
+    
+    # Pre-declarar las cajas y filas
+    box_spec_raw = None
+    box_spec_filt = None
+    box_amp_raw = None
+    box_amp_filt = None
+    row_1 = None
+    row_2 = None
+    
+    def on_maximize(e, chart_id):
+        if maximized_chart[0] == chart_id:
+            maximized_chart[0] = None  # Restaurar
+            icon = ft.Icons.FULLSCREEN
+        else:
+            maximized_chart[0] = chart_id  # Maximizar
+            icon = ft.Icons.FULLSCREEN_EXIT
+            
+        e.control.icon = icon
+        
+        # Restaurar todo por defecto
+        box_spec_raw.visible = box_spec_filt.visible = True
+        box_amp_raw.visible = box_amp_filt.visible = True
+        row_1.visible = row_2.visible = True
+        
+        # Ocultar lo que no se necesita
+        if maximized_chart[0] == "mon_raw_spec":
+            box_spec_filt.visible = row_2.visible = False
+        elif maximized_chart[0] == "mon_filt_spec":
+            box_spec_raw.visible = row_2.visible = False
+        elif maximized_chart[0] == "mon_raw_amp":
+            box_amp_filt.visible = row_1.visible = False
+        elif maximized_chart[0] == "mon_filt_amp":
+            box_amp_raw.visible = row_1.visible = False
+            
+        # Actualizar los iconos de todos para que el estado sea correcto
+        for box in [box_spec_raw, box_spec_filt, box_amp_raw, box_amp_filt]:
+            btn = box.content.controls[0].controls[1]
+            if maximized_chart[0] is None:
+                btn.icon = ft.Icons.FULLSCREEN
+            else:
+                if box.visible:
+                    btn.icon = ft.Icons.FULLSCREEN_EXIT
+                    
+        e.control.page.update()
+
     def _chart_box(img, chart_id, title, accent):
+        btn = ft.IconButton(
+            icon=ft.Icons.FULLSCREEN,
+            icon_color=TEXT_MUTED,
+            icon_size=18,
+            on_click=lambda e: on_maximize(e, chart_id),
+            tooltip="Maximizar/Restaurar",
+            padding=0,
+            width=24,
+            height=24
+        )
         return ft.Container(
             content=ft.Column([
-                ft.Text(title, color=accent, size=10, weight=ft.FontWeight.BOLD),
+                ft.Row([
+                    ft.Text(title, color=accent, size=10, weight=ft.FontWeight.BOLD),
+                    btn
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                 ft.GestureDetector(
                     mouse_cursor=ft.MouseCursor.ZOOM_IN,
                     on_scroll=lambda e: on_zoom_scroll(e, chart_id),
                     content=img,
                     expand=True,
                 )
-            ], spacing=2),
+            ], spacing=2, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
             expand=True,
             bgcolor=PANEL_BG,
             border_radius=8,
@@ -83,17 +142,19 @@ def build_dual_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
             padding=6,
         )
 
+    box_spec_raw = _chart_box(img_spec_raw, "mon_raw_spec", "ESPECTRO ORIGINAL", ACCENT_CYAN)
+    box_spec_filt = _chart_box(img_spec_filt, "mon_filt_spec", "ESPECTRO FILTRADO", ACCENT_GREEN)
+    box_amp_raw = _chart_box(img_amp_raw, "mon_raw_amp", "AMPLITUD ORIGINAL", ACCENT_CYAN)
+    box_amp_filt = _chart_box(img_amp_filt, "mon_filt_amp", "AMPLITUD FILTRADA (MA)", ACCENT_AMBER)
+
+    row_1 = ft.Row([box_spec_raw, box_spec_filt], expand=True, spacing=10, vertical_alignment=ft.CrossAxisAlignment.STRETCH)
+    row_2 = ft.Row([box_amp_raw, box_amp_filt], expand=True, spacing=10, vertical_alignment=ft.CrossAxisAlignment.STRETCH)
+
     # Grid 2x2
     grid = ft.Column([
-        ft.Row([
-            _chart_box(img_spec_raw,  "mon_raw_spec",  "ESPECTRO ORIGINAL",  ACCENT_CYAN),
-            _chart_box(img_spec_filt, "mon_filt_spec", "ESPECTRO FILTRADO", ACCENT_GREEN),
-        ], expand=True, spacing=10, vertical_alignment=ft.CrossAxisAlignment.STRETCH),
-        ft.Row([
-            _chart_box(img_amp_raw,   "mon_raw_amp",   "AMPLITUD ORIGINAL",  ACCENT_CYAN),
-            _chart_box(img_amp_filt,  "mon_filt_amp",  "AMPLITUD FILTRADA (MA)", ACCENT_AMBER),
-        ], expand=True, spacing=10, vertical_alignment=ft.CrossAxisAlignment.STRETCH),
-    ], expand=True, spacing=10)
+        row_1,
+        row_2,
+    ], expand=True, spacing=10, horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
 
     return ft.Container(
         content=grid,

@@ -117,7 +117,7 @@ def build_config(page: ft.Page) -> ft.Control:
     rfi_count_val = ft.Text(f"{engine_instance.rfi_event_count}", color=ACCENT_AMBER, size=10, weight=ft.FontWeight.BOLD)
 
     # Columna principal persistente para mantener el scroll y el foco de los inputs
-    main_col = ft.Column(scroll=ft.ScrollMode.AUTO, spacing=10)
+    main_col = ft.Column(scroll=ft.ScrollMode.AUTO, spacing=10, expand=True)
 
     def render_panel():
         """Genera la estructura de controles. Solo se llama al cambiar de pestaña."""
@@ -195,26 +195,29 @@ def build_config(page: ft.Page) -> ft.Control:
         elif idx == 6: tab_content = build_axis_group("Algoritmo", "mon_filt_spec")
         else: tab_content = ft.Text("Configuración general activa", color=TEXT_MUTED, size=10)
 
-        sync_btn = make_toggle(engine_instance.sync_active, 
-            lambda e: (engine_instance.apply_sync_mode(not engine_instance.sync_active), on_ui_event(e)))
-        
-        reset_btn = ft.ElevatedButton("Reset Global", icon=ft.Icons.RESTART_ALT, 
-            on_click=lambda e: (engine_instance.reset_to_defaults(), on_ui_event(e)),
-            style=ft.ButtonStyle(bgcolor=ft.Colors.RED_900, color=ft.Colors.WHITE, shape=ft.RoundedRectangleBorder(radius=4)))
-        
-        try:
-            reset_btn.tab_index = -1
-        except:
-            pass
+        if idx == 0:
+            main_col.controls = []
+        else:
+            sync_btn = make_toggle(engine_instance.sync_active, 
+                lambda e: (engine_instance.apply_sync_mode(not engine_instance.sync_active), on_ui_event(e)))
+            
+            reset_btn = ft.ElevatedButton("Reset Global", icon=ft.Icons.RESTART_ALT, 
+                on_click=lambda e: (engine_instance.reset_to_defaults(), on_ui_event(e)),
+                style=ft.ButtonStyle(bgcolor=ft.Colors.RED_900, color=ft.Colors.WHITE, shape=ft.RoundedRectangleBorder(radius=4)))
+            
+            try:
+                reset_btn.tab_index = -1
+            except:
+                pass
 
-        main_col.controls = [
-            ft.Text("⚙️ CONFIGURACIÓN", size=14, weight=ft.FontWeight.BOLD, color=ACCENT_CYAN),
-            ft.Divider(height=10, color=ACCENT_CYAN),
-            row("Sincronización", sync_btn),
-            reset_btn,
-            ft.Divider(height=20, color=BORDER_COL),
-            tab_content
-        ]
+            main_col.controls = [
+                ft.Text("⚙️ CONFIGURACIÓN", size=14, weight=ft.FontWeight.BOLD, color=ACCENT_CYAN),
+                ft.Divider(height=10, color=ACCENT_CYAN),
+                row("Sincronización", sync_btn),
+                reset_btn,
+                ft.Divider(height=20, color=BORDER_COL),
+                tab_content
+            ]
 
     def update_stats():
         """Solo actualiza los valores de los textos, sin recrear controles."""
@@ -255,6 +258,15 @@ def build_config(page: ft.Page) -> ft.Control:
             render_panel()
             try: main_col.update()
             except: pass
+            
+            # Actualizar estilos del wrapper dinámicamente
+            try:
+                idx = engine_instance.active_tab
+                wrapper.bgcolor = PANEL_BG if idx != 0 else ft.Colors.TRANSPARENT
+                wrapper.padding = 15 if idx != 0 else 5
+                wrapper.update()
+            except: pass
+
         elif msg == "refresh_charts":
             if engine_instance.active_tab == 1:
                 update_stats()
@@ -265,10 +277,15 @@ def build_config(page: ft.Page) -> ft.Control:
     render_panel()
     root_container.content = main_col
     
-    return ft.Container(
+    wrapper = ft.Container(
         content=root_container,
         width=300,
-        bgcolor=PANEL_BG,
-        padding=15,
-        border=ft.Border(left=ft.BorderSide(1, BORDER_COL))
+        expand=True,
+        bgcolor=PANEL_BG if engine_instance.active_tab != 0 else ft.Colors.TRANSPARENT,
+        padding=15 if engine_instance.active_tab != 0 else 5,
     )
+    
+    # Re-asignar para poder actualizarlo desde _update_ui
+    page.pubsub.subscribe(lambda msg: wrapper.update() if msg == "tab_changed" else None)
+    
+    return wrapper
