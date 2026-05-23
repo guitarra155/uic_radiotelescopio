@@ -690,14 +690,13 @@ class DSPEngine:
                     cfg["ymin"] = float(max(0.0, a_min - diff * 0.1))
                     cfg["ymax"] = float(a_max + diff * 0.2)
                 elif chart_id == "pow_time":
-                    p_valid = self.power_time_data[self.power_time_data > -110]
-                    if len(p_valid) > 2 and cfg.get("auto_y", True):
+                    written = min(self.power_samples_written, len(self.power_time_data))
+                    if written > 2 and cfg.get("auto_y", True):
+                        p_valid = self.power_time_data[:written]
                         p_min = float(np.nanmin(p_valid))
                         p_max = float(np.nanmax(p_valid))
-                        # Enmarcar con un margen del 15% para que no toque los bordes
-                        diff = max(2.0, p_max - p_min)
-                        cfg["ymin"] = float(p_min - diff * 0.15)
-                        cfg["ymax"] = float(p_max + diff * 0.15)
+                        cfg["ymin"] = float(p_min - 5.0)
+                        cfg["ymax"] = float(p_max + 5.0)
                 elif chart_id == "snr_freq":
                     s_max = float(np.nanpercentile(self.snr_data, 99))
                     if cfg.get("auto_y", True):

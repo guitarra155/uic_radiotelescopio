@@ -108,6 +108,7 @@ def build_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
             box_amp.visible = True
             side.visible = True
             
+        e.control.icon = ft.Icons.CLOSE_FULLSCREEN if engine_instance.chart_fullscreen_active else ft.Icons.ASPECT_RATIO
         e.control.page.pubsub.send_all("toggle_fullscreen_chart")
 
     def _chart_box(img, chart_id, title, accent=BORDER_COL):

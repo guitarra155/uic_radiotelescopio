@@ -151,6 +151,7 @@ def build_statistics(page: ft.Page, key_state: dict) -> ft.Control:
         is_fs = engine_instance.chart_fullscreen_active
         side.visible = not is_fs
             
+        e.control.icon = ft.Icons.CLOSE_FULLSCREEN if engine_instance.chart_fullscreen_active else ft.Icons.ASPECT_RATIO
         e.control.page.pubsub.send_all("toggle_fullscreen_chart")
 
     btn_fs = ft.IconButton(

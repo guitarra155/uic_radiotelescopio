@@ -88,7 +88,14 @@ def build_estado(page: ft.Page) -> ft.Control:
     )
 
     freq_f = txt_field("Frecuencia (MHz)", f"{engine_instance.center_freq:.8f}", "e.g. 1420.40")
-    rate_f = txt_field("Sample Rate (MSps)", f"{engine_instance.sample_rate / 1e6:.8f}", "")
+    
+    current_sr = engine_instance.sample_rate / 1e6
+    sr_str = f"{current_sr:.1f}" if current_sr.is_integer() else str(current_sr).rstrip('0').rstrip('.')
+    if '.' not in sr_str: sr_str += ".0"
+    rate_opts = ["40.0", "20.0", "10.0", "5.0", "2.5", "1.25", "0.625", "0.3125"]
+    if sr_str not in rate_opts: rate_opts.append(sr_str)
+    
+    rate_f = dd("Sample Rate (MSps)", sr_str, rate_opts)
     span_visual_f = txt_field("Span Visual (Zoom MHz)", f"{engine_instance.visual_span_mhz:.8f}", "e.g. 1.0")
 
     ref_level_f = txt_field("Nivel Ref. (dBm)", f"{engine_instance.bb60c_ref_level:.8f}", "-100 a +20")
@@ -111,14 +118,14 @@ def build_estado(page: ft.Page) -> ft.Control:
         except ValueError: pass
 
     freq_f.on_submit = lambda e: on_global_change(e, "center_freq")
-    rate_f.on_submit = lambda e: on_global_change(e, "sample_rate", factor=1e6)
+    rate_f.on_change = lambda e: on_global_change(e, "sample_rate", factor=1e6)
     ref_level_f.on_submit = lambda e: on_global_change(e, "bb60c_ref_level")
     rbw_f.on_submit       = lambda e: on_global_change(e, "bb60c_iq_bw")
     vbw_alpha_f.on_submit = lambda e: on_global_change(e, "vbw_alpha")
     
     # También aplicar a on_blur para que guarde si hacen click fuera del campo
     freq_f.on_blur = lambda e: on_global_change(e, "center_freq")
-    rate_f.on_blur = lambda e: on_global_change(e, "sample_rate", factor=1e6)
+    # rate_f is a Dropdown, so it only needs on_change
     ref_level_f.on_blur = lambda e: on_global_change(e, "bb60c_ref_level")
     rbw_f.on_blur       = lambda e: on_global_change(e, "bb60c_iq_bw")
     vbw_alpha_f.on_blur = lambda e: on_global_change(e, "vbw_alpha")
