@@ -292,8 +292,8 @@ def chart_spectrogram() -> str:
         im = ax.imshow(
             data,
             aspect="auto",
-            origin="lower",
-            extent=[fc - fs / 2, fc + fs / 2, 0, total_secs],
+            origin="upper",
+            extent=[fc - fs / 2, fc + fs / 2, total_secs, 0],
             cmap="inferno",
             interpolation="nearest",
             vmin=engine_instance.db_min,
@@ -319,7 +319,8 @@ def chart_spectrogram() -> str:
     if abs(xmax - xmin) < 1e-6:
         xmin, xmax = xmin - 0.5, xmax + 0.5
     
-    im.set_extent([fc - fs / 2, fc + fs / 2, 0, total_secs])
+    im.set_extent([fc - fs / 2, fc + fs / 2, total_secs, 0])
+    ax.set_ylim([total_secs, 0])
     im.set_clim(cfg["ymin"], cfg["ymax"])
     if "cbar" in cache.artists["waterfall"]:
         cache.artists["waterfall"]["cbar"].update_normal(im)
@@ -547,10 +548,11 @@ def chart_cwt_map(result: dict) -> str:
         style_ax(ax, "Escalograma CWT/Morlet 2D", "Frecuencia (MHz)", "Tiempo (s)")
         ax.xaxis.get_major_formatter().set_useOffset(False)
         ax.xaxis.get_major_formatter().set_scientific(False)
+        current_sec = len(matrix) * engine_instance.analysis_window_sec
         im = ax.imshow(
             matrix,
-            aspect="auto", origin="lower",
-            extent=[f0, f1, 0.0, history_sec],
+            aspect="auto", origin="upper",
+            extent=[f0, f1, current_sec, 0.0],
             cmap="inferno",
             vmin=v_min, vmax=v_max,
             interpolation="nearest",
@@ -586,9 +588,10 @@ def chart_cwt_map(result: dict) -> str:
         legend = cache.artists[name]["legend"]
         legend.get_texts()[0].set_text(f"HI {fc_hi:.2f} MHz")
 
-    ax.set_ylim([0.0, history_sec])
+    ax.set_ylim([history_sec, 0.0])
     im = cache.artists[name]["im"]
-    im.set_extent([f0, f1, 0.0, history_sec])
+    current_sec = len(matrix) * engine_instance.analysis_window_sec
+    im.set_extent([f0, f1, current_sec, 0.0])
 
     cfg = engine_instance.charts_config.get("spec_cwt", {})
     safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
@@ -761,10 +764,11 @@ def chart_ar_spectrogram(result: dict) -> str:
         style_ax(ax, "Espectrograma AR/Burg 2D (Paramétrico)", "Frecuencia (MHz)", "Tiempo (s)")
         ax.xaxis.get_major_formatter().set_useOffset(False)
         ax.xaxis.get_major_formatter().set_scientific(False)
+        current_sec = len(matrix) * engine_instance.analysis_window_sec
         im = ax.imshow(
             matrix,
-            aspect="auto", origin="lower",
-            extent=[f0, f1, 0.0, history_sec],
+            aspect="auto", origin="upper",
+            extent=[f0, f1, current_sec, 0.0],
             cmap="inferno",
             vmin=v_min, vmax=v_max,
             interpolation="nearest",
@@ -800,9 +804,10 @@ def chart_ar_spectrogram(result: dict) -> str:
         legend = cache.artists[name]["legend"]
         legend.get_texts()[0].set_text(f"HI {fc_hi:.2f} MHz")
 
-    ax.set_ylim([0.0, history_sec])
+    ax.set_ylim([history_sec, 0.0])
     im = cache.artists[name]["im"]
-    im.set_extent([f0, f1, 0.0, history_sec])
+    current_sec = len(matrix) * engine_instance.analysis_window_sec
+    im.set_extent([f0, f1, current_sec, 0.0])
 
     cfg = engine_instance.charts_config.get("spec_ar", {})
     safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
@@ -845,10 +850,11 @@ def chart_correlogram_spectrogram(result: dict) -> str:
         style_ax(ax, "Correlograma 2D — Blackman-Tukey (Wiener-Khinchin)", "Frecuencia (MHz)", "Tiempo (s)")
         ax.xaxis.get_major_formatter().set_useOffset(False)
         ax.xaxis.get_major_formatter().set_scientific(False)
+        current_sec = len(matrix) * engine_instance.analysis_window_sec
         im = ax.imshow(
             matrix,
-            aspect="auto", origin="lower",
-            extent=[f0, f1, 0.0, history_sec],
+            aspect="auto", origin="upper",
+            extent=[f0, f1, current_sec, 0.0],
             cmap="inferno",
             vmin=v_min, vmax=v_max,
             interpolation="nearest",
@@ -884,9 +890,10 @@ def chart_correlogram_spectrogram(result: dict) -> str:
         legend = cache.artists[name]["legend"]
         legend.get_texts()[0].set_text(f"HI {fc_hi:.2f} MHz")
 
-    ax.set_ylim([0.0, history_sec])
+    ax.set_ylim([history_sec, 0.0])
     im = cache.artists[name]["im"]
-    im.set_extent([f0, f1, 0.0, history_sec])
+    current_sec = len(matrix) * engine_instance.analysis_window_sec
+    im.set_extent([f0, f1, current_sec, 0.0])
 
     cfg = engine_instance.charts_config.get("spec_corr", {})
     safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])

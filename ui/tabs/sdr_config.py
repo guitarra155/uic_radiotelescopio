@@ -17,8 +17,8 @@ def build_config(page: ft.Page) -> ft.Control:
         """Cualquier cambio en la UI dispara un refresco total del panel."""
         page.pubsub.send_all("tab_changed")
 
-    LABEL_WIDTH = 100
-    INPUT_WIDTH = 130
+    LABEL_WIDTH = 95
+    INPUT_WIDTH = 120
     ROW_HEIGHT = 35
 
     def prop_row(label: str, control: ft.Control, tooltip: str = "") -> ft.Row:
@@ -263,7 +263,7 @@ def build_config(page: ft.Page) -> ft.Control:
             try:
                 idx = engine_instance.active_tab
                 wrapper.bgcolor = PANEL_BG if idx != 0 else ft.Colors.TRANSPARENT
-                wrapper.padding = 15 if idx != 0 else 5
+                wrapper.padding = ft.Padding(left=10, top=15, right=25, bottom=15) if idx != 0 else 5
                 wrapper.update()
             except: pass
 
@@ -290,9 +290,11 @@ def build_config(page: ft.Page) -> ft.Control:
     
     wrapper = ft.Container(
         content=root_container,
-        width=315,
-        bgcolor=PANEL_BG if engine_instance.active_tab != 0 else ft.Colors.TRANSPARENT,
-        padding=ft.Padding(left=15, top=15, right=20, bottom=15) if engine_instance.active_tab != 0 else 5,
+        width=300,
+        bgcolor=PANEL_BG,
+        border=ft.Border(left=ft.BorderSide(1, BORDER_COL)),
+        padding=ft.Padding(left=10, top=15, right=20, bottom=15),
+        alignment=ft.Alignment(-1.0, -1.0),
     )
     
     is_collapsed = [False]

@@ -443,6 +443,8 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
         header_row1.visible = not is_fs
         header_row2.visible = not is_fs
         legend.visible = not is_fs
+        
+        btn_fs.icon = ft.Icons.CLOSE_FULLSCREEN if is_fs else ft.Icons.ASPECT_RATIO
             
         e.control.page.pubsub.send_all("toggle_fullscreen_chart")
 

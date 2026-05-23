@@ -328,30 +328,36 @@ class DSPEngine:
         # Redimensionar el buffer del correlograma para que coincida con el nuevo historial
         self._resize_corr_buffer()
 
-    def start_stream(self, mode: str, kwargs: dict):
-        """
-        Inicia el streaming. mode = 'file' o 'sdr'
-        kwargs puede contener 'filename', 'format' o ajustes propios del SDR
-        """
-        self.is_playing = True
-        self.power_samples_written = 0  # reiniciar el contador al empezar
-        self.power_time_data.fill(-100.0)  # limpiar buffer
-
-        if self.worker_thread is not None and self.worker_thread.is_alive():
+    def start_stream(self, mode, params):
+        if self.is_playing:
             return
-
+        
+        # Si se cambia de archivo, reiniciar posición
+        if mode == "file" and params.get("filename") != getattr(self, "iq_filename", None):
+            self.file_position = 0
+            
+        self.stream_mode = mode
         if mode == "file":
-            self.filename = kwargs.get("filename")
-            self.data_format = kwargs.get("format", "int16")
-            self.worker_thread = threading.Thread(
-                target=self._process_file_loop, daemon=True
-            )
-        else:  # mode == 'sdr'
-            self.worker_thread = threading.Thread(
-                target=self._process_sdr_loop, daemon=True
-            )
-
-        self.worker_thread.start()
+            self.iq_filename = params.get("filename", "")
+            self.filename = self.iq_filename
+            self.data_format = params.get("format", "uint8")
+            
+            # Resetear si llegó al final
+            if self.current_file_time >= self.total_file_time and self.total_file_time > 0:
+                self.file_position = 0
+                self.current_file_time = 0.0
+                # Vaciar la cascada (waterfall) al reiniciar
+                self.waterfall_data.fill(self.db_min)
+                self.waterfall_idx = 0
+                self.power_samples_written = 0
+                
+            self.is_playing = True
+            self.stream_thread = threading.Thread(target=self._process_file_loop, daemon=True)
+            self.stream_thread.start()
+        else:
+            self.is_playing = True
+            self.stream_thread = threading.Thread(target=self._process_sdr_loop, daemon=True)
+            self.stream_thread.start()
 
     def stop_stream(self):
         self.is_playing = False
@@ -685,7 +691,7 @@ class DSPEngine:
                     cfg["ymax"] = float(a_max + diff * 0.2)
                 elif chart_id == "pow_time":
                     p_valid = self.power_time_data[self.power_time_data > -110]
-                    if len(p_valid) > 2:
+                    if len(p_valid) > 2 and cfg.get("auto_y", True):
                         p_min = float(np.nanmin(p_valid))
                         p_max = float(np.nanmax(p_valid))
                         # Enmarcar con un margen del 15% para que no toque los bordes
@@ -694,14 +700,16 @@ class DSPEngine:
                         cfg["ymax"] = float(p_max + diff * 0.15)
                 elif chart_id == "snr_freq":
                     s_max = float(np.nanpercentile(self.snr_data, 99))
-                    # El centro de SNR siempre es 0 dB
-                    span_y = float(max(10.0, s_max + 5.0))
-                    cfg["ymin"] = -span_y
-                    cfg["ymax"] = span_y
+                    if cfg.get("auto_y", True):
+                        # El centro de SNR siempre es 0 dB
+                        span_y = float(max(10.0, s_max + 5.0))
+                        cfg["ymin"] = -span_y
+                        cfg["ymax"] = span_y
                 elif chart_id == "stat_hist":
                     h_max = float(np.nanpercentile(self.histogram_data, 99))
-                    cfg["xmin"] = 0.0 # El histograma usa x para amplitud
-                    cfg["xmax"] = float(max(0.1, h_max * 1.2))
+                    if cfg.get("auto_x", True):
+                        cfg["xmin"] = 0.0 # El histograma usa x para amplitud
+                        cfg["xmax"] = float(max(0.1, h_max * 1.2))
 
             # --- Validación Final Anti-Colapso (ymin < ymax y sin NaNs) ---
             for attr in ["xmin", "xmax", "ymin", "ymax"]:
@@ -719,8 +727,8 @@ class DSPEngine:
     def reset_to_defaults(self):
         """Restaura los rangos de visualización a los óptimos detectados por el sistema."""
         for cfg in self.charts_config.values():
-            cfg["auto_x"] = False
-            cfg["auto_y"] = False
+            cfg["auto_x"] = True
+            cfg["auto_y"] = True
 
         # Forzar re-detección inmediata
         self._frames_since_autoscale = 30
@@ -835,6 +843,12 @@ class DSPEngine:
                     return
                 file_size = os.path.getsize(self.filename)
 
+                # NUEVO: Recuperar posición guardada
+                if hasattr(self, "file_position") and self.file_position > 0:
+                    f.seek(self.file_position)
+                else:
+                    self.current_file_time = 0.0
+
                 def get_bytes_per_sample(fmt):
                     if fmt in ("uint8", "int8"): return 2
                     if fmt == "int16": return 4
@@ -849,7 +863,7 @@ class DSPEngine:
 
                 import time
 
-                start_real_time = time.time()
+                start_real_time = time.time() - (self.current_file_time / max(0.1, self.playback_speed))
 
                 while self.is_playing:
                     # NUEVO: Manejar cambios de parámetros en vivo (como el Sample Rate o Formato)
@@ -910,6 +924,9 @@ class DSPEngine:
                     sleep_time = target_time - elapsed
                     if sleep_time > 0:
                         time.sleep(sleep_time)
+
+                # Guardar posición al salir (Pausar)
+                self.file_position = f.tell()
 
         except Exception as e:
             print(f"File Stream Error: {e}", flush=True)

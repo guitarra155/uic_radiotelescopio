@@ -26,7 +26,7 @@
         "corr_max_lag": 1024,
         "ar_n_freqs": 1024,
         "cwt_n_scales": 2048,
-        "spec2d_method": "cwt"
+        "spec2d_method": "ar_burg_2d"
     },
     "analysis_window_sec": 0.1,
     "moving_avg_samples": 3,
@@ -41,62 +41,62 @@
         "mon_raw_spec": {
             "xmin": 1419.2057499999999,
             "xmax": 1421.60575,
-            "ymin": -100.0,
-            "ymax": -20.0,
+            "ymin": -56.57336751647344,
+            "ymax": -33.95818173916114,
             "auto_x": 0,
             "auto_y": 1
         },
         "mon_raw_amp": {
             "xmin": 0.0,
-            "xmax": 1.0,
+            "xmax": 0.1,
             "ymin": 0.0,
-            "ymax": 1.0,
+            "ymax": 0.009755323454737664,
             "auto_x": 1,
             "auto_y": 1
         },
         "mon_filt_spec": {
             "xmin": 1419.2057499999999,
             "xmax": 1421.60575,
-            "ymin": -100.0,
-            "ymax": -20.0,
+            "ymin": -56.57336751647344,
+            "ymax": -33.95818173916114,
             "auto_x": 0,
             "auto_y": 1
         },
         "mon_filt_amp": {
             "xmin": 0.0,
-            "xmax": 1.0,
+            "xmax": 0.1,
             "ymin": 0.0,
-            "ymax": 1.0,
+            "ymax": 0.006938229070553963,
             "auto_x": 1,
             "auto_y": 1
         },
         "spec_wf": {
-            "xmin": 1419.0,
-            "xmax": 1421.0,
-            "ymin": -100.0,
-            "ymax": -20.0,
+            "xmin": 1419.46825,
+            "xmax": 1421.34325,
+            "ymin": -56.57336751647344,
+            "ymax": -33.95818173916114,
             "auto_x": 1,
             "auto_y": 1
         },
         "spec_cwt": {
-            "xmin": 1419.0,
-            "xmax": 1421.0,
-            "ymin": -100.0,
-            "ymax": -20.0,
+            "xmin": 1419.46825,
+            "xmax": 1421.34325,
+            "ymin": -128.45111637895872,
+            "ymax": -92.65171144143007,
             "auto_x": 1,
             "auto_y": 1
         },
         "spec_ar": {
-            "xmin": 1419.0,
-            "xmax": 1421.0,
+            "xmin": 1419.46825,
+            "xmax": 1421.34325,
             "ymin": -100.0,
             "ymax": -20.0,
             "auto_x": 1,
             "auto_y": 1
         },
         "spec_corr": {
-            "xmin": 1419.0,
-            "xmax": 1421.0,
+            "xmin": 1419.46825,
+            "xmax": 1421.34325,
             "ymin": -100.0,
             "ymax": -20.0,
             "auto_x": 1,
@@ -104,25 +104,25 @@
         },
         "stat_hist": {
             "xmin": 0.0,
-            "xmax": 1.5,
+            "xmax": 0.1,
             "ymin": 0.0,
-            "ymax": 100.0,
+            "ymax": 0.48559,
             "auto_x": 1,
             "auto_y": 1
         },
         "pow_time": {
             "xmin": 0.0,
-            "xmax": 20.0,
-            "ymin": -100.0,
-            "ymax": -20.0,
+            "xmax": 200.0,
+            "ymin": -104.78753973672191,
+            "ymax": -63.29552868513206,
             "auto_x": 1,
             "auto_y": 1
         },
         "snr_freq": {
-            "xmin": 1419.0,
-            "xmax": 1421.0,
-            "ymin": -5.0,
-            "ymax": 40.0,
+            "xmin": 1419.46825,
+            "xmax": 1421.34325,
+            "ymin": -14.99401319516558,
+            "ymax": 14.99401319516558,
             "auto_x": 1,
             "auto_y": 1
         }
