@@ -160,7 +160,7 @@ class DSPEngine:
         self.current_file_time = 0.0
         self.total_file_time = 0.0
         self.iq_filename = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "test_signal.iq"
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "test_signal.iq"
         )
         self.iq_format = "int16"
 

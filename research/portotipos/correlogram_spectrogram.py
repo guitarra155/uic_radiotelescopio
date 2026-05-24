@@ -1,9 +1,13 @@
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal.windows import bartlett
 
 # ── CONFIGURACIÓN (idéntica a main_indirecto.m) ──────────────────────────────
-IQ_FILE   = r"C:\uic_radiotelescopio\data\test_signal_1.iq"
+# Ajustado para ejecutarse desde c:\uic_radiotelescopio\research\prototipos\
+BASE_DIR  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+IQ_FILE   = os.path.join(BASE_DIR, "data", "test_signal_1.iq")
+
 fs        = 2.4e6          # Hz
 fc        = 1420e6       # Hz  (línea HI)
 PERCENT_TO_ANALYZE = 0.05
@@ -137,7 +141,7 @@ ax_p.set_xlabel('Frecuencia (MHz)')
 ax_p.set_ylabel('Amplitud Promedio (dBm)')
 ax_p.set_title(f'Perfil Espectral Promedio ({PERCENT_TO_ANALYZE*100:.1f}%)')
 ax_p.grid(True)
-fig_p.savefig(r"C:\uic_radiotelescopio\data\correlogram_perfil.png", dpi=100)
+fig_p.savefig(os.path.join(BASE_DIR, "data", "correlogram_perfil.png"), dpi=100)
 print("✔ Perfil espectral guardado.")
 MAX_SEGS_PLOT = 1000 
 if len(t_all) > MAX_SEGS_PLOT:
@@ -168,7 +172,7 @@ ax2d.set_xlabel('Frecuencia (MHz)')
 ax2d.set_ylabel('Tiempo (s)')
 ax2d.set_title(f'Correlograma 2D ({PERCENT_TO_ANALYZE*100:.1f}%) — Línea HI 1420 MHz')
 ax2d.axvline(x=fc / 1e6, color='r', linestyle='--', linewidth=1.0)
-fig2d.savefig(r"C:\uic_radiotelescopio\data\correlogram_2D.png", dpi=100)
+fig2d.savefig(os.path.join(BASE_DIR, "data", "correlogram_2D.png"), dpi=100)
 print("✔ Espectrograma 2D guardado.")
 plt.show()
 print("Proceso completado.")
