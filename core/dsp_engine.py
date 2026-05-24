@@ -59,6 +59,7 @@ class DSPEngine:
         # load_config() restaurará los valores reales guardados
         self._sample_rate = 40_000_000
         self.bb60c_decimation = 1
+        self.chart_line_width = 1.0
         self._initializing = False
         
         self.window_raw = np.hanning(self.fft_size)
@@ -328,6 +329,24 @@ class DSPEngine:
         # Redimensionar el buffer del correlograma para que coincida con el nuevo historial
         self._resize_corr_buffer()
 
+    def reset_buffers(self):
+        """Limpia los historiales para que las gráficas se llenen de arriba hacia abajo al iniciar."""
+        # Limpiar cascada principal
+        if hasattr(self, 'waterfall_data'):
+            self.waterfall_data.fill(-100.0)
+            self.waterfall_idx = 0
+            
+        # Limpiar historial IQ para CWT/AR/Correlograma
+        if hasattr(self, 'corr_iq_buffer'):
+            self.corr_iq_buffer.fill(0j)
+            self._corr_buf_idx = 0
+            self._corr_buf_full = False
+            
+        # Limpiar potencia y estadísticas
+        if hasattr(self, 'power_time_data'):
+            self.power_time_data.fill(-100.0)
+            self.power_samples_written = 0
+
     def start_stream(self, mode, params):
         if self.is_playing:
             return
@@ -342,20 +361,18 @@ class DSPEngine:
             self.filename = self.iq_filename
             self.data_format = params.get("format", "uint8")
             
-            # Resetear si llegó al final
-            if self.current_file_time >= self.total_file_time and self.total_file_time > 0:
+            # Resetear si llegó al final o va a iniciar
+            if self.current_file_time >= self.total_file_time or self.file_position == 0:
                 self.file_position = 0
                 self.current_file_time = 0.0
-                # Vaciar la cascada (waterfall) al reiniciar
-                self.waterfall_data.fill(self.db_min)
-                self.waterfall_idx = 0
-                self.power_samples_written = 0
+                self.reset_buffers()
                 
             self.is_playing = True
             self.stream_thread = threading.Thread(target=self._process_file_loop, daemon=True)
             self.stream_thread.start()
         else:
             self.is_playing = True
+            self.reset_buffers()
             self.stream_thread = threading.Thread(target=self._process_sdr_loop, daemon=True)
             self.stream_thread.start()
 
@@ -456,8 +473,26 @@ class DSPEngine:
             self.amplitude_data = np.roll(self.amplitude_data, -len(mag_raw))
             self.amplitude_data[-len(mag_raw) :] = mag_raw
 
-        # ── 2b. Buffer IQ crudo para Correlograma (sin decimación, circular) ────────────────
-        iq_c64  = iq.astype(np.complex64)
+        # ── 3. Moving Average Filter (IMPLEMENTACIÓN ULTRA-RÁPIDA) ────────
+        win_len = max(1, int(self.moving_avg_samples))
+        
+        if self.ma_enabled and win_len > 1:
+            # Optimizamos usando Suma Acumulada para que sea O(N) independientemente de la ventana
+            # Esto es lo mismo que np.convolve pero instantáneo.
+            def fast_ma(x, w):
+                # Padding para mantener modo "same"
+                pad = w // 2
+                x_padded = np.pad(x, (pad, pad), mode='edge')
+                cs = np.cumsum(x_padded, dtype=np.float64)
+                res = (cs[w:] - cs[:-w]) / w
+                return res[:len(x)]
+
+            iq_f = fast_ma(iq.real, win_len) + 1j * fast_ma(iq.imag, win_len)
+        else:
+            iq_f = iq  # Sin filtrado
+
+        # ── 2b. Buffer IQ crudo para Correlograma (sin decimación, circular, usando filtrado MA) ──
+        iq_c64  = iq_f.astype(np.complex64)
         n_new   = len(iq_c64)
         buf_sz  = self._corr_buf_size
         if n_new >= buf_sz:
@@ -477,24 +512,6 @@ class DSPEngine:
             self._corr_buf_idx = end % buf_sz
             if end >= buf_sz:
                 self._corr_buf_full = True
-
-        # ── 3. Moving Average Filter (IMPLEMENTACIÓN ULTRA-RÁPIDA) ────────
-        win_len = max(1, int(self.moving_avg_samples))
-        
-        if self.ma_enabled and win_len > 1:
-            # Optimizamos usando Suma Acumulada para que sea O(N) independientemente de la ventana
-            # Esto es lo mismo que np.convolve pero instantáneo.
-            def fast_ma(x, w):
-                # Padding para mantener modo "same"
-                pad = w // 2
-                x_padded = np.pad(x, (pad, pad), mode='edge')
-                cs = np.cumsum(x_padded, dtype=np.float64)
-                res = (cs[w:] - cs[:-w]) / w
-                return res[:len(x)]
-
-            iq_f = fast_ma(iq.real, win_len) + 1j * fast_ma(iq.imag, win_len)
-        else:
-            iq_f = iq  # Sin filtrado
 
         # Buffer de amplitud filtrada (Diezmado)
         mag_f = np.abs(iq_f[::step][:len(self.amplitude_ma_data)])
@@ -1123,6 +1140,7 @@ class DSPEngine:
             "charts_config": self.charts_config,
             "window_res": getattr(self, "window_res", "Auto-Detect (Pantalla Actual)"),
             "window_mode": getattr(self, "window_mode", "Normal"),
+            "chart_line_width": getattr(self, "chart_line_width", 1.0),
         }
         try:
             import json, os
@@ -1165,6 +1183,7 @@ class DSPEngine:
                 self.snr_db_max = conf.get("snr_db_max", self.snr_db_max)
                 self.window_res = conf.get("window_res", getattr(self, "window_res", "Auto-Detect (Pantalla Actual)"))
                 self.window_mode = conf.get("window_mode", getattr(self, "window_mode", "Normal"))
+                self.chart_line_width = conf.get("chart_line_width", getattr(self, "chart_line_width", 1.0))
 
                 ap = conf.get("algo_params")
                 if ap and isinstance(ap, dict):

@@ -97,12 +97,15 @@ def get_cached_fig(name, figsize=(9.5, 3.0), is_3d=False):
     return fig, ax, False
 
 
-def fig_to_b64(fig: Figure, dpi: int = 72) -> str:
-    """Retorna Base64 SVG para que los ejes tengan resolución vectorial perfecta, 
-    mientras los rasterizados (gráficas 2D) quedan incrustados."""
+def fig_to_b64(fig: Figure, dpi: int = 96) -> str:
+    """Retorna Base64 SVG de alta fidelidad con ejes vectoriales y señales internas rasterizadas.
+    Garantiza ejes y textos vectoriales 100% nítidos en Flet y una transmisión ultra-veloz."""
     buf = io.BytesIO()
-    # SVG garantiza resolución infinita en las etiquetas y ejes de Flet sin pixelarse.
-    fig.savefig(buf, format="svg", bbox_inches='tight', facecolor=MPL_BG, edgecolor=MPL_BG)
+    try:
+        fig.tight_layout(pad=0.25)
+    except:
+        pass
+    fig.savefig(buf, format="svg", facecolor=MPL_BG, edgecolor=MPL_BG)
     buf.seek(0)
     enc = base64.b64encode(buf.read()).decode()
     buf.close()
@@ -166,10 +169,11 @@ def chart_amplitude() -> str:
         style_ax(
             ax, "Amplitud vs Tiempo (Streaming)", "Tiempo (s)", "Amplitud Baseband (V)"
         )
-        (line,) = ax.plot(t, sig, color=ACCENT_CYAN, linewidth=0.9, alpha=0.85)
+        (line,) = ax.plot(t, sig, color=ACCENT_CYAN, linewidth=engine_instance.chart_line_width, alpha=0.85, rasterized=True)
         cache.artists["amplitude"]["line"] = line
     else:
         line = cache.artists["amplitude"]["line"]
+        line.set_linewidth(engine_instance.chart_line_width)
         line.set_data(t, sig)
         
     # El eje X siempre cubre exactamente la ventana de análisis actual
@@ -199,7 +203,7 @@ def chart_spectrum() -> str:
             "Frecuencia (MHz)",
             "Potencia (dBFS)",
         )
-        (line,) = ax.plot(full_freq, spec, color=ACCENT_GREEN, linewidth=1.0)
+        (line,) = ax.plot(full_freq, spec, color=ACCENT_GREEN, linewidth=engine_instance.chart_line_width, rasterized=True)
         hline = ax.axhline(
             y=engine_instance.db_noise_floor,
             color=ACCENT_AMBER,
@@ -215,6 +219,7 @@ def chart_spectrum() -> str:
         cache.artists["spectrum"]["hline"] = hline
     else:
         line = cache.artists["spectrum"]["line"]
+        line.set_linewidth(engine_instance.chart_line_width)
         hline = cache.artists["spectrum"]["hline"]
         
         line.set_data(full_freq, spec)
@@ -249,7 +254,7 @@ def chart_spectrum_raw() -> str:
             "Frecuencia (MHz)",
             "Potencia (dBFS)",
         )
-        (line,) = ax.plot(full_freq, spec, color=ACCENT_CYAN, linewidth=1.0)
+        (line,) = ax.plot(full_freq, spec, color=ACCENT_CYAN, linewidth=engine_instance.chart_line_width, rasterized=True)
         hline = ax.axhline(
             y=engine_instance.db_noise_floor_raw,
             color=ACCENT_AMBER,
@@ -265,6 +270,7 @@ def chart_spectrum_raw() -> str:
         cache.artists["spectrum_raw"]["hline"] = hline
     else:
         line = cache.artists["spectrum_raw"]["line"]
+        line.set_linewidth(engine_instance.chart_line_width)
         hline = cache.artists["spectrum_raw"]["hline"]
         
         line.set_data(full_freq, spec)
@@ -556,7 +562,7 @@ def chart_cwt_map(result: dict) -> str:
         style_ax(ax, "Escalograma CWT/Morlet 2D", "Frecuencia (MHz)", "Tiempo (s)")
         ax.xaxis.get_major_formatter().set_useOffset(False)
         ax.xaxis.get_major_formatter().set_scientific(False)
-        current_sec = len(matrix) * engine_instance.analysis_window_sec
+        current_sec = history_sec if engine_instance._corr_buf_full else (engine_instance._corr_buf_idx / max(1, engine_instance.sample_rate))
         im = ax.imshow(
             matrix,
             aspect="auto", origin="upper",
@@ -598,7 +604,7 @@ def chart_cwt_map(result: dict) -> str:
 
     ax.set_ylim([history_sec, 0.0])
     im = cache.artists[name]["im"]
-    current_sec = len(matrix) * engine_instance.analysis_window_sec
+    current_sec = history_sec if engine_instance._corr_buf_full else (engine_instance._corr_buf_idx / max(1, engine_instance.sample_rate))
     im.set_extent([f0, f1, current_sec, 0.0])
 
     cfg = engine_instance.charts_config.get("spec_cwt", {})
@@ -772,7 +778,7 @@ def chart_ar_spectrogram(result: dict) -> str:
         style_ax(ax, "Espectrograma AR/Burg 2D (Paramétrico)", "Frecuencia (MHz)", "Tiempo (s)")
         ax.xaxis.get_major_formatter().set_useOffset(False)
         ax.xaxis.get_major_formatter().set_scientific(False)
-        current_sec = len(matrix) * engine_instance.analysis_window_sec
+        current_sec = history_sec if engine_instance._corr_buf_full else (engine_instance._corr_buf_idx / max(1, engine_instance.sample_rate))
         im = ax.imshow(
             matrix,
             aspect="auto", origin="upper",
@@ -814,7 +820,7 @@ def chart_ar_spectrogram(result: dict) -> str:
 
     ax.set_ylim([history_sec, 0.0])
     im = cache.artists[name]["im"]
-    current_sec = len(matrix) * engine_instance.analysis_window_sec
+    current_sec = history_sec if engine_instance._corr_buf_full else (engine_instance._corr_buf_idx / max(1, engine_instance.sample_rate))
     im.set_extent([f0, f1, current_sec, 0.0])
 
     cfg = engine_instance.charts_config.get("spec_ar", {})
@@ -858,7 +864,7 @@ def chart_correlogram_spectrogram(result: dict) -> str:
         style_ax(ax, "Correlograma 2D — Blackman-Tukey (Wiener-Khinchin)", "Frecuencia (MHz)", "Tiempo (s)")
         ax.xaxis.get_major_formatter().set_useOffset(False)
         ax.xaxis.get_major_formatter().set_scientific(False)
-        current_sec = len(matrix) * engine_instance.analysis_window_sec
+        current_sec = history_sec if engine_instance._corr_buf_full else (engine_instance._corr_buf_idx / max(1, engine_instance.sample_rate))
         im = ax.imshow(
             matrix,
             aspect="auto", origin="upper",
@@ -900,7 +906,7 @@ def chart_correlogram_spectrogram(result: dict) -> str:
 
     ax.set_ylim([history_sec, 0.0])
     im = cache.artists[name]["im"]
-    current_sec = len(matrix) * engine_instance.analysis_window_sec
+    current_sec = history_sec if engine_instance._corr_buf_full else (engine_instance._corr_buf_idx / max(1, engine_instance.sample_rate))
     im.set_extent([f0, f1, current_sec, 0.0])
 
     cfg = engine_instance.charts_config.get("spec_corr", {})

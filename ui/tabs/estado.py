@@ -321,9 +321,13 @@ def build_estado(page: ft.Page) -> ft.Control:
     mode_opts = [ft.dropdown.Option(o) for o in ["Normal", "Maximizada", "Pantalla Completa"]]
     mode_dd = ft.Dropdown(label="Modo Ventana", value=getattr(engine_instance, "window_mode", "Normal"), options=mode_opts, text_size=12, color=TEXT_MAIN, bgcolor=DARK_BG, border_color=BORDER_COL)
     
+    line_opts = [ft.dropdown.Option(str(round(x * 0.5, 1))) for x in range(1, 11)]
+    line_dd = ft.Dropdown(label="Grosor de Línea Gráficas", value=str(getattr(engine_instance, "chart_line_width", 1.0)), options=line_opts, text_size=12, color=TEXT_MAIN, bgcolor=DARK_BG, border_color=BORDER_COL)
+    
     def apply_window_config(e):
         engine_instance.window_res = res_dd.value
         engine_instance.window_mode = mode_dd.value
+        engine_instance.chart_line_width = float(line_dd.value)
         engine_instance.save_config()
         
         page = e.control.page
@@ -372,6 +376,8 @@ def build_estado(page: ft.Page) -> ft.Control:
             res_dd, 
             ft.Container(height=5),
             mode_dd, 
+            ft.Container(height=5),
+            line_dd,
             ft.Container(height=10),
             apply_btn
         ], spacing=5)

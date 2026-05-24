@@ -227,20 +227,21 @@ def main(page: ft.Page):
             try:
                 # El motor detectó metadatos nuevos (ej: sintonía automática)
                 if getattr(engine_instance, "metadata_updated", False):
-                    # Solo enviamos señal de refresco de gráficas/títulos, NO de configuración
                     engine_instance.metadata_updated = False
                     page.pubsub.send_all("refresh_charts")
 
                 if is_p and getattr(engine_instance, "data_ready", False):
-                    page.pubsub.send_all("refresh_charts")
+                    # Solo despachar refresh si hay una pestaña activa con gráficas (no tab 0)
                     engine_instance.data_ready = False
+                    if engine_instance.active_tab != 0:
+                        page.pubsub.send_all("refresh_charts")
                 elif was_playing and not is_p:
                     page.pubsub.send_all("stream_stopped")
             except RuntimeError:
                 break
-                
+
             was_playing = is_p
-            await asyncio.sleep(0.05) # Chequeo rápido del flag
+            await asyncio.sleep(0.05)  # Chequeo rápido del flag
             
     page.run_task(refresh_loop)
 
