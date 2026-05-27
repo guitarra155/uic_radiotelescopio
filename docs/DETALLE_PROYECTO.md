@@ -1,108 +1,177 @@
-# DocumentaciÃ³n Detallada del Proyecto (DETALLE_PROYECTO.md)
+# Documentación Detallada del Proyecto (DETALLE_PROYECTO.md)
 
 ## 1. Arquitectura del Sistema
-El proyecto "Plataforma DSP" consiste en un sistema de procesamiento digital de seÃ±ales (DSP) en tiempo real con una interfaz grÃ¡fica basada en **Flet** y renderizado de grÃ¡ficos vÃ­a **Matplotlib** en un flujo asÃ­ncrono. EstÃ¡ diseÃ±ado para interactuar con receptores SDR (como el BB60C de Signal Hound) o reproducir archivos IQ pregrabados.
+El proyecto "Plataforma DSP" consiste en un sistema avanzado de procesamiento digital de señales (DSP) en tiempo real, diseñado para operar un radiotelescopio. Su núcleo lógico está programado en Python, utilizando **Flet** para proveer una interfaz gráfica de usuario (GUI) reactiva y **Matplotlib** para el renderizado asíncrono y ultra-rápido de gráficos científicos de alto nivel.
 
-### 1.1 Flujo de Funcionamiento
-1. **AdquisiciÃ³n**: El `DSPEngine` recolecta seÃ±ales I/Q desde el SDR a alta velocidad (hasta 40 MSps).
-2. **Filtrado y Acondicionamiento**: Se aplica un filtro de media mÃ³vil (Moving Average) hiper-optimizado usando sumas acumuladas (`cumsum`) para aislar ruidos transitorios.
-3. **Procesamiento de SeÃ±al (DSP Core)**: 
-    - CÃ¡lculo de FFT (Espectro RAW y Filtrado).
-    - CÃ¡lculo de matrices bidimensionales (Cascada Waterfall, Correlograma 2D de Blackman-Tukey, AR/Burg).
-    - DetecciÃ³n automÃ¡tica de rango dinÃ¡mico de piso de ruido (`db_noise_floor`).
-    - Smart Trigger (disparador automÃ¡tico) basado en la energÃ­a instantÃ¡nea (Zero-Crossing Rate y umbrales de dBFS) para capturar eventos de interÃ©s.
-4. **Renderizado de Interfaz**: Un bucle `async` en `flet` captura las matrices de Matplotlib generadas en hilos secundarios (Base64 JPEG) y actualiza componentes visuales fluidamente.
+El sistema está construido bajo una arquitectura modular y concurrente, garantizando el aislamiento entre la adquisición de hardware, los cálculos matemáticos pesados y el refresco visual de la interfaz. Esto previene cuellos de botella y permite operar a tasas de hasta 40 MSps reales.
 
-## 2. DescripciÃ³n Detallada de Funciones
+### 1.1 Diagrama de Modularización
+- **`core/`**: Cerebro matemático y de control. Contiene el motor DSP (`dsp_engine.py`), métodos avanzados como Wavelet y Burg (`advanced_dsp.py`), y parámetros físicos (`constants.py`).
+- **`ui/`**: Capa de presentación visual. Maneja el diseño reactivo con Flet, organizado en componentes aislados (`ui/components/`) y visualizadores de pestañas específicos (`ui/tabs/`). Aquí también se sitúa el puente de renderizado gráfico (`ui/charts.py`).
+- **`data/`**: Repositorio de almacenamiento de volcados IQ, firmas de eventos transitorios (Smart Trigger) y configuraciones previas guardadas.
+- **`scripts/`**: Utilidades auxiliares (por ejemplo, para generar señales sintéticas de prueba).
 
-### `core/dsp_engine.py`
-- `_process_dsp_core(self, iq)`: Bucle crÃ­tico. EfectÃºa todo el procesamiento de la trama de muestras `iq`, extrae mÃ©tricas de potencia y alimenta buffers circulares (amplitud, histograma, espectro, SNR).
-- `_auto_detect_ranges(self)`: Ajusta los lÃ­mites de los ejes (eje X e Y) de las grÃ¡ficas evaluando el piso de ruido y detectando picos.
-- `save_config(self)`: MÃ©todo optimizado para persistir de forma instantÃ¡nea y sÃ­ncrona los cambios de configuraciÃ³n en `config.json`, resolviendo problemas donde el retraso asÃ­ncrono impedÃ­a guardar los datos al cerrar o reiniciar con F5.
+## 2. Flujo de Funcionamiento Detallado
 
-### `core/advanced_dsp.py`
-- `run_cwt_2d`: Transformada Wavelet Continua optimizada mediante diezmado inteligente de bloques (150 muestras) y vectorizaciÃ³n completa del banco de filtros Wavelet de Morlet con broadcasting nativo en NumPy.
-- `run_ar_burg_2d`: Modelo paramÃ©trico autorregresivo por el mÃ©todo de Burg de alta resoluciÃ³n. Se rediseÃ±Ã³ por completo eliminando la aproximaciÃ³n por autocorrelaciÃ³n y la resoluciÃ³n de Yule-Walker por `solve_toeplitz`, implementando en su lugar el verdadero algoritmo recursivo de Burg de minimizaciÃ³n del error de predicciÃ³n hacia adelante y hacia atrÃ¡s y la recursiÃ³n de Levinson-Durbin de forma 100% vectorizada en NumPy a travÃ©s de lotes de segmentos paralelos. Esto entrega la mÃ¡xima resoluciÃ³n espectral equivalente a `pburg` de MATLAB y elimina a cero el sobrecosto de bucles de cÃ³mputo.
-- `run_correlogram_2d`: Espectrograma por Correlograma 2D vÃ­a Wiener-Khinchin optimizado mediante FFT. Se corrigiÃ³ un error crÃ­tico de escala originado en la definiciÃ³n de la IFFT de NumPy multiplicando por el factor `(n_fft_ac / window_len_eff)` para que coincida matemÃ¡ticamente al 100% con la estimaciÃ³n de la autocorrelaciÃ³n sesgada (`xcorr` biased) de MATLAB.
+El ciclo de vida del procesamiento de señales transcurre por varias etapas críticas, sincronizadas mediante un sistema "PubSub" (Publicación/Suscripción) interno de Flet y hilos de exclusión (Locks):
 
-### `ui/charts.py`
-- `safe_set_xlim` y `safe_set_ylim`: Evitan repintados innecesarios y recalculaciones de layout comprobando si las variaciones en los lÃ­mites exceden un umbral de `1e-3` antes de llamar a Matplotlib.
-- `get_cached_fig(name)`: Implementa la reutilizaciÃ³n de figuras pre-configuradas para evitar instanciaciÃ³n constante de instancias de figura pesadas.
-- `chart_cwt_map`, `chart_ar_spectrogram`, `chart_correlogram_spectrogram`: Totalmente unificados para aplicar instantÃ¡neamente la configuraciÃ³n dinÃ¡mica de lÃ­mites visuales (XMin/XMax y ColorMin/ColorMax) definida en el objeto `spec_wf` del panel derecho.
+1. **Adquisición de Hardware / Lectura (Data Ingestion)**: El `DSPEngine` recolecta muestras I/Q de forma ininterrumpida desde un receptor SDR (Signal Hound BB60C) o desde archivos binarios (`.iq` / `.npy`). Se alimenta un buffer global para su procesamiento por lotes.
+2. **Acondicionamiento y Filtrado**: Las señales brutas atraviesan un filtro de media móvil (Moving Average) hiper-optimizado mediante sumas acumuladas (`cumsum`), cuyo propósito es amortiguar transitorios espurios (RFI) sin degradar las firmas de banda estrecha, como el Hidrógeno Neutro a 1420.4 MHz.
+3. **Procesamiento de Señal (DSP Core)**: 
+    - Se calculan las Transformadas Rápidas de Fourier (FFT) para obtener la Densidad Espectral de Potencia (Welch PSD).
+    - Se invocan matrices de cálculo bidimensional mediante el motor `advanced_dsp.py` para calcular el Escalograma de Wavelet Continua (CWT), el Autoregresivo de Burg (AR) y el Correlograma 2D por el método de Blackman-Tukey.
+    - El módulo computa automáticamente métricas de energía y ajusta los umbrales del piso de ruido (`db_noise_floor`).
+    - Se evalúan las métricas frente al módulo "Smart Trigger", el cual registra ráfagas de interés si la relación Señal/Ruido supera un umbral parametrizable.
+4. **Renderizado Asíncrono de Interfaz**: Un bucle `async` captura los tensores procesados y solicita su visualización a `charts.py`. Matplotlib dibuja los mapas de calor y genera un volcado vectorial SVG integrado con metadatos Base64. Esta cadena es protegida por candados multihilo (`threading.Lock`) para evitar corrupción visual (pantallas blancas o colapsos de coordenadas) en transiciones en caliente.
+5. **Persistencia (Persistence Layer)**: Las modificaciones aplicadas por el usuario en tiempo de ejecución (ganancia, frecuencias, escalas de color) son inyectadas instantáneamente a disco vía `config.json`, asegurando que la parametrización sobreviva a cortes de flujo.
 
-### `ui/tabs/spectrogram.py`
-- `_render_advanced_method(force_recompute)`: Implementa una **cachÃ© de renderizado de alto rendimiento**. Almacena el Ãºltimo resultado del cÃ¡lculo DSP y su firma de parÃ¡metros fÃ­sicos (orden AR, lag, frecuencia central, tasa de muestreo). Si el usuario modifica parÃ¡metros Ãºnicamente visuales desde el panel lateral derecho (ej. zoom, lÃ­mites de color), el sistema re-plotea la matriz en la UI instantÃ¡neamente (<10ms) en lugar de re-calcular el costoso DSP, garantizando una fluidez impecable.
-- `on_refresh`: Maneja el flujo de actualizaciÃ³n asÃ­ncrona. Si el origen es un cambio en la interfaz grÃ¡fica (`tab_changed`), utiliza la cachÃ©. Si es por adquisiciÃ³n de nuevas tramas de datos, invalida la cachÃ© y calcula.
+## 3. Descripción Detallada de Funciones Clave
 
-## 3. Ãšltima Update y Mejoras
-* **OptimizaciÃ³n de Velocidad Extrema y Latencia Real-Time (<40ms) en CWT, AR/Burg y Correlograma 2D**:
-    - **ReutilizaciÃ³n y Caching de Artistas en Matplotlib**: Se eliminÃ³ la lentitud extrema causada por `fig.clear()` y la reconstrucciÃ³n recurrente del sistema de ejes y barras de colores (`append_axes`) en `chart_cwt_map`, `chart_ar_spectrogram` y `chart_correlogram_spectrogram`. Ahora se aprovecha el sistema de cachÃ© `is_new` para instanciar subplots y colorbars una sola vez. En los frames subsecuentes se actualizan los datos mediante `im.set_data()`, se redimensiona la visualizaciÃ³n con `im.set_extent()`, y se reposiciona la lÃ­nea de sintonÃ­a con `vline.set_xdata()`. Esto reduce la latencia de renderizado de ~400ms a **<5ms**.
-    - **EliminaciÃ³n del Casteo Masivo de Memoria**: Se removiÃ³ la conversiÃ³n redundante `iq = iq.astype(np.complex64)` sobre el buffer global de 25 millones de muestras (~400 MB) al principio de `run_cwt_2d` y `run_ar_burg_2d`. En su lugar, se opera sobre el buffer original y el casteo se realiza de manera eficiente sobre la sub-matriz recortada final `seg_matrix` (~0.7 MB), eliminando la sobrecarga por reserva e intercambio en la memoria RAM.
-    - **AceleraciÃ³n Computacional en Modelo de Burg**: Se cambiÃ³ el factor de sub-ventanas por defecto `n_sub` de 5 a 1. Esto elimina el bucle de promediado redundante por cada paso temporal en `run_ar_burg_2d`, logrando un incremento de velocidad de **500%** directo y obteniendo una representaciÃ³n paramÃ©trica de alta resoluciÃ³n equivalente e idÃ©ntica al estÃ¡ndar `pburg` de MATLAB.
-* **Control Visual "Escalas CWT" en Flet**: Se integrÃ³ un control de texto interactivo `cwt_scales_f` ("Escalas CWT") anÃ¡logo al de AR en la barra superior de la pestaÃ±a de espectrogramas, permitiendo reconfigurar dinÃ¡micamente el nivel de detalle wavelet con persistencia inmediata y sincronizada en `config.json`.
-* **Atajo F11 para Pantalla Completa**: Se integrÃ³ soporte en `main.py` para alternar fluidamente el modo pantalla completa (`page.window.full_screen`) mediante la tecla **F11**, mejorando la experiencia de monitoreo.
-* **ParametrizaciÃ³n DinÃ¡mica de ResoluciÃ³n para CWT y AR/Burg**:
-    - **CWT (`cwt_n_scales`)**: Se desacoplÃ³ el valor estÃ¡tico duro de 48 escalas en `ui/tabs/spectrogram.py` para leerse dinÃ¡micamente desde `engine_instance.algo_params["cwt_n_scales"]` (por defecto 64). Permite incrementar o decrementar el nÃºmero de escalas wavelet directamente en la configuraciÃ³n de la aplicaciÃ³n para aumentar la resoluciÃ³n en frecuencia al cambiar de sample rate (p. ej., a 2.4 MSps o 2.5 MSps).
-    - **AR/Burg (`ar_n_freqs`)**: Se desacoplaron los 1024 bins espectrales estÃ¡ticos en `ui/tabs/spectrogram.py` para leerse dinÃ¡micamente de `engine_instance.algo_params["ar_n_freqs"]` (por defecto 1024).
-* **Suavizado Temporal y Promediado por Sub-ventanas en CWT 2D y AR/Burg 2D (100% de Cobertura Temporal)**:
-    - **CWT 2D**: Se reemplazÃ³ el muestreo discontinuo (que tomaba solo un bloque corto de 5000 muestras y omitÃ­a el resto del paso temporal) por un estimador promediado de $n_{sub} = 5$ sub-ventanas solapadas y distribuidas uniformemente a lo largo de cada intervalo de paso `global_step`. Esto elimina completamente las bandas oscuras discontinuas en el eje del tiempo y entrega un escalograma de Morlet perfectamente continuo y suave.
-    - **AR/Burg 2D**: De forma homÃ³loga, se rediseÃ±Ã³ la estimaciÃ³n autorregresiva para promediar la densidad espectral de potencia calculada vÃ­a Burg de $n_{sub} = 5$ sub-ventanas distribuidas uniformemente dentro de cada paso `global_step`. Esto reduce masivamente la varianza del estimador paramÃ©trico, eliminando el pixelado y el ruido de alta frecuencia transitorio, proporcionando picos espectrales sumamente suaves y limpios sin perder velocidad de cÃ³mputo vectorizada.
-* **RemociÃ³n de ComplexWarning en AR/Burg**: Se corrigiÃ³ el descarte implÃ­cito de la parte imaginaria de NumPy en `core/advanced_dsp.py` al forzar el casteo explÃ­cito a la componente real `.real` en el PSD de Burg.
-* **Persistencia Inmediata de Configuraciones**: Se reemplazÃ³ el mecanismo de debounce asÃ­ncrono con `threading.Timer(1.0)` en `save_config` por una escritura sÃ­ncrona directa e instantÃ¡nea a disco. Esto garantiza que cualquier modificaciÃ³n en los lÃ­mites de frecuencia, parÃ¡metros DSP o auto-escala del panel lateral se registre inmediatamente en `config.json`, evitando la pÃ©rdida de configuraciones cuando la aplicaciÃ³n se reinicia o detiene mediante la tecla F5.
-* **CorrecciÃ³n de Escala MatemÃ¡tica del Correlograma 2D**: Se solucionÃ³ la descalibraciÃ³n de amplitud que causaba espectrogramas negros y opacos en el mÃ©todo de Blackman-Tukey (`run_correlogram_2d`). Se compensÃ³ la escala inherente de la IFFT de NumPy multiplicando explÃ­citamente el array concatenado de autocorrelaciÃ³n por `n_fft_ac` antes de dividir por la longitud de ventana (`window_len_eff`). Esto restaura de forma perfecta la coherencia de densidad de potencia espectral en dBm, haciÃ©ndola idÃ©ntica a la autocorrelaciÃ³n sesgada (`xcorr(..., 'biased')`) implementada originalmente en MATLAB (`main_indirecto.m`).
-* **UnificaciÃ³n de Ejes Temporales y de Frecuencia (2D Spectrograms)**: Se unificÃ³ el sistema de coordenadas de las grÃ¡ficas `chart_cwt_map`, `chart_ar_spectrogram` and `chart_correlogram_spectrogram` con el del Waterfall FFT convencional (`chart_spectrogram`). Ahora, la extensiÃ³n del eje Y de `imshow` se configura exactamente a `[0.0, history_sec]` (en lugar de `t_max` temporal de los bloques DSP), y el lÃ­mite vertical se fuerza con `ax.set_ylim([0.0, history_sec])`. De este modo, la escala temporal fluye de manera uniforme (de 0.0s en la parte inferior al mÃ¡ximo de historial en la parte superior) en los cuatro mÃ©todos espectrograma 2D, eliminando bordes vacÃ­os y desalineaciones de pixelado al cambiar de algoritmo.
-* **Consistencia Absoluta de Colormap y Unidades de Colorbar**: Para garantizar coherencia visual completa al cambiar de mÃ©todo, todas las grÃ¡ficas 2D avanzadas se configuraron para utilizar el colormap nativo del Waterfall (`"inferno"`) y la misma etiqueta de barra de colores (`"PSD (dBm)"`), facilitando la comparaciÃ³n cientÃ­fica directa de la densidad de potencia espectral bajo una misma paleta de intensidad.
-* **Control Centralizado de Ejes Frecuenciales (X-Axis)**: Se eliminÃ³ el condicional `cfg.get("auto_x", True)` en `chart_cwt_map`, `chart_ar_spectrogram` y `chart_correlogram_spectrogram`. Ahora, todas las visualizaciones de espectrogramas 2D aplican incondicionalmente `safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])` del canal de configuraciÃ³n `"spec_wf"`, logrando que cualquier ajuste de zoom manual (X MÃ­n / X MÃ¡x) o autoescala dinÃ¡mica se propague instantÃ¡neamente a los 4 mÃ©todos por igual.
-* **SincronizaciÃ³n Total del Colorbar**: Todos los mÃ©todos avanzados ahora aplican directamente las directivas `ymin` y `ymax` de `spec_wf` in la barra de colores mediante la llamada incondicional `im.set_clim(cfg["ymin"], cfg["ymax"])`, respondiendo dinÃ¡micamente tanto al autoescala como al control manual del panel derecho.
-* **EliminaciÃ³n Definitiva de UnboundLocalError**: Se rediseÃ±Ã³ el procesamiento de matrices de dibujo eliminando las variables auxiliares duplicadas (`matrix_rev`) y asegurando que las figuras no se queden en blanco o con trazas incompletas al transicionar Ã¡gilmente entre algoritmos.
-* **IntegraciÃ³n y Fluidez Total del Panel de Control**: Se unificaron `chart_cwt_map` y `chart_ar_spectrogram` para reaccionar a los lÃ­mites de frecuencia (X MÃ­n, X MÃ¡x) y lÃ­mites de color (Color MÃ­n, Color MÃ¡x) del panel derecho de configuraciÃ³n.
-* **CachÃ© InstantÃ¡nea de ConfiguraciÃ³n en Espectrograma 2D**: El cambio de parÃ¡metros de renderizado es inmediato (<10ms) debido a que no bloquea recalculando el DSP core si el buffer de datos no ha cambiado.
-* **ReducciÃ³n de Latencia de Streaming**: Se redujo `ALGO_EVERY_N` a `10` en los bucles de refresco asÃ­ncronos para actualizar el CWT 2D y AR/Burg 2D con mayor frecuencia durante el streaming.
-* **AlineaciÃ³n y SincronizaciÃ³n Frecuencial Perfecta en CWT y AR**:
-    - **CWT de Morlet Bilateral Symmetrical**: Se rediseÃ±Ã³ la funciÃ³n `run_cwt_2d` para utilizar una cuadrÃ­cula de frecuencias lineal bilateral que cubre simÃ©tricamente tanto frecuencias analÃ­ticas (positivas, derechas) como anti-analÃ­ticas (negativas, izquierdas) del espectro complejo en `[-sample_rate * 0.49, sample_rate * 0.49]`. Se implementÃ³ un banco de filtros FFT vectorial donde el soporte (`support`) y el argumento central (`arg`) se calculan con base en el signo de la frecuencia de destino, garantizando la captura simÃ©trica de la banda IQ compleja 1:1 con la visualizaciÃ³n FFT y eliminando desfases.
-    - **SincronizaciÃ³n de Bins y EliminaciÃ³n de `fftshift` en AR/Burg**: Se eliminÃ³ la llamada errÃ³nea de doble desplazamiento de frecuencia `np.fft.fftshift(psd)` en `run_ar_burg` and `run_ar_burg_2d`, dado que la evaluaciÃ³n polinomial sobre el plano unitario complejo ya se realiza de forma ordenada en el intervalo `[-0.5, 0.5]`. Adicionalmente, se sincronizÃ³ el vector de evaluaciÃ³n de coeficientes directamente a partir de la cuadrÃ­cula de bins discretos `f_vec / sample_rate` (eliminando `np.linspace`), asegurando coincidencia bin por bin con la FFT y la AutocorrelaciÃ³n.
-* **CorrecciÃ³n CrÃ­tica de AdquisiciÃ³n (Play/Pause) y Soporte F5**:
-    - Se reemplazaron las instancias obsoletas e incompatibles de `ft.Button` en `ui/components/layout.py` por `ft.ElevatedButton`.
-    - Se solucionÃ³ un TypeError crÃ­tico del constructor al definir los botones usando `content=ft.Text(...)` de manera nativa en Flet, y modificando la propiedad mutable `.content.value` del objeto `ft.Text` al alternar entre estados, garantizando estabilidad total y compatibilidad multiversiÃ³n de Flet.
-    - Se validÃ³ y optimizÃ³ la llamada a la tecla **F5** a travÃ©s de la integraciÃ³n de eventos de teclado de Flet vinculados por pubsub al header global, permitiendo alternar de manera fluida y concurrentemente el streaming fÃ­sico y la reproducciÃ³n de archivos locales.
-* **SincronizaciÃ³n Hilo-Segura Global (Thread-Safe) de Matplotlib**:
-    - Se identificÃ³ un fallo de colisiÃ³n de hilos concurrentes al cambiar de mÃ©todo de espectrograma 2D en caliente o alternar de pestaÃ±a en streaming activo, lo que provocaba que Matplotlib corrompiera su estado interno y generara un canvas vacÃ­o (grÃ¡fico blanco brillante sin ejes, etiquetas, leyendas ni barra de color).
-    - Se implementÃ³ un Lock de exclusiÃ³n mutua global (`threading.Lock`) en `ui/charts.py` llamado `mpl_lock`.
-    - Se diseÃ±Ã³ un decorador de metaprogramaciÃ³n dinÃ¡mico en Python que envuelve de forma transparente en tiempo de inicializaciÃ³n todas las funciones del mÃ³dulo que inician con el prefijo `"chart_"`. Esto asegura que cada tarea de dibujo y exportaciÃ³n a Base64 se ejecute de forma atÃ³mica y aislada, previniendo fallos por concurrencia y garantizando renderizados consistentemente estables bajo alta demanda.
-* **Correcion MatemÃ¡tica de AutocorrelaciÃ³n Compleja para SeÃ±ales IQ (Burg y Blackman-Tukey)**:
-    - **Burg 2D (`run_ar_burg_2d`)**: Se removiÃ³ el descarte errÃ³neo de la componente de cuadratura provocado por `.real` en el cÃ¡lculo de autocorrelaciÃ³n por FFT batch: `R_full = np.fft.ifft(SEG_F * np.conj(SEG_F), axis=1)`. Esto preserva intacta la fase de las muestras IQ, garantizando que el sistema de Yule-Walker (`scipy.linalg.solve_toeplitz`) se resuelva de manera estable e independiente para la densidad espectral de potencia compleja de alta resoluciÃ³n.
-    - **Correlograma 2D (`run_correlogram_2d`)**: De forma homÃ³loga, se conservÃ³ el tensor de autocorrelaciÃ³n complejo `Rcirc = np.fft.ifft(SEG * np.conj(SEG), axis=1)`. El cÃ¡lculo de la densidad de potencia espectral vÃ­a teorema de Wiener-Khinchin ahora asimila correctamente el comportamiento asimÃ©trico inherente a las seÃ±ales de banda base complejas IQ del radiotelescopio.
-* **InmunizaciÃ³n de Ejes contra Colapsos [0.0, 1.0] (ReconstrucciÃ³n AtÃ³mica de Figuras)**:
-    - Se detectÃ³ que la reutilizaciÃ³n de figuras desde la cachÃ© de Matplotlib colapsaba el sistema de coordenadas al cambiar dinÃ¡micamente de mÃ©todo espectrograma en caliente, debido a conflictos con la inserciÃ³n y redimensionamiento dinÃ¡mico del eje de la barra de colores (`make_axes_locatable(ax)` and `divider.append_axes`). Esto causaba que los lÃ­mites espectrales y temporales se colapsaran a la escala por defecto `[0.0, 1.0]`.
-    - Se rediseÃ±aron por completo las funciones `chart_cwt_map`, `chart_ar_spectrogram` y `chart_correlogram_spectrogram` en `ui/charts.py`. Ahora, en cada iteraciÃ³n de dibujo se realiza una limpieza atÃ³mica y absoluta de la figura (`fig.clear()`), instanciando de forma limpia y transparente el sistema de ejes, la leyenda, la barra de colores y aplicando de inmediato las directivas de lÃ­mites manuales/automÃ¡ticos de `spec_wf` (`safe_set_xlim` e `im.set_clim`), eliminando por completo acumulaciones residuales de ticks y canvases negros vacÃ­os.
-* **CorrecciÃ³n de VisualizaciÃ³n Negra y CalibraciÃ³n Adaptativa de Colorbars**:
-    - Se implementÃ³ una diferenciaciÃ³n inteligente en la asignaciÃ³n del lÃ­mite de intensidad del colorbar (`im.set_clim`) para los mÃ©todos avanzados 2D (CWT/Morlet, AR/Burg y Correlograma 2D). Si `Auto Color` estÃ¡ activado (`cfg.get("auto_y", True)`), se aplican los lÃ­mites dinÃ¡micos calculados directamente por los algoritmos avanzados a partir de percentiles (`v_min` y `v_max`), protegiendo la visualizaciÃ³n de colapsos negros por diferencias dinÃ¡micas de dBFS. Si se desactiva `Auto Color`, se respetan y aplican los lÃ­mites estrictos `Color MÃ­n` y `Color MÃ¡x` manuales ingresados por el usuario.
-* **EliminaciÃ³n del Offset CientÃ­fico del Eje X (MHz)**:
-    - Se aplicÃ³ incondicionalmente la desactivaciÃ³n de offset y formato cientÃ­fico en los cuatro mÃ©todos espectrograma 2D mediante `.get_major_formatter().set_useOffset(False)` y `.set_scientific(False)` al eje X de Matplotlib en `ui/charts.py`. Esto garantiza que las frecuencias en MHz reales se lean directamente como nÃºmeros planos (`1420.4`), sin la confusa notaciÃ³n `+1.42e3` ni ticks normalizados a la unidad.
+### `core/dsp_engine.py` (El Corazón del Sistema)
+- `_process_dsp_core(self, iq)`: Función crítica ejecutada por el hilo de adquisición. Ingesta el vector de muestras complejas, computa la energía en el dominio del tiempo, resuelve la FFT aplicando una ventana Blackman, extrae el piso de ruido y actualiza los buffers circulares que dan vida a los gráficos históricos de la UI.
+- `_auto_detect_ranges(self)`: Algoritmo heurístico que escanea la distribución estadística de la señal instantánea para ajustar dinámicamente los ejes cartesianos de la Interfaz (Auto-Escala), garantizando que los picos de interés nunca queden ocultos.
+- `save_config(self)`: Serializador síncrono ultra-rápido. Convierte el estado interno de la plataforma en JSON, impidiendo bloqueos I/O prolongados y garantizando la persistencia al vuelo.
 
-* **Resolución Infinita en Ejes y Etiquetas (Renderizado Vectorial)**:
-    - **Transición de JPEG a SVG**: Se reemplazó el motor de salida de ig_to_b64 en Matplotlib para que todas las gráficas se rendericen en formato SVG (image/svg+xml) en lugar de JPEG. Al utilizar gráficos vectoriales, Flet puede reescalar infinitamente las figuras sin que las etiquetas, números, ejes y leyendas se pixelen o se vean borrosos. 
-    - **Rasterizado Híbrido**: Los elementos pesados (como los mapas de color y espectrogramas densos) se incrustan internamente como mapas de bits dentro del SVG, garantizando un rendimiento óptimo en la transferencia de Base64, logrando lo mejor de ambos mundos: rendimiento en los tensores grandes y máxima nitidez en las tipografías y ejes de la UI.
-    - **Tipografías Puras Aceleradas por Hardware**: Se inyectó la directiva matplotlib.rcParams['svg.fonttype'] = 'none' para impedir que Matplotlib vectorice las fuentes a polígonos, permitiendo que Flet dibuje nativamente los textos SVG.
+### `core/advanced_dsp.py` (Matemáticas Avanzadas)
+- `run_cwt_2d`: Implementa una Transformada Wavelet Continua mediante la convolución de un banco vectorizado de filtros Morlet. Posee una cuadrícula espectral bilateral y promediado de sub-ventanas, entregando una suavidad temporal extrema (sin pixelado) para el análisis de espectros transitorios.
+- `run_ar_burg_2d`: Computa el modelo paramétrico Autoregresivo usando el algoritmo de minimización de error hacia adelante/atrás de Burg. Vectorizado a bajo nivel, proporciona una resolución frecuencial masivamente superior a la FFT clásica, replicando con exactitud la función `pburg` de MATLAB.
+- `run_correlogram_2d`: Genera un Espectrograma de Correlograma vánculo de Wiener-Khinchin. Calcula la autocorrelación de las tramas y su posterior Transformada Inversa. El sistema calibra rigurosamente la escala espectral para coincidir en dBm reales.
 
-* **Reescalado Dinámico y Responsividad Geométrica (Aspect Ratio)**:
-    - **Adaptación Activa**: Se reescribió profundamente el motor matemático get_dynamic_figsize en charts.py para calcular el *Aspect Ratio* (proporción geométrica) dinámico de cada figura en tiempo de ejecución de acuerdo a los píxeles reales disponibles dentro de las cajas de Flet (page.window_width y page.window_height).
-    - **Sincronización del Panel de Control**: Se enlazó una variable compartida engine_instance.is_config_collapsed al motor de gráficos. Cuando se acciona el botón para minimizar/expandir el panel derecho lateral, Flet dispara un evento interno y charts.py regenera la figura (19.0, 5.6 fracción dinámica panorámica) para que encaje matemáticamente en la nueva caja Flet *sin sufrir deformaciones ni aplastamiento horizontal* provocado por BoxFit.FILL.
+### `ui/charts.py` (Motor de Renderizado Gráfico)
+- `get_cached_fig(name)`: Implementa un patrón de diseño tipo *Flyweight*. Recicla las estructuras pesadas de Matplotlib (ejes, canvas), evitando la creación masiva de objetos que degradaría drásticamente los FPS.
+- `chart_cwt_map`, `chart_ar_spectrogram`, `chart_correlogram_spectrogram`: Cadenas de renderizado atómicas (Thread-Safe). Reconstruyen los visuales instantáneamente basándose en metadatos y caché paramétrica cuando el usuario altera los límites del zoom o la barra de colores sin necesidad de volver a computar las matemáticas pesadas. Utilizan rasterizado híbrido sobre contenedores SVG para mantener etiquetas infinitamente nítidas.
 
-* **Expansión Horizontal Estructural (STRETCH)**:
-    - Se identificó un defecto en el layout secundario que confina las vistas de pestaña única (Espectrograma, Histograma, SNR, Potencia, etc.) a cuadros rígidos en resoluciones mayores a 1080p.
-    - Se inyectó globalmente la propiedad direccional horizontal_alignment=ft.CrossAxisAlignment.STRETCH a las estructuras base t.Column en los archivos dependientes (spectrogram.py, statistics.py, req_snr.py, lgo_result.py, power_time.py), forzando a que los lienzos se autorellenen al 100% de la anchura del monitor sin importar si la barra lateral está contraída o extendida.
+### `main.py` (Orquestación General)
+- Coordina la inicialización de Flet, la configuración de la ventana (Full Screen auto-detectado, renderizado adaptativo `STRETCH` de los contenedores), invoca los sub-componentes (Layouts, pestañas) e inyecta la tarea asíncrona permanente (`refresh_loop`) que refresca la pantalla iterativamente a medida que el `DSPEngine` informa de nuevos datos (`metadata_updated` / `data_ready`).
 
-* **Gestión y Persistencia de Ventana (UI)**:
-    - Se agregó una nueva tarjeta ('Pantalla y Ventana') en la pestaña principal de **Estado** para permitir al usuario cambiar la resolución de la interfaz en tiempo real.
-    - Se habilitó el soporte para modos de visualización múltiples: Ventana Normal, Pantalla Completa (Full Screen) y Maximizada.
-    - **Auto-Detección y Memoria**: Se implementó una lógica de autodetención utilizando la API nativa de Windows (tkinter) para leer la resolución nativa del monitor. La configuración seleccionada se almacena en el caché persistente del sistema local (page.client_storage).
+## 4. Dependencias y Optimizaciones
+- **Python 3.10+**: Motor de ejecución base.
+- **NumPy & SciPy**: Base monolítica de tensores multidimensionales y transformadas (`solve_toeplitz`, `ifft`, algebra lineal).
+- **Matplotlib**: Subsistema gráfico, vectorizando en SVG para Flet sin bloquear el hilo primario.
+- **Flet**: Framework de Flutter transpilado que proporciona botones, controles, sliders reactivos asíncronos y sistema de *routing* de menús (`tabs`).
+- **Hardware DLL**: API estática (`bb_api.dll`) que abstrae la complejidad de la tarjeta de adquisición del Signal Hound.
 
-* **Controles de Emergencia Mejorados**:
-    - Se enlazó nativamente el atajo de teclado **F8** con el sistema de PubSub mediante el evento emergency_stop. Esto permite al usuario abortar bruscamente la captura del backend de SDR o la lectura del archivo .iq y detener todos los hilos DSP sin necesidad de interactuar visualmente con la UI.
+El software fue intensamente optimizado (ver `OPTIMIZATIONS_LOG.md`) para abatir la latencia visual de <400ms a <10ms, erradicar fugas de memoria por variables complejas "zombies", y eliminar interrupciones térmicas mediante el uso dinámico del diezmado (decimation) en la GPU/CPU de la PC anfitriona.
 
-## 4. Fuentes APA Verificables
+## 5. Fuentes y Referencias Académicas (Normas APA)
 - Blackman, R. B., & Tukey, J. W. (1958). *The measurement of power spectra, from the point of view of communications engineering*. Dover Publications.
 - Burg, J. P. (1975). *Maximum entropy spectral analysis* (Doctoral dissertation, Stanford University).
 - Welch, P. (1967). The use of fast Fourier transform for the estimation of power spectra: A method based on time averaging over short, modified periodograms. *IEEE Transactions on Audio and Electroacoustics*, 15(2), 70-73. https://doi.org/10.1109/TAU.1967.1161895
 - Wiener, N. (1930). Generalized harmonic analysis. *Acta Mathematica*, 55(1), 117-258. https://doi.org/10.1007/BF02546511
+# Referencia Técnica: Arquitectura y Optimizaciones
+
+Este documento profundiza en la ingeniería detrás de la plataforma UIC Radiotelescopio, detallando las soluciones aplicadas a retos de alta tasa de datos.
+
+## 1. Gestión de Datos de Alta Velocidad (40 MSps)
+A 40 Millones de muestras por segundo (MSps), el BB60C genera aproximadamente **160 MB/s** de datos I/Q. 
+- **Estrategia de Ráfagas**: El motor DSP no procesa muestra por muestra. Captura "chunks" de 1 segundo (40M de puntos), los procesa vectorialmente con NumPy y luego actualiza los buffers de visualización.
+- **Diezmado Visual**: Para mantener la UI a 30 FPS sin colapsar, los buffers de amplitud se diezman de 40,000,000 a 2,000 puntos usando un paso dinámico (`step = len(iq) // 2000`). Esto permite ver la forma de onda global sin pérdida de información de envolvente.
+
+## 2. Estabilización de la API de Signal Hound
+La integración con `bb_api.dll` presentó retos de concurrencia y límites físicos:
+- **Manejo de Warnings (Status 4 - Clamping)**: El BB60C aplica un recorte digital si el ancho de banda solicitado es muy cercano a la tasa de muestreo. Implementamos un filtro de estados donde los valores `> 0` se registran pero no interrumpen el flujo. Esto permite operar a los **27 MHz** máximos con total estabilidad.
+- **Auto-Configuración en Cascada**: El comando `bb_configure_IQ` es precedido siempre por un `bb_abort` y seguido por un `bb_initiate`. Esta secuencia está protegida por un **Mutex (Lock)** global para evitar que ráfagas de comandos desde la UI saturen el buffer de comandos del hardware USB.
+
+## 3. Inteligencia Espectral y Auto-Rango
+- **Algoritmo de Centrado**: El sistema utiliza `np.argmax()` sobre el espectro suavizado para localizar la portadora más fuerte. Si el pico está dentro de un margen del 10% del centro, se considera una "señal de interés" y se activa el protocolo de centrado.
+- **Sanitización de Visualización**: El error de los "cuadros blancos" fue identificado como una excepción de renderizado de la UI (Flet) ante números de punto flotante con precisión excesiva. La solución implementada aplica `round(val, 2)` en la capa de carga de datos (`load_config`), garantizando que la UI solo reciba strings compatibles.
+
+## 4. Algoritmos de Análisis Avanzado
+Además de la FFT estándar, la plataforma integra:
+- **Welch PSD**: Reduce la varianza del ruido promediando periodogramas solapados. Esencial para ver la línea de hidrógeno oculta bajo el piso de ruido.
+- **SNR en Tiempo Real**: Se calcula estimando el piso de ruido mediante el percentil 25 del espectro y restándolo de la potencia pico. Un SNR > 3dB activa automáticamente los indicadores de detección en el Header.
+# Documentación Técnica Detallada: Signal Hound BB60C
+
+El **Signal Hound BB60C** es un analizador de espectro en tiempo real y grabador de RF de alto rendimiento. Basado en una arquitectura de Radio Definida por Software (SDR), ofrece un rendimiento de grado de laboratorio en un dispositivo alimentado exclusivamente por USB 3.0. 
+
+A continuación, se detalla la información técnica profunda extraída de sus manuales de usuario, referencias de la API y hojas de datos de producto.
+
+---
+
+## 1. Arquitectura de Hardware y Panel de Conexiones
+
+El BB60C utiliza un oscilador y filtros pasa-banda para realizar una conversión descendente (down-convert) de una porción del espectro de entrada a una Frecuencia Intermedia (IF). Esta IF se envía al PC host mediante USB 3.0, donde el software se encarga de aplicar el análisis de espectro mediante la Transformada Rápida de Fourier (FFT).
+
+### Panel Frontal
+* **Entrada de RF (SMA):** Conector de 50Ω nominales. **Precaución:** No se debe exceder una potencia de entrada de +20 dBm para evitar daños irreversibles en el equipo.
+* **LED de Estado (READY/BUSY):** Parpadea en color naranja cada vez que procesa un comando desde el ordenador anfitrión.
+
+### Panel Trasero
+* **Referencia de 10 MHz (In/Out):** Permite sincronizar la base de tiempo. Se recomienda una onda sinusoidal limpia o cuadrada con un nivel >0 dBm (idealmente una onda senoidal de +13 dBm o un reloj CMOS de 3.3V).
+* **Puerto USB 3.0 Micro-B Hembra:** Conector principal de datos y alimentación. Requiere el cable tipo "Y" suministrado para garantizar el amperaje adecuado (datos USB 3.0 + alimentación auxiliar USB 2.0).
+* **Conector BNC Multipropósito:** Funciona principalmente para la entrada de un pulso por segundo (1 PPS) de GPS que permite marcas de tiempo con una precisión de ±50 ns, o para triggers. También es capaz de emitir niveles lógicos alto y bajo controlados mediante la API.
+
+---
+
+## 2. Rendimiento y Especificaciones de Radiofrecuencia
+
+El BB60C mejora significativamente respecto a modelos anteriores (como el BB60A), mejorando el Rango Dinámico Libre de Espurias (SFDR) en 20 dB y aplanando el piso de ruido en más de 8 dB.
+
+* **Rango de Frecuencia:** 9 kHz a 6.0 GHz.
+* **Ancho de Banda Instantáneo (IBW):** Hasta 27 MHz calibrados para streaming I/Q.
+* **Velocidad de Barrido:** Hasta 24 GHz/segundo (con RBW ≥ 10 kHz).
+* **Tasa de Muestreo:** Recolecta 80 millones de muestras IF por segundo, generando un flujo continuo de datos de 140 MB/s hacia la PC.
+* **Tasas de Muestreo I/Q Variables:** Permite tasas seleccionables desde 312.5 kS/s hasta 40 MS/s I/Q, ofreciendo un control fino sobre el espectro que se desea grabar.
+* **Rango Dinámico:** Amplio rango de -158 dBm hasta +10 dBm (90 dB de rango dinámico general).
+* **Nivel de Ruido Promedio Mostrado (DANL):**
+    * De 9 kHz a 500 kHz: -140 dBm/Hz.
+    * De 500 kHz a 10 MHz: -154 dBm/Hz.
+    * De 10 MHz a 6 GHz: -158 dBm + 1.1 dB/GHz.
+* **Figura de Ruido del Sistema:** 12 dB típico (de 20 MHz a 1.8 GHz).
+* **Precisión de Amplitud:** ± 2.0 dB absolutos.
+* **Precisión de Base de Tiempo:** ± 1 ppm por año.
+* **Temperaturas de Operación:** * Estándar: 0°C a +65°C.
+    * Opción 1: -40°C a +65°C (Probado rigurosamente con ráfagas de frío de 3 horas a -40ºC y 24 horas de calor continuo a +65ºC).
+* **Dimensiones y Peso:** 21.9 x 8.1 x 3 cm (8.63" x 3.19" x 1.19") y 0.50 kg de peso.
+
+---
+
+## 3. Funciones de Software (Spike) y Aplicaciones
+
+El procesamiento se realiza a través del software **Spike** (o aplicaciones de terceros mediante la API), el cual incluye:
+
+* **Pantalla de Persistencia de Color 2D y Cascada (Waterfall):** Revela eventos transitorios de hasta 1 µsec con un 100% de probabilidad de intercepción (POI) que los analizadores de espectro normales no detectarían.
+* **Aplicaciones Principales:**
+    * Grabador de RF (RF Recorder).
+    * Test y medición de RF de propósito general.
+    * Pruebas de pre-cumplimiento EMC.
+    * Caracterización de Ruido de Fase.
+    * Mediciones EVM (Error Vector Magnitude).
+    * Caracterización de canales.
+
+---
+
+## 4. Desarrollo de Software y API
+
+El BB60C incluye una potente Interfaz de Programación de Aplicaciones (API) escrita en C (compatible con la interfaz binaria de aplicaciones ABI), la cual permite una personalización total del dispositivo.
+
+* **Compatibilidad y Entornos:** Al ser compatible con ABI de C, la API puede ser invocada desde múltiples lenguajes de programación, incluyendo Java, C#, Python, C++, MATLAB y LabVIEW.
+* **Mediciones Principales Vía API:**
+    * Análisis de Espectro por Barrido (Swept Spectrum Analysis).
+    * Análisis de Espectro en Tiempo Real.
+    * Streaming de datos I/Q.
+    * Demodulación de Audio.
+    * Análisis de Redes Escalar (Scalar Network Analysis).
+* **Gestión de Energía Avanzada:** Mediante la API, el equipo puede ponerse en estado de bajo consumo. Estando activo, el BB60C consume unos 6 Watts, pero usando la función `bbSetPowerState` se puede reducir a un modo de espera (standby) de aproximadamente 1.25 Watts.
+* **Procesamiento de Datos I/Q Vía Código:** Para medir la potencia de una muestra en los flujos I/Q de la API, los desarrolladores deben convertir las muestras complejas de 16-bits a punto flotante (float), escalar los valores flotantes utilizando el valor de corrección devuelto por `bbGetIQCorrection`, y aplicar un cálculo logarítmico (10.0 * log10) para obtener la potencia en dBm.
+* **Salida UART en Barrido:** Durante el streaming o barrido, se pueden emitir bytes UART en posiciones específicas, permitiendo aplicaciones como radiogoniometría (dirección pseudo-Doppler) o conmutación de múltiples antenas.
+
+---
+
+## 5. Requisitos del Sistema y Hardware
+
+Dado el enorme flujo sostenido de información, el PC utilizado debe cumplir especificaciones estrictas:
+
+* **Procesador:** Intel Core i7 de cuatro núcleos de 3.ª generación para equipos de escritorio (los procesadores Intel están recomendados debido a optimizaciones específicas de instrucciones).
+* **Conectividad:** Controlador USB 3.0 nativo.
+* **Grabación de RF Continua:** Si se desea operar como un grabador de banda base I/Q a la máxima velocidad, se necesita un disco duro de estado sólido (SSD) o arreglo RAID capaz de sostener de forma ininterrumpida una velocidad de escritura de al menos 250 MB/s.
+## 6. Optimización y Estabilidad en UIC Radiotelescopio
+
+Para garantizar una operación ininterrumpida en entornos de investigación, se han implementado las siguientes mejoras de software sobre la API base:
+
+* **Gestión de Bloqueos (Mutex):** Implementación de `threading.Lock` para sincronizar el acceso al `sdr_handle`. Esto evita errores de `Device not open` cuando la interfaz de usuario intenta reconfigurar el hardware mientras el motor DSP está leyendo muestras.
+* **Manejo Inteligente de Warnings:** El sistema diferencia entre errores fatales (Status < 0) y avisos informativos (Status > 0). El **Warning 4 (Value Clamped)** se captura y se ignora silenciosamente, permitiendo que la adquisición continúe sin desconexiones accidentales.
+* **Auto-Cuantización de Sample Rate:** El software traduce automáticamente cualquier petición de velocidad de muestreo a las potencias de 2 soportadas por el BB60C (40, 20, 10, 5, 2.5, 1.25 MSps), garantizando que `bb_configure_IQ` siempre reciba parámetros válidos.
+* **Límites de Seguridad de Ancho de Banda:** Para operar de forma estable a la tasa máxima (40 MSps), se aplica un límite de ancho de banda IQ de **27 MHz**, cumpliendo con los límites físicos del dispositivo y garantizando una señal libre de aliasing.
+* **Recuperación Automática:** En caso de un fallo de configuración crítico, el motor intenta devolver el hardware a un estado seguro (20 MHz BW / Decimación 1) antes de reportar el error, maximizando la resiliencia del sistema.
+

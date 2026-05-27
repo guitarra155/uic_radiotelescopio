@@ -14,7 +14,7 @@
     "amp_min": 0.0,
     "amp_max": 0.3,
     "waterfall": 5.0,
-    "iq_filename": "C:/uic_radiotelescopio/data/test_signal_1.iq",
+    "iq_filename": "C:/SignalHound/ArchivosIQ/IQREC_Milk2025-02-12_11h39m03s_1.iq",
     "iq_format": "int16",
     "stream_mode": "file",
     "algo_params": {
@@ -26,10 +26,10 @@
         "corr_max_lag": 4098,
         "ar_n_freqs": 1024,
         "cwt_n_scales": 2048,
-        "spec2d_method": "cwt"
+        "spec2d_method": "correlogram_2d"
     },
     "analysis_window_sec": 0.1,
-    "moving_avg_samples": 3,
+    "moving_avg_samples": 2,
     "bb60c_ref_level": -30.0,
     "bb60c_iq_bw": 20.0,
     "vbw_alpha": 0.3,
@@ -41,8 +41,8 @@
         "mon_raw_spec": {
             "xmin": 1419.46825,
             "xmax": 1421.34325,
-            "ymin": -56.132534913788696,
-            "ymax": -37.47185961393575,
+            "ymin": -42.429458902385726,
+            "ymax": -21.686964805715903,
             "auto_x": 1,
             "auto_y": 1
         },
@@ -50,15 +50,15 @@
             "xmin": 0.0,
             "xmax": 0.1,
             "ymin": 0.0,
-            "ymax": 0.009276458621025085,
+            "ymax": 0.046021294240199496,
             "auto_x": 1,
             "auto_y": 1
         },
         "mon_filt_spec": {
             "xmin": 1419.46825,
             "xmax": 1421.34325,
-            "ymin": -56.132534913788696,
-            "ymax": -37.47185961393575,
+            "ymin": -42.429458902385726,
+            "ymax": -21.686964805715903,
             "auto_x": 1,
             "auto_y": 1
         },
@@ -66,31 +66,31 @@
             "xmin": 0.0,
             "xmax": 0.1,
             "ymin": 0.0,
-            "ymax": 0.006907316046366768,
+            "ymax": 0.038460639311083414,
             "auto_x": 1,
             "auto_y": 1
         },
         "spec_wf": {
             "xmin": 1419.46825,
             "xmax": 1421.34325,
-            "ymin": -56.132534913788696,
-            "ymax": -37.47185961393575,
+            "ymin": -42.429458902385726,
+            "ymax": -21.686964805715903,
             "auto_x": 1,
             "auto_y": 1
         },
         "spec_cwt": {
             "xmin": 1419.46825,
             "xmax": 1421.34325,
-            "ymin": -100.0,
-            "ymax": -20.0,
+            "ymin": -104.76501944896825,
+            "ymax": -66.84767350366198,
             "auto_x": 1,
             "auto_y": 1
         },
         "spec_ar": {
             "xmin": 1419.46825,
             "xmax": 1421.34325,
-            "ymin": -148.22409057617188,
-            "ymax": -99.73963928222656,
+            "ymin": -115.64822387695312,
+            "ymax": -77.39496612548828,
             "auto_x": 1,
             "auto_y": 1
         },
@@ -106,23 +106,23 @@
             "xmin": 0.0,
             "xmax": 0.1,
             "ymin": 0.0,
-            "ymax": 0.48391,
+            "ymax": 0.47771,
             "auto_x": 1,
             "auto_y": 1
         },
         "pow_time": {
             "xmin": 0.0,
             "xmax": 200.0,
-            "ymin": -73.72688542102237,
-            "ymax": -63.083068421853966,
+            "ymin": -64.23267833063032,
+            "ymax": -49.37026939461549,
             "auto_x": 1,
             "auto_y": 1
         },
         "snr_freq": {
             "xmin": 1419.46825,
             "xmax": 1421.34325,
-            "ymin": -14.915379686804028,
-            "ymax": 14.915379686804028,
+            "ymin": -10.0,
+            "ymax": 10.0,
             "auto_x": 1,
             "auto_y": 1
         }
