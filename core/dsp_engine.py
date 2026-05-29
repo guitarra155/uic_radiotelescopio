@@ -99,9 +99,9 @@ class DSPEngine:
         )
         self.waterfall_data = np.full((self.waterfall_steps, self.fft_size), -100.0)
 
-        self.amplitude_data = np.zeros(8000)
+        self.amplitude_data = np.zeros(2000, dtype=np.complex64)
         # Amplitude buffer — señal filtrada por Moving Average
-        self.amplitude_ma_data = np.zeros(8000)
+        self.amplitude_ma_data = np.zeros(2000, dtype=np.complex64)
 
         # Buffer IQ de alta resolución para el Correlograma 2D
         # Se vincula al 'Historial Cascada' (waterfall_history_sec)
@@ -464,30 +464,19 @@ class DSPEngine:
                     self.trigger_state = 0
                     self.trigger_active = False # Auto-desarmar tras capturar
 
-        # ── 2. Buffer RAW: Diezmar 1 segundo de datos a 2000 puntos para UI fluida ──────────────────
-        step = max(1, len(iq) // len(self.amplitude_data))
-        mag_raw = np.abs(iq[::step][:len(self.amplitude_data)])
-        if len(mag_raw) == len(self.amplitude_data):
-            self.amplitude_data[:] = mag_raw
+        # ── 2. Buffer RAW: Guardar primeras 2000 muestras contiguas (Alta Resolución, sin diezmado) ──
+        n_samples = len(self.amplitude_data)
+        if len(iq) >= n_samples:
+            self.amplitude_data[:] = iq[:n_samples]
         else:
-            self.amplitude_data = np.roll(self.amplitude_data, -len(mag_raw))
-            self.amplitude_data[-len(mag_raw) :] = mag_raw
+            self.amplitude_data[:] = np.pad(iq, (0, n_samples - len(iq)), mode='constant')
 
-        # ── 3. Moving Average Filter (IMPLEMENTACIÓN ULTRA-RÁPIDA) ────────
+        # ── 3. Moving Average Filter (IMPLEMENTACIÓN ULTRA-RÁPIDA Y CORRECTA) ────────
         win_len = max(1, int(self.moving_avg_samples))
         
         if self.ma_enabled and win_len > 1:
-            # Optimizamos usando Suma Acumulada para que sea O(N) independientemente de la ventana
-            # Esto es lo mismo que np.convolve pero instantáneo.
-            def fast_ma(x, w):
-                # Padding para mantener modo "same"
-                pad = w // 2
-                x_padded = np.pad(x, (pad, pad), mode='edge')
-                cs = np.cumsum(x_padded, dtype=np.float64)
-                res = (cs[w:] - cs[:-w]) / w
-                return res[:len(x)]
-
-            iq_f = fast_ma(iq.real, win_len) + 1j * fast_ma(iq.imag, win_len)
+            from scipy.ndimage import uniform_filter1d
+            iq_f = uniform_filter1d(iq.real, size=win_len, mode='nearest') + 1j * uniform_filter1d(iq.imag, size=win_len, mode='nearest')
         else:
             iq_f = iq  # Sin filtrado
 
@@ -513,13 +502,11 @@ class DSPEngine:
             if end >= buf_sz:
                 self._corr_buf_full = True
 
-        # Buffer de amplitud filtrada (Diezmado)
-        mag_f = np.abs(iq_f[::step][:len(self.amplitude_ma_data)])
-        if len(mag_f) == len(self.amplitude_ma_data):
-            self.amplitude_ma_data[:] = mag_f
+        # Buffer de amplitud filtrada (primeras 2000 muestras contiguas sin diezmado)
+        if len(iq_f) >= n_samples:
+            self.amplitude_ma_data[:] = iq_f[:n_samples]
         else:
-            self.amplitude_ma_data = np.roll(self.amplitude_ma_data, -len(mag_f))
-            self.amplitude_ma_data[-len(mag_f) :] = mag_f
+            self.amplitude_ma_data[:] = np.pad(iq_f, (0, n_samples - len(iq_f)), mode='constant')
 
         # ── 3b. Espectro RAW (FFT sobre señal sin filtrar) → solo para Tab 1 ───
         pwr_raw_avg = np.zeros(self.fft_size)
@@ -575,8 +562,8 @@ class DSPEngine:
         self.waterfall_idx = (self.waterfall_idx - 1) % self.waterfall_steps
         self.waterfall_data[self.waterfall_idx, :] = self.spectrum_data
 
-        # ── 6. Histograma (magnitud de señal filtrada) ─────────────────────
-        self.histogram_data = np.random.choice(mag_f, size=2000, replace=True)
+        # ── 6. Histograma (Relación Señal/Ruido SNR en dB) ──────────────────
+        self.histogram_data = self.snr_data.copy()
 
         # ── 7. Potencia instantánea vs Tiempo ────────────────────────────
         inst_pwr_db = float(np.mean(pwr))
@@ -654,8 +641,8 @@ class DSPEngine:
         # 1. Sanitizar datos de entrada para evitar cálculos corruptos
         spec = np.nan_to_num(self.spectrum_data, nan=-100.0)
         spec_raw = np.nan_to_num(self.spectrum_raw_data, nan=-100.0)
-        amp = np.nan_to_num(self.amplitude_data, nan=0.0)
-        amp_f = np.nan_to_num(self.amplitude_ma_data, nan=0.0)
+        amp = np.nan_to_num(np.abs(self.amplitude_data), nan=0.0)
+        amp_f = np.nan_to_num(np.abs(self.amplitude_ma_data), nan=0.0)
         
         # Ignorar los bordes caídos del filtro anti-aliasing SDR para calcular el ruido
         c_start = len(spec) // 4
@@ -722,10 +709,12 @@ class DSPEngine:
                         cfg["ymin"] = -span_y
                         cfg["ymax"] = span_y
                 elif chart_id == "stat_hist":
-                    h_max = float(np.nanpercentile(self.histogram_data, 99))
+                    h_min = float(np.nanpercentile(self.histogram_data, 0.1))
+                    h_max = float(np.nanpercentile(self.histogram_data, 99.9))
                     if cfg.get("auto_x", True):
-                        cfg["xmin"] = 0.0 # El histograma usa x para amplitud
-                        cfg["xmax"] = float(max(0.1, h_max * 1.2))
+                        margin = max(1.0, (h_max - h_min) * 0.15)
+                        cfg["xmin"] = float(h_min - margin)
+                        cfg["xmax"] = float(h_max + margin)
 
             # --- Validación Final Anti-Colapso (ymin < ymax y sin NaNs) ---
             for attr in ["xmin", "xmax", "ymin", "ymax"]:

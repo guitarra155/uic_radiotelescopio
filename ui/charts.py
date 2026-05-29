@@ -160,21 +160,26 @@ def chart_amplitude() -> str:
     sig = engine_instance.amplitude_data
     n = len(sig)
     # Tiempo RELATIVO: siempre de 0 a la duración de la ventana
-    # La señal siempre será visible; solo cambia la escala X si cambia analysis_window_sec
     duration_sec = engine_instance.analysis_window_sec
     t = np.linspace(0.0, duration_sec, n)
 
-    if is_new or "line" not in cache.artists["amplitude"]:
+    if is_new or "line_i" not in cache.artists["amplitude"]:
         ax.clear()
         style_ax(
             ax, "Amplitud vs Tiempo (Streaming)", "Tiempo (s)", "Amplitud Baseband (V)"
         )
-        (line,) = ax.plot(t, sig, color=ACCENT_CYAN, linewidth=engine_instance.chart_line_width, alpha=0.85, rasterized=True)
-        cache.artists["amplitude"]["line"] = line
+        (line_i,) = ax.plot(t, sig.real, color=ACCENT_CYAN, linewidth=engine_instance.chart_line_width, alpha=0.85, label="I (Real)", rasterized=True)
+        (line_q,) = ax.plot(t, sig.imag, color="#E040FB", linewidth=engine_instance.chart_line_width, alpha=0.85, label="Q (Imaginario)", rasterized=True)
+        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL)
+        cache.artists["amplitude"]["line_i"] = line_i
+        cache.artists["amplitude"]["line_q"] = line_q
     else:
-        line = cache.artists["amplitude"]["line"]
-        line.set_linewidth(engine_instance.chart_line_width)
-        line.set_data(t, sig)
+        line_i = cache.artists["amplitude"]["line_i"]
+        line_q = cache.artists["amplitude"]["line_q"]
+        line_i.set_linewidth(engine_instance.chart_line_width)
+        line_q.set_linewidth(engine_instance.chart_line_width)
+        line_i.set_data(t, sig.real)
+        line_q.set_data(t, sig.imag)
         
     # El eje X siempre cubre exactamente la ventana de análisis actual
     cfg = engine_instance.charts_config["mon_raw_amp"]
@@ -348,23 +353,38 @@ def chart_histogram() -> str:
     fig, ax, is_new = get_cached_fig("histogram", figsize=dyn_size)
     samples = engine_instance.histogram_data
 
-    # El histograma es difícil de actualizar vía set_data, lo regeneramos pero reusando la figura
     ax.clear()
-    style_ax(ax, "Histograma Baseband", "Magnitud (Abs)", "Ocurrencia Relativa")
+    style_ax(ax, "Histograma de Relación Señal/Ruido (SNR)", "SNR (dB)", "Cantidad de Datos (Bins)")
 
     if len(samples) > 2 and np.std(samples) > 0:
-        ax.hist(samples, bins=50, density=True, color=ACCENT_CYAN, alpha=0.5)
+        # Se genera el histograma con cuentas absolutas (sin density=True)
+        counts, bins, _ = ax.hist(samples, bins=50, color=ACCENT_CYAN, alpha=0.4, label="Datos Medidos")
         mu, std = np.mean(samples), np.std(samples)
         x = np.linspace(np.min(samples), np.max(samples), 100)
+        
+        # Ecuación de la PDF Gaussiana estándar
         gauss = (1 / (std * math.sqrt(2 * math.pi))) * np.exp(
             -0.5 * ((x - mu) / std) ** 2
         )
-        ax.plot(x, gauss, color=ACCENT_GREEN, linewidth=1.5)
+        # Escalar la gaussiana al número total de muestras y al ancho de los bins para que coincida con las cuentas
+        bin_width = bins[1] - bins[0]
+        ax.plot(x, gauss * len(samples) * bin_width, color=ACCENT_GREEN, linewidth=1.5, label="Ideal Térmico (Gauss)")
+
+        # NUEVO: Curva empírica real aproximada usando Kernel Density Estimation (KDE)
+        try:
+            from scipy.stats import gaussian_kde
+            kde = gaussian_kde(samples)
+            kde_vals = kde(x) * len(samples) * bin_width
+            ax.plot(x, kde_vals, color=ACCENT_AMBER, linewidth=1.5, linestyle="-", label="Real Observado (KDE)")
+        except Exception:
+            pass
+        
+        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL)
 
     cfg = engine_instance.charts_config["stat_hist"]
     safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
 
-    # Sincronizar ymin/ymax: auto detecta el rango real de la curva gaussiana
+    # Sincronizar ymin/ymax para el eje Y de cuentas absolutas
     if cfg.get("auto_y", True):
         y_lo, y_hi = ax.get_ylim()
         cfg["ymin"] = round(y_lo, 5)
@@ -372,7 +392,7 @@ def chart_histogram() -> str:
     else:
         safe_set_ylim(ax, cfg["ymin"], cfg["ymax"])
 
-    # Sincronizar xmin/xmax cuando auto_x está activo
+    # Sincronizar xmin/xmax para el eje X de dBFS
     if cfg.get("auto_x", True):
         x_lo, x_hi = ax.get_xlim()
         cfg["xmin"] = round(x_lo, 5)
@@ -384,7 +404,7 @@ def chart_histogram() -> str:
 def chart_signal_time() -> str:
     dyn_size = get_dynamic_figsize(19.0, 5.6)
     fig, ax, is_new = get_cached_fig("signal_time", figsize=dyn_size)
-    raw = engine_instance.amplitude_data.astype(np.float32)
+    raw = engine_instance.amplitude_data
     n = len(raw)
     # Tiempo absoluto en segundos
     elapsed_sec = engine_instance.elapsed_samples / engine_instance.sample_rate
@@ -395,15 +415,14 @@ def chart_signal_time() -> str:
     if is_new or "line_i" not in cache.artists["signal_time"]:
         ax.clear()
         style_ax(ax, "Señal en el Tiempo (I / Q)", "Tiempo (s)", "Amplitud (V)")
-        (li,) = ax.plot(t, raw, color=ACCENT_CYAN, linewidth=0.8, label="I")
-        (lq,) = ax.plot(
-            t, np.roll(raw, n // 4), color=ACCENT_GREEN, linewidth=0.8, label="Q"
-        )
+        (li,) = ax.plot(t, raw.real, color=ACCENT_CYAN, linewidth=0.8, label="I", rasterized=True)
+        (lq,) = ax.plot(t, raw.imag, color="#E040FB", linewidth=0.8, label="Q", rasterized=True)
+        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL)
         cache.artists["signal_time"]["line_i"] = li
         cache.artists["signal_time"]["line_q"] = lq
     else:
-        cache.artists["signal_time"]["line_i"].set_data(t, raw)
-        cache.artists["signal_time"]["line_q"].set_data(t, np.roll(raw, n // 4))
+        cache.artists["signal_time"]["line_i"].set_data(t, raw.real)
+        cache.artists["signal_time"]["line_q"].set_data(t, raw.imag)
 
     # Sincronizar con charts_config igual que los demás
     cfg = engine_instance.charts_config["mon_raw_amp"]
@@ -661,7 +680,7 @@ def chart_amplitude_ma() -> str:
     duration_sec = engine_instance.analysis_window_sec
     t = np.linspace(0.0, duration_sec, n)
 
-    if is_new or "line" not in cache.artists["amplitude_ma"]:
+    if is_new or "line_i" not in cache.artists["amplitude_ma"]:
         ax.clear()
         style_ax(
             ax,
@@ -669,11 +688,16 @@ def chart_amplitude_ma() -> str:
             "Tiempo (s)",
             "Amplitud (V)",
         )
-        (line,) = ax.plot(t, sig, color=ACCENT_AMBER, linewidth=0.9, alpha=0.9)
-        cache.artists["amplitude_ma"]["line"] = line
+        (line_i,) = ax.plot(t, sig.real, color=ACCENT_GREEN, linewidth=0.9, alpha=0.9, label="I Filtrado", rasterized=True)
+        (line_q,) = ax.plot(t, sig.imag, color=ACCENT_AMBER, linewidth=0.9, alpha=0.9, label="Q Filtrado", rasterized=True)
+        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL)
+        cache.artists["amplitude_ma"]["line_i"] = line_i
+        cache.artists["amplitude_ma"]["line_q"] = line_q
     else:
-        line = cache.artists["amplitude_ma"]["line"]
-        line.set_data(t, sig)
+        line_i = cache.artists["amplitude_ma"]["line_i"]
+        line_q = cache.artists["amplitude_ma"]["line_q"]
+        line_i.set_data(t, sig.real)
+        line_q.set_data(t, sig.imag)
         ax.set_title(
             f"Amplitud Filtrada — MA ({int(engine_instance.moving_avg_samples)} muestras)",
             color=ACCENT_CYAN,

@@ -99,7 +99,7 @@ def main(page: ft.Page):
         "🏠  Inicio & Configuración",    # 0
         "🌓  Monitoreo Dual (RAW/MA)",   # 1
         "🌈  Espectrograma",             # 2
-        "📊  Estadística & Smart Trigger",# 3
+        "📊  Histograma & Estadística",# 3
         "⚡  Potencia vs. Tiempo",        # 4
         "📶  SNR vs. Frecuencia",        # 5
         "🔬  Algoritmo DSP",             # 6
