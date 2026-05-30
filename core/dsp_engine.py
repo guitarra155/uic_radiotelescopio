@@ -688,11 +688,9 @@ class DSPEngine:
                     cfg["ymax"] = float(p_max + altura_senal * 0.3) # Margen sobre los picos
                 elif "amp" in chart_id:
                     data_y = amp_f if "filt" in chart_id else amp
-                    a_max = float(np.nanmax(data_y))
-                    a_min = float(np.nanmin(data_y))
-                    diff = max(0.001, a_max - a_min)
-                    cfg["ymin"] = float(max(0.0, a_min - diff * 0.1))
-                    cfg["ymax"] = float(a_max + diff * 0.2)
+                    a_max = max(0.001, float(np.nanmax(data_y)))
+                    cfg["ymin"] = float(-a_max * 1.2)
+                    cfg["ymax"] = float(a_max * 1.2)
                 elif chart_id == "pow_time":
                     written = min(self.power_samples_written, len(self.power_time_data))
                     if written > 2 and cfg.get("auto_y", True):
