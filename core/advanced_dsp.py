@@ -813,33 +813,50 @@ def run_correlogram_2d(iq: np.ndarray, max_lag: int = 37, n_freqs: int = 1024,
             "method": "Correlograma 2D (Blackman-Tukey)",
         }
 
-    P_blk = np.zeros((n_freqs, num_seg), dtype=np.float64)
     t_seg_abs = t_signal[seg_starts] + (window_len_eff / 2) / sample_rate
 
-    # ── Vectorización total: sin loop Python ─────────────────────────────────
-    # Construir matriz de segmentos (num_seg × window_len_eff) en un solo indexing
-    idx_matrix = seg_starts[:, None] + np.arange(window_len_eff)   # (num_seg, window_len)
-    seg_matrix = iq[idx_matrix].astype(np.complex64)                 # (num_seg, window_len)
-
-    # Autocorrelación batch vía FFT: O(num_seg × N log N)
+    # ── Promediado de sub-ventanas para reducir varianza (elimina líneas horizontales) ──
+    n_sub = min(20, max(1, step_win // window_len_eff))
+    sub_offsets = np.linspace(0, max(0, step_win - window_len_eff), n_sub, dtype=int)
+    
+    n_fft_psd = max(n_freqs, 2 ** int(np.ceil(np.log2(2 * lag_eff + 1))))
+    
     n_fft_ac = 2 ** int(np.ceil(np.log2(2 * window_len_eff - 1)))
-    SEG  = np.fft.fft(seg_matrix, n=n_fft_ac, axis=1)               # (num_seg, n_fft_ac)
-    Rcirc = np.fft.ifft(SEG * np.conj(SEG), axis=1)                 # (num_seg, n_fft_ac) (Complejo)
+    w = np.bartlett(2 * lag_eff + 1).astype(np.float64)
+    P_batch_accum = np.zeros((num_seg, n_fft_psd), dtype=np.float64)
 
-    # Extraer lags [-lag_eff ... +lag_eff]
-    w = np.bartlett(2 * lag_eff + 1)
-    R_neg = Rcirc[:, n_fft_ac - lag_eff:]                           # (num_seg, lag_eff)
-    R_pos = Rcirc[:, :lag_eff + 1]                                  # (num_seg, lag_eff+1)
-    R = np.concatenate([R_neg, R_pos], axis=1) * (n_fft_ac / window_len_eff) # (num_seg, 2*lag+1)
-    R_w = R * w                                                       # broadcast row-wise
+    for offset in sub_offsets:
+        starts_shifted = np.clip(seg_starts + offset, 0, N - window_len_eff).astype(np.int64)
+        idx_matrix = starts_shifted[:, None] + np.arange(window_len_eff)
+        seg_matrix = iq[idx_matrix].astype(np.complex64)
+        
+        # Eliminar DC para evitar fuerte línea central y estabilizar el correlograma
+        seg_matrix -= seg_matrix.mean(axis=1, keepdims=True)
 
-    # PSD batch (num_seg × n_freqs)
-    P_batch = np.fft.fftshift(
-        np.abs(np.fft.fft(R_w, n=n_freqs, axis=1)), axes=1
-    )                                                                 # (num_seg, n_freqs)
-    P_blk = P_batch.T                                                 # (n_freqs, num_seg)
+        # Autocorrelación batch vía FFT
+        SEG  = np.fft.fft(seg_matrix, n=n_fft_ac, axis=1)
+        Rcirc = np.fft.ifft(SEG * np.conj(SEG), axis=1)
+
+        # Extraer lags [-lag_eff ... +lag_eff]
+        R_neg = Rcirc[:, n_fft_ac - lag_eff:]
+        R_pos = Rcirc[:, :lag_eff + 1]
+        R = np.concatenate([R_neg, R_pos], axis=1) * (n_fft_ac / window_len_eff)
+        R_w = R * w
+
+        # PSD batch y acumular
+        P_batch = np.fft.fftshift(np.abs(np.fft.fft(R_w, n=n_fft_psd, axis=1)), axes=1)
+        P_batch_accum += P_batch
+
+    P_batch = P_batch_accum / n_sub
+    P_blk = P_batch.T
 
     P_all = 10 * np.log10(P_blk + np.finfo(float).eps) + offset_calibracion
+    
+    # Recortar/interpolar al tamaño original n_freqs para evitar truncamientos en la FFT
+    if P_all.shape[0] != n_freqs:
+        idx = np.round(np.linspace(0, P_all.shape[0] - 1, n_freqs)).astype(int)
+        P_all = P_all[idx, :]
+
     t_all = t_seg_abs
 
     # ── Máscara de frecuencia visual (= mask_vis del script de referencia) ────

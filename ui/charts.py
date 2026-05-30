@@ -788,8 +788,23 @@ def chart_ar_spectrogram(result: dict) -> str:
     matrix    = result["matrix"]          # (n_segs × n_freqs_vis)
     times_s   = result["times_s"]         # (n_segs,)
     freqs_mhz = result["freqs_mhz"]       # (n_freqs_vis,)
-    v_min     = result.get("v_min",  float(np.percentile(matrix, 1)))
-    v_max     = result.get("v_max",  float(np.percentile(matrix, 99)))
+    
+    # Calcular limites percentiles crudos
+    raw_vmin = float(np.percentile(matrix, 1))
+    raw_vmax = float(np.percentile(matrix, 99))
+    
+    if "ema_vmin" not in cache.artists[name]:
+        cache.artists[name]["ema_vmin"] = raw_vmin
+        cache.artists[name]["ema_vmax"] = raw_vmax
+    else:
+        # Suavizado exponencial (EMA)
+        alpha = 0.15
+        cache.artists[name]["ema_vmin"] = (1 - alpha) * cache.artists[name]["ema_vmin"] + alpha * raw_vmin
+        cache.artists[name]["ema_vmax"] = (1 - alpha) * cache.artists[name]["ema_vmax"] + alpha * raw_vmax
+
+    v_min = cache.artists[name]["ema_vmin"]
+    v_max = cache.artists[name]["ema_vmax"]
+    
     if v_max <= v_min: v_max = v_min + 20.0
     fc_hi = engine_instance.center_freq
     history_sec = engine_instance.waterfall_history_sec
@@ -874,8 +889,23 @@ def chart_correlogram_spectrogram(result: dict) -> str:
     matrix    = result["matrix"]        # (n_segs × n_freqs)
     times_s   = result["times_s"]       # (n_segs,)
     freqs_mhz = result["freqs_mhz"]    # (n_freqs,)
-    v_min     = result.get("v_min", float(np.percentile(matrix, 1)))
-    v_max     = result.get("v_max", float(np.percentile(matrix, 99)))
+    
+    # Calcular limites percentiles crudos
+    raw_vmin = float(np.percentile(matrix, 1))
+    raw_vmax = float(np.percentile(matrix, 99))
+    
+    if "ema_vmin" not in cache.artists[name]:
+        cache.artists[name]["ema_vmin"] = raw_vmin
+        cache.artists[name]["ema_vmax"] = raw_vmax
+    else:
+        # Suavizado exponencial (EMA) para evitar el "flicker" o "cambio de color" abrupto
+        alpha = 0.15
+        cache.artists[name]["ema_vmin"] = (1 - alpha) * cache.artists[name]["ema_vmin"] + alpha * raw_vmin
+        cache.artists[name]["ema_vmax"] = (1 - alpha) * cache.artists[name]["ema_vmax"] + alpha * raw_vmax
+
+    v_min = cache.artists[name]["ema_vmin"]
+    v_max = cache.artists[name]["ema_vmax"]
+    
     if v_max <= v_min: v_max = v_min + 20.0
     fc_hi     = engine_instance.center_freq
     history_sec = engine_instance.waterfall_history_sec

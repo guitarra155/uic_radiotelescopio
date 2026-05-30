@@ -10,7 +10,7 @@ end
 %% --- CONFIGURACIÓN GENERAL ---
 fs = 1e6;
 f_HI = 1420e6;
-carpeta = 'ArchivosIQ';
+carpeta = 'data';
 
 % Configuración Correlación
 nfft = 1024;

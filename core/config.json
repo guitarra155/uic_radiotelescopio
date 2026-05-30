@@ -23,10 +23,10 @@
         "method": "Correlograma",
         "welch_fft": 1024,
         "welch_overlap": 0.5,
-        "corr_max_lag": 4098,
+        "corr_max_lag": 2048,
         "ar_n_freqs": 1024,
         "cwt_n_scales": 2048,
-        "spec2d_method": "ar_burg_2d"
+        "spec2d_method": "correlogram_2d"
     },
     "analysis_window_sec": 0.1,
     "moving_avg_samples": 5,
@@ -39,42 +39,42 @@
     "visual_span_mhz": 2.5,
     "charts_config": {
         "mon_raw_spec": {
-            "xmin": 1419.468251768,
-            "xmax": 1421.343251768,
+            "xmin": 1419.155751768,
+            "xmax": 1421.655751768,
             "ymin": -49.261618422770866,
             "ymax": -20.039611596129433,
-            "auto_x": 1,
+            "auto_x": 0,
             "auto_y": 1
         },
         "mon_raw_amp": {
             "xmin": 0.0,
-            "xmax": 0.02,
+            "xmax": 0.1,
             "ymin": -0.032454554736614225,
             "ymax": 0.032454554736614225,
-            "auto_x": 0,
-            "auto_y": 0
+            "auto_x": 1,
+            "auto_y": 1
         },
         "mon_filt_spec": {
-            "xmin": 1419.468251768,
-            "xmax": 1421.343251768,
+            "xmin": 1419.155751768,
+            "xmax": 1421.655751768,
             "ymin": -49.261618422770866,
             "ymax": -20.039611596129433,
-            "auto_x": 1,
+            "auto_x": 0,
             "auto_y": 1
         },
         "mon_filt_amp": {
             "xmin": 0.0,
-            "xmax": 0.02,
-            "ymin": -0.01713510565459728,
-            "ymax": 0.01713510565459728,
-            "auto_x": 0,
-            "auto_y": 0
+            "xmax": 0.1,
+            "ymin": -0.015812215581536292,
+            "ymax": 0.015812215581536292,
+            "auto_x": 1,
+            "auto_y": 1
         },
         "spec_wf": {
             "xmin": 1419.468251768,
             "xmax": 1421.343251768,
-            "ymin": -50.0,
-            "ymax": -10.0,
+            "ymin": -42.0,
+            "ymax": -20.039611596129433,
             "auto_x": 1,
             "auto_y": 0
         },
@@ -82,32 +82,32 @@
             "xmin": 1419.468251768,
             "xmax": 1421.343251768,
             "ymin": -110.0,
-            "ymax": -73.88458951739639,
+            "ymax": -70.0,
             "auto_x": 1,
             "auto_y": 0
         },
         "spec_ar": {
             "xmin": 1419.468251768,
             "xmax": 1421.343251768,
-            "ymin": -110.0,
-            "ymax": -83.57928466796875,
+            "ymin": -100.0,
+            "ymax": -85.0,
             "auto_x": 1,
             "auto_y": 0
         },
         "spec_corr": {
             "xmin": 1419.468251768,
             "xmax": 1421.343251768,
-            "ymin": -89.54829628269977,
-            "ymax": -38.23935920966193,
+            "ymin": -70.0,
+            "ymax": -40.0,
             "auto_x": 1,
-            "auto_y": 1
+            "auto_y": 0
         },
         "stat_hist": {
-            "xmin": -60.46231508844874,
-            "xmax": 33.83258630783937,
+            "xmin": -77.68510549540477,
+            "xmax": 33.73793990762526,
             "ymin": 0.0,
-            "ymax": 59.85,
-            "auto_x": 0,
+            "ymax": 65.1,
+            "auto_x": 1,
             "auto_y": 1
         },
         "pow_time": {
