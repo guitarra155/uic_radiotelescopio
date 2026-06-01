@@ -131,3 +131,13 @@ Procesa la distribución de las muestras complejas I/Q según la selección del 
 - **Sincronización Dinámica de Gráficos Rodantes (Waterfall & Potencia vs Tiempo):**
   - Se rediseñó el buffer `power_time_data` para que deje de tener un tamaño fijo e ineficiente (de 2000 muestras) y se redimensione dinámicamente según la ecuación $\frac{\text{Historial Cascada}}{\text{Ventana Análisis}}$ (ej: $30.0\text{ s} / 0.1\text{ s} = 300\text{ pasos}$).
   - Esto garantiza que tanto el Espectrograma de Cascada como la gráfica de Potencia vs Tiempo se desplacen de forma coordinada a la velocidad de tu ventana de análisis (0.1s) y mantengan exactamente la misma ventana de memoria visual configurada (30 segundos), desplazando los datos antiguos hacia la izquierda/arriba en tiempo real y eliminando discrepancias de escala temporal.
+- **Reinicio Preciso de Temporizador DSP:**
+  - Se implementó el reseteo explícito de la variable global de tiempo `self.elapsed_samples = 0` en la función `reset_buffers()`. Esto garantiza que al detener (Stop) y reanudar la adquisición, el reloj siempre inicie limpiamente en 0.0s.
+- **Resolución Extrema y Caché en Transformada Wavelet Continua (CWT):**
+  - Se elevó el límite paramétrico de 512 a **4096 escalas** para ultra alta resolución espectral.
+  - Se desarrolló un mecanismo de **Caché en RAM** (`self._cwt_cached_matrix`) que calcula la matriz compleja de wavelets Morlet una sola vez y recicla la memoria en operaciones matriciales directas, permitiendo computar 4096 escalas en tiempo real a 30 FPS.
+  - Se ajustó el parámetro central $\omega_0$ de 6.0 a 24.0, afilando drásticamente el ancho de banda del wavelet y generando visualizaciones mucho más finas y delgadas en el eje frecuencial.
+- **Estabilización Absoluta de Línea Base Térmica (Baseline Lock) en CWT:**
+  - Se integró un algoritmo que extrae la mediana frecuencial en tiempo real de cada ráfaga.
+  - El piso de ruido se alinea a un ancla pre-grabada (`self._baseline_noise`), compensando la fluctuación térmica natural temporal (`pwr - current_median + self._baseline_noise`). Esto suprime definitivamente las rayas horizontales y el parpadeo de contraste.
+  - Incorpora un rechazo de transitorios de banda ancha (estática): Si la mediana salta repentinamente > 3.0 dB, el frame anómalo es descartado y reemplazado por la referencia limpia previa.
