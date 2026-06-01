@@ -110,11 +110,16 @@ def build_estado(page: ft.Page) -> ft.Control:
             
             setattr(engine_instance, attr, val)
             
-            # Avisar al hilo de hardware que reconfigure en vivo si es un parámetro físico
-            if attr in ["sample_rate", "bb60c_ref_level", "bb60c_iq_bw"]:
+            # Avisar al hilo que reconfigure en vivo (para SDR y sintonía digital en archivos)
+            if attr in ["center_freq", "sample_rate", "bb60c_ref_level", "bb60c_iq_bw"]:
                 engine_instance._retune_requested = True
                 
             engine_instance.save_config()
+            
+            # Refrescar todas las gráficas y componentes visuales en todas las pestañas
+            try:
+                e.control.page.pubsub.send_all("refresh_charts")
+            except: pass
         except ValueError: pass
 
     freq_f.on_submit = lambda e: on_global_change(e, "center_freq")

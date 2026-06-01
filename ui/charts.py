@@ -356,10 +356,16 @@ def chart_histogram() -> str:
     mode = getattr(engine_instance, "histogram_mode", "Magnitud")
     ax.clear()
 
+    # Calcular el rango de tiempo de este análisis para el título de la gráfica
+    c = engine_instance.current_file_time if engine_instance.stream_mode == "file" else (engine_instance.elapsed_samples / engine_instance.sample_rate)
+    w = engine_instance.analysis_window_sec
+    start_t = max(0.0, c - w)
+    time_str = f"[{start_t:.1f}s - {c:.1f}s]"
+
     if mode == "Magnitud":
-        style_ax(ax, "Distribución de Magnitud de Señal (Histograma)", "Magnitud de la Señal", "Conteo de Muestras")
+        style_ax(ax, f"Distribución de Magnitud de Señal {time_str}", "Magnitud de la Señal", "Densidad de Probabilidad (PDF)")
     else:
-        style_ax(ax, "Distribución de Fase de Señal (Histograma)", "Fase (Radianes)", "Conteo de Muestras")
+        style_ax(ax, f"Distribución de Fase de Señal {time_str}", "Fase (Radianes)", "Densidad de Probabilidad (PDF)")
 
     if len(samples) > 2 and np.std(samples) > 0:
         if mode == "Magnitud":
@@ -371,7 +377,7 @@ def chart_histogram() -> str:
             bins_range = np.linspace(-np.pi, np.pi, 100)
             
         # Se genera el histograma como área rellenada (stepfilled)
-        counts, bins, _ = ax.hist(samples, bins=bins_range, color=ACCENT_CYAN, alpha=0.4, label="Datos Medidos", histtype='stepfilled')
+        counts, bins, _ = ax.hist(samples, bins=bins_range, color=ACCENT_CYAN, alpha=0.4, label="Datos Medidos", histtype='stepfilled', density=True)
         mu, std = np.mean(samples), np.std(samples)
         
         if mode == "Magnitud":
@@ -383,20 +389,20 @@ def chart_histogram() -> str:
         gauss = (1 / (std * math.sqrt(2 * math.pi))) * np.exp(
             -0.5 * ((x - mu) / std) ** 2
         )
-        # Escalar la gaussiana al número total de muestras y al ancho de los bins para que coincida con las cuentas
-        bin_width = bins[1] - bins[0]
-        ax.plot(x, gauss * len(samples) * bin_width, color=ACCENT_GREEN, linewidth=1.5, label="Ideal Térmico (Gauss)")
+        # Ya no se requiere escalar la gaussiana porque el histograma ahora es un PDF (density=True)
+        ax.plot(x, gauss, color=ACCENT_GREEN, linewidth=1.5, label="Ideal Térmico (Gauss)")
 
         # NUEVO: Curva empírica real aproximada usando Kernel Density Estimation (KDE)
         try:
             from scipy.stats import gaussian_kde
             kde = gaussian_kde(samples)
-            kde_vals = kde(x) * len(samples) * bin_width
+            kde_vals = kde(x)
             ax.plot(x, kde_vals, color=ACCENT_AMBER, linewidth=1.5, linestyle="-", label="Real Observado (KDE)")
         except Exception:
             pass
-        
-        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL)
+        leg = ax.legend(loc="upper right", fontsize=8, facecolor=MPL_AXBG, edgecolor=BORDER_COL)
+        for text in leg.get_texts():
+            text.set_color("#ECEFF1")  # Color claro y visible en modo oscuro
 
     cfg_id = "stat_hist_mag" if mode == "Magnitud" else "stat_hist_fase"
     cfg = engine_instance.charts_config.get(cfg_id)

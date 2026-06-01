@@ -17,10 +17,11 @@ def build_statistics(page: ft.Page, key_state: dict) -> ft.Control:
         padding=ft.Padding(left=14, top=14, right=14, bottom=14),
     )
 
-    val_media = ft.Text("0.000", color=ACCENT_GREEN, size=10, weight=ft.FontWeight.W_600, expand=1)
-    val_std   = ft.Text("0.000", color=ACCENT_GREEN, size=10, weight=ft.FontWeight.W_600, expand=1)
+    val_media = ft.Text("0.0000", color=ACCENT_GREEN, size=10, weight=ft.FontWeight.W_600, expand=1)
+    val_std   = ft.Text("0.0000", color=ACCENT_GREEN, size=10, weight=ft.FontWeight.W_600, expand=1)
     val_kur   = ft.Text("0.00",  color=ACCENT_AMBER, size=10, weight=ft.FontWeight.W_600, expand=1)
     val_sesgo = ft.Text("0.00",  color=ACCENT_AMBER, size=10, weight=ft.FontWeight.W_600, expand=1)
+    val_rango_t = ft.Text("0.0s - 0.0s", color=ACCENT_CYAN, size=10, weight=ft.FontWeight.W_600, expand=1)
 
     is_rendering = [False]
     async def on_refresh(msg):
@@ -34,6 +35,14 @@ def build_statistics(page: ft.Page, key_state: dict) -> ft.Control:
         try:
             from core.dsp_engine import engine_instance # redundante pero seguro
             import numpy as np
+            
+            # Calcular rango temporal de análisis
+            c = engine_instance.current_file_time if engine_instance.stream_mode == "file" else (engine_instance.elapsed_samples / engine_instance.sample_rate)
+            w = engine_instance.analysis_window_sec
+            start_t = max(0.0, c - w)
+            val_rango_t.value = f"{start_t:.1f}s - {c:.1f}s"
+            if val_rango_t.page: val_rango_t.update()
+
             samples = engine_instance.histogram_data
             if len(samples) > 0:
                 mu, std = np.mean(samples), np.std(samples)
@@ -51,8 +60,8 @@ def build_statistics(page: ft.Page, key_state: dict) -> ft.Control:
                     val_kur.value = "0.00"
                 
                 # Actualizar los textos individualmente con validación
-                for w in [val_media, val_std, val_sesgo, val_kur]:
-                    if w.page: w.update()
+                for w_lbl in [val_media, val_std, val_sesgo, val_kur]:
+                    if w_lbl.page: w_lbl.update()
 
             import asyncio
             img.src = await asyncio.to_thread(chart_histogram)
@@ -66,7 +75,8 @@ def build_statistics(page: ft.Page, key_state: dict) -> ft.Control:
         ft.Row([ft.Text("Media (μ)", color=TEXT_MAIN, size=10, expand=1), val_media]),
         ft.Row([ft.Text("Std Dev (σ)", color=TEXT_MAIN, size=10, expand=1), val_std]),
         ft.Row([ft.Text("Kurtosis", color=TEXT_MAIN, size=10, expand=1), val_kur]),
-        ft.Row([ft.Text("Sesgo", color=TEXT_MAIN, size=10, expand=1), val_sesgo])
+        ft.Row([ft.Text("Sesgo", color=TEXT_MAIN, size=10, expand=1), val_sesgo]),
+        ft.Row([ft.Text("Rango Temporal", color=TEXT_MAIN, size=10, expand=1), val_rango_t])
     ]
     
     info_lbl = ft.Text("Distribución detectada:\nCampana de Gauss (Aprox)", color=ACCENT_CYAN, size=11, italic=True)

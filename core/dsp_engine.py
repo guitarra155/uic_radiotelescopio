@@ -241,8 +241,7 @@ class DSPEngine:
             return
         delta = val - self._center_freq
         self._center_freq = val
-        if self.stream_mode == "sdr":
-            self._retune_requested = True
+        self._retune_requested = True
         
         # Desplazar los límites X de las gráficas de frecuencia si están en modo manual
         if hasattr(self, "charts_config"):
@@ -349,6 +348,14 @@ class DSPEngine:
             self.power_samples_written = 0
 
     def start_stream(self, mode, params):
+        # Si ya hay un hilo reproduciendo, lo apagamos y esperamos a que muera para evitar solapamientos
+        if hasattr(self, "stream_thread") and self.stream_thread and self.stream_thread.is_alive():
+            self.is_playing = False
+            try:
+                self.stream_thread.join(timeout=0.02) # Espera imperceptible para el hilo de UI
+            except:
+                pass
+
         if self.is_playing:
             return
         
@@ -888,8 +895,11 @@ class DSPEngine:
                     self.current_file_time = (pos / bytes_per_sample) / self.sample_rate
 
                     raw_data = f.read(chunk_bytes)
-                    if not raw_data or len(raw_data) < chunk_bytes:
+                    if not raw_data or len(raw_data) < chunk_bytes or not self.is_playing:
                         self.is_playing = False  # Termina y se apaga
+                        break
+
+                    if not self.is_playing:
                         break
 
                     if self.data_format == "uint8":
@@ -915,6 +925,9 @@ class DSPEngine:
                     else:
                         break
 
+                    if not self.is_playing:
+                        break
+
                     # Sanitizar datos para evitar NaNs o Infs en caso de formato erróneo
                     iq = np.nan_to_num(iq, nan=0.0, posinf=1.0, neginf=-1.0)
 
@@ -924,23 +937,39 @@ class DSPEngine:
                         self._perform_spectral_lock(iq)
 
                     # --- Desplazamiento de Frecuencia Digital para Simular Sintonía en Archivos ---
-                    file_cf = getattr(self, "file_center_freq", 1420.40575179)
+                    file_cf = getattr(self, "file_center_freq", 1420.40575)
                     tuned_cf = self.center_freq
                     delta_f = file_cf - tuned_cf
                     
                     if abs(delta_f) > 1e-6:
-                        n = np.arange(len(iq))
-                        phase = 2.0 * np.pi * (delta_f * 1e6) * n / self.sample_rate
-                        iq = iq * np.exp(1j * phase)
+                        nyquist_limit = (self.sample_rate / 2.0) / 1e6
+                        if abs(delta_f) > nyquist_limit:
+                            # Fuera de banda: reemplazamos la señal grabada por ruido térmico simulado a nivel del piso de ruido
+                            iq = np.random.normal(0, 0.005, len(iq)) + 1j * np.random.normal(0, 0.005, len(iq))
+                        else:
+                            # Dentro de banda: aplicamos desplazamiento digital de frecuencia (complejo)
+                            n = np.arange(len(iq))
+                            phase = 2.0 * np.pi * (delta_f * 1e6) * n / self.sample_rate
+                            iq = iq * np.exp(1j * phase)
+
+                    if not self.is_playing:
+                        break
 
                     self._process_dsp_core(iq, batches=None)
 
-                    # Sincronización con playback_speed
+                    # Sincronización con playback_speed (con escape rápido a micro-intervalos si se detiene)
                     target_time = self.current_file_time / max(0.1, self.playback_speed)
                     elapsed = time.time() - start_real_time
                     sleep_time = target_time - elapsed
                     if sleep_time > 0:
-                        time.sleep(sleep_time)
+                        steps = int(sleep_time / 0.03) # Intervalos de 30ms para respuesta ultra-instantánea
+                        for _ in range(steps):
+                            if not self.is_playing:
+                                break
+                            time.sleep(0.03)
+                        residual = sleep_time % 0.03
+                        if residual > 0 and self.is_playing:
+                            time.sleep(residual)
 
                 # Guardar posición al salir (Pausar)
                 self.file_position = f.tell()
@@ -954,6 +983,12 @@ class DSPEngine:
         NIVEL 1: Carga metadatos explícitos (JSON/TXT/Nombre).
         NIVEL 2: Análisis espectral ciego para detectar la frecuencia real.
         """
+        # Si ya estábamos reproduciendo este mismo archivo y reanudamos desde pausa,
+        # NO reiniciamos la auto-calibración espectral ni sobreescribimos los cambios del usuario.
+        if getattr(self, "file_position", 0) > 0:
+            self._needs_spectral_lock = False
+            return
+
         import os, json, re
         
         base = os.path.splitext(filename)[0]
@@ -998,7 +1033,10 @@ class DSPEngine:
         # Si seguimos en 1420.4 pero el archivo no dice nada, intentamos 'lock-on' al pico
         # Esto se ejecutará en el primer frame de _process_file_loop
         self._needs_spectral_lock = not meta_found
-        self.file_center_freq = self.center_freq
+        if not meta_found:
+            self.file_center_freq = 1420.40575
+        else:
+            self.file_center_freq = self.center_freq
 
     def _perform_spectral_lock(self, iq_data):
         """Analiza el primer bloque de datos para detectar la frecuencia central real."""
@@ -1019,15 +1057,17 @@ class DSPEngine:
         if spec[peak_idx] > noise_floor + 10:
             print(f"🎯 Pico detectado en bin {peak_idx}. Posible señal de interés.", flush=True)
             
-            # Solo auto-calibrar si no estamos ya cerca de la frecuencia de Hidrógeno
-            if abs(self.center_freq - 1420.40575) > 0.5:
+            # Solo auto-calibrar si el usuario ya está intentando sintonizar cerca de la frecuencia de Hidrógeno
+            if abs(self.center_freq - 1420.40575) <= 1.0:
                 self.center_freq = 1420.40575
                 self.metadata_updated = True
-                print("✨ Auto-calibrado a Línea de Hidrógeno (1420.4 MHz)", flush=True)
+                print("✨ Auto-calibrado fino a Línea de Hidrógeno (1420.4 MHz)", flush=True)
             else:
-                print("✅ Ya sintonizado en la banda de interés.", flush=True)
-        
-        self.file_center_freq = self.center_freq
+                print("✅ Sintonización manual mantenida por el usuario.", flush=True)
+            self.file_center_freq = 1420.40575
+        else:
+            # Si no hay pico claro, mantenemos la frecuencia por defecto del archivo de hidrógeno
+            self.file_center_freq = 1420.40575
 
     def update_visual_span(self, span_mhz: float):
         """Ajusta el zoom visual de las gráficas de espectro."""

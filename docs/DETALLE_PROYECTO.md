@@ -84,7 +84,7 @@ Maneja el "Header" dinámico. Muestra la configuración central exactas de frecu
 Procesa la distribución de las muestras complejas I/Q según la selección del usuario en la interfaz (`ui/tabs/statistics.py`):
 *   **Modo Magnitud:** Extrae el valor absoluto de la señal (`np.abs(amplitude_ma_data)`). Los bins se mantienen anclados estrictamente desde la magnitud $0.0$. Esto previene la falsa recreación de distribuciones simétricas si solo hay ruido en frecuencias carentes de emisión.
 *   **Modo Fase:** Extrae el ángulo de la matriz compleja (`np.angle(amplitude_ma_data)`). El eje X respeta los límites físicos de radianes entre $-\pi$ y $\pi$ ($-3.14$ a $3.14$).
-*   **Visualización (Matplotlib):** Se dibuja el área rellenada con densidad de probabilidad real empírica frente al modelo de ruido térmico base (Gauss) con una densidad total de 100 *bins*.
+*   **Visualización (Matplotlib):** Se dibuja el área rellenada transformando el histograma en una **Función de Densidad de Probabilidad (PDF)** (`density=True`), calculando la probabilidad real en lugar del conteo bruto. Se superponen los modelos empíricos (KDE) y térmicos (Gauss) escalados a densidad total.
 *   *Referencia:* PySDR. (n.d.). IQ Data: Complex Numbers and Magnitude Distribution Analysis. PySDR: A Guide to SDR and DSP using Python. Recuperado de https://pysdr.org/content/iq_files.html
 
 ## 10. Mejoras e Implementaciones Actuales
@@ -98,6 +98,21 @@ Procesa la distribución de las muestras complejas I/Q según la selección del 
 - **Sintonía Simulada en Reproducción de Archivos:**
   - Se implementó un algoritmo de **desplazamiento digital de frecuencia (digital down/upconversion)** en la reproducción de archivos `.iq`.
   - Cuando el usuario sintoniza una frecuencia central en la interfaz (`center_freq`), el backend calcula la diferencia espectral $\Delta f = f_{archivo} - f_{sintonizada}$.
-  - Si hay diferencia, las muestras se multiplican por un exponente complejo ($e^{j 2 \pi \Delta f t}$) para trasladar la señal espectralmente en tiempo real. Esto permite que el usuario "busque" la señal de hidrógeno variando la frecuencia y que el pico se desplace o desaparezca físicamente tal como ocurriría operando un hardware SDR real.
-
-
+  - Si hay diferencia y esta es menor que el límite físico de Nyquist ($\pm f_s / 2$), las muestras se multiplican por un exponente complejo ($e^{j 2 \pi \Delta f t}$) para trasladar la señal espectralmente en tiempo real.
+  - Si la diferencia de frecuencia supera el límite de Nyquist, significa que la frecuencia sintonizada está completamente fuera del ancho de banda capturado en el archivo. En este caso, el motor **reemplaza las muestras grabadas por ruido térmico de bajísima amplitud** ($0.005$ V), logrando que los picos espectrales y de histograma desaparezcan por completo de la pantalla tal como ocurre en un receptor SDR real de hardware.
+- **Propagación en Caliente de Parámetros Globales:**
+  - Se habilitó la reactividad total cuando se altera la **Frecuencia Central** (`center_freq`) u otros atributos desde la pestaña de Estado.
+  - El setter de `center_freq` ahora activa el flag de sintonía en caliente (`_retune_requested`) incondicionalmente para modo SDR y Archivos.
+  - La UI en `estado.py` emite un evento PubSub de difusión (`refresh_charts`) al presionar Enter o quitar el cursor, refrescando en caliente todas las gráficas y cabeceras dinámicas de todas las pestañas de manera instantánea y coherente.
+- **Corrección de Lógica de Auto-Calibración en Archivos:**
+  - Se corrigió la condición de calibración espectral ciega (`_perform_spectral_lock`). Anteriormente, si el usuario sintonizaba una frecuencia lejana como $1410.0\text{ MHz}$, la condición invertida forzaba el retorno a $1420.4\text{ MHz}$ automáticamente.
+  - La nueva lógica solo realiza el ajuste fino de auto-calibración si la frecuencia ingresada ya se encuentra cerca de la banda de interés ($\le 1.0\text{ MHz}$ de diferencia), permitiendo al usuario explorar libremente sintonías manuales lejanas (como $1410.0\text{ MHz}$) y ver la banda completamente desierta sin que el software anule su decisión.
+- **Rango Temporal del Bloque de Análisis en Histograma:**
+  - Se incorporó la visualización dinámica del instante de tiempo analizado. Tanto en el título del gráfico de distribución (`ui/charts.py`) como en la tabla estadística lateral (`ui/tabs/statistics.py`), se calcula y muestra el rango exacto `[t_inicio - t_fin]` (calculado como $t - \text{ventana de análisis}$) relativo al archivo o streaming en vivo. Esto permite realizar comparaciones y congelar visualizaciones exactas en modo pausa junto con el Espectrograma.
+- **Mejora de Contraste en Leyendas para Modo Oscuro:**
+  - Se corrigió el problema de legibilidad en la leyenda del histograma. El texto por defecto heredaba un tono oscuro casi invisible contra el fondo gris del panel. Se forzó explícitamente un color de fuente claro (`#ECEFF1`) y un tamaño de letra ligeramente mayor (`fontsize=8`) para asegurar una lectura óptima y descansada bajo cualquier iluminación de la pantalla.
+- **Protección de Sintonía al Pausar / Reanudar:**
+  - Se implementó un control en `_try_load_metadata()` que detecta si el archivo se está reanudando desde una pausa (`file_position > 0`). Si es el caso, se omite por completo la inicialización de la búsqueda de metadatos y el flag de calibración espectral ciega (`_needs_spectral_lock = False`). Esto evita que el sistema sobreescriba o fuerce calibraciones repetidas de la frecuencia central si el usuario no ha realizado ningún cambio en los controles.
+- **Optimización de Latencia y Prevención de Solapamiento de Hilos:**
+  - **Sincronización por Fraccionamiento (Micro-Sleeping) y Escape Rápido:** Se sustituyó el retardo largo `time.sleep(sleep_time)` por un bucle de micro-intervalos de 30ms. Asimismo, se añadieron múltiples puntos de control e interrupción rápida (`if not self.is_playing: break`) a lo largo del flujo de lectura, conversión de formato y procesamiento DSP en `_process_file_loop()`. Esto causa que el hilo cese operaciones y libere recursos inmediatamente (en menos de 3ms) tras pulsar "Pausa".
+  - **Exclusión Mutua de Hilos (Safe Thread Re-use) y No-Bloqueo de UI:** En `start_stream()`, se realiza una espera segura mediante `.join(timeout=0.02)` (reducido de 300ms a tan solo 20ms). Al ser combinada con el escape rápido, garantiza que el hilo anterior muere de inmediato y evita congelar o bloquear el hilo principal de la interfaz visual (UI de Flet), logrando transiciones fluidas de play/pausa sin saltos ni congelamientos.
