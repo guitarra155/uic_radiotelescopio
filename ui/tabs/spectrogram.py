@@ -7,7 +7,7 @@ Métodos: Waterfall FFT, CWT/Morlet, AR/Burg 2D, Correlograma 2D.
 import numpy as np
 import flet as ft
 from core.constants import *
-from ui.charts import chart_spectrogram
+from ui.charts import chart_spectrogram, chart_cwt_map, chart_ar_spectrogram, chart_correlogram_spectrogram
 from ui.components.shared import panel, border_all
 
 _METHODS = [
@@ -134,13 +134,8 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
                 if c.page:
                     c.update()
             page.pubsub.send_all("tab_changed")  # refresca el panel de config
-            
-            # Lanzar tarea pesada usando la caché si ya existe una anterior
-            if val != "waterfall":
-                if e.page:
-                    async def _run_it(*args):
-                        await _render_advanced_method(force_recompute=False)
-                    e.page.run_task(_run_it)
+            # Los buffers 2D se llenan en tiempo real desde _process_dsp_core;
+            # no hay que lanzar ninguna tarea pesada adicional.
         except Exception as ex:
             print(f"Error UI fatal: {ex}")
 
@@ -363,24 +358,18 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
             return
         is_rendering[0] = True
         try:
-            if msg == "tab_changed":
-                # Refresco forzado al cambiar configuración, para cualquier método
-                if method == "waterfall":
-                    img.src = await asyncio.to_thread(chart_spectrogram)
-                    if img.page: img.update()
-                else:
-                    await _render_advanced_method(force_recompute=False)
-                return
-
             if method == "waterfall":
                 img.src = await asyncio.to_thread(chart_spectrogram)
-                if img.page: img.update()
+            elif method == "cwt":
+                img.src = await asyncio.to_thread(chart_cwt_map)
+            elif method == "ar_burg_2d":
+                img.src = await asyncio.to_thread(chart_ar_spectrogram)
             elif method == "correlogram_2d":
-                await _render_advanced_method(force_recompute=True)
-            else:
-                algo_counter[0] += 1
-                if algo_counter[0] % ALGO_EVERY_N == 0:
-                    await _render_advanced_method(force_recompute=True)
+                img.src = await asyncio.to_thread(chart_correlogram_spectrogram)
+            if img.page:
+                img.update()
+        except Exception as _ex:
+            print(f"[Spec2D] Error render {method}: {_ex}")
         finally:
             is_rendering[0] = False
 

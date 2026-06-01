@@ -162,11 +162,16 @@ def chart_amplitude() -> str:
     # Tiempo RELATIVO: siempre de 0 a la duración de la ventana
     duration_sec = engine_instance.analysis_window_sec
     t = np.linspace(0.0, duration_sec, n)
+    
+    # Rango de tiempo absoluto para el título
+    c = engine_instance.current_file_time if engine_instance.stream_mode == "file" else (engine_instance.elapsed_samples / engine_instance.sample_rate)
+    start_t = max(0.0, c - duration_sec)
+    time_str = f"[{start_t:.1f}s - {c:.1f}s]"
 
     if is_new or "line_i" not in cache.artists["amplitude"]:
         ax.clear()
         style_ax(
-            ax, "Amplitud vs Tiempo (Streaming)", "Tiempo (s)", "Amplitud Baseband (V)"
+            ax, f"Amplitud vs Tiempo (Streaming) {time_str}", "Tiempo (s)", "Amplitud Baseband (V)"
         )
         (line_i,) = ax.plot(t, sig.real, color=ACCENT_CYAN, linewidth=engine_instance.chart_line_width, alpha=0.85, label="I (Real)", rasterized=True)
         (line_q,) = ax.plot(t, sig.imag, color="#E040FB", linewidth=engine_instance.chart_line_width, alpha=0.85, label="Q (Imaginario)", rasterized=True)
@@ -180,6 +185,7 @@ def chart_amplitude() -> str:
         line_q.set_linewidth(engine_instance.chart_line_width)
         line_i.set_data(t, sig.real)
         line_q.set_data(t, sig.imag)
+        ax.set_title(f"Amplitud vs Tiempo (Streaming) {time_str}", color="#ECEFF1", fontsize=11, fontweight="bold", pad=12)
         
     # El eje X siempre cubre exactamente la ventana de análisis actual
     cfg = engine_instance.charts_config["mon_raw_amp"]
@@ -200,11 +206,17 @@ def chart_spectrum() -> str:
 
     full_freq = np.linspace(fc - fs / 2, fc + fs / 2, len(spec))
 
+    # Rango de tiempo absoluto para el título
+    c = engine_instance.current_file_time if engine_instance.stream_mode == "file" else (engine_instance.elapsed_samples / engine_instance.sample_rate)
+    w = engine_instance.analysis_window_sec
+    start_t = max(0.0, c - w)
+    time_str = f"[{start_t:.1f}s - {c:.1f}s]"
+
     if is_new or "line" not in cache.artists["spectrum"]:
         ax.clear()
         style_ax(
             ax,
-            "Espectro de Frecuencia (Señal Filtrada)",
+            f"Espectro de Frecuencia (Señal Filtrada) {time_str}",
             "Frecuencia (MHz)",
             "Potencia (dBFS)",
         )
@@ -232,6 +244,7 @@ def chart_spectrum() -> str:
         # Actualizar piso de ruido dinámico sin regenerar leyenda
         nf = engine_instance.db_noise_floor
         hline.set_ydata([nf, nf])
+        ax.set_title(f"Espectro de Frecuencia (Señal Filtrada) {time_str}", color="#ECEFF1", fontsize=11, fontweight="bold", pad=12)
 
     cfg = engine_instance.charts_config["mon_filt_spec"]
     safe_set_ylim(ax, cfg["ymin"], cfg["ymax"])
@@ -251,11 +264,17 @@ def chart_spectrum_raw() -> str:
 
     full_freq = np.linspace(fc - fs / 2, fc + fs / 2, len(spec))
 
+    # Rango de tiempo absoluto para el título
+    c = engine_instance.current_file_time if engine_instance.stream_mode == "file" else (engine_instance.elapsed_samples / engine_instance.sample_rate)
+    w = engine_instance.analysis_window_sec
+    start_t = max(0.0, c - w)
+    time_str = f"[{start_t:.1f}s - {c:.1f}s]"
+
     if is_new or "line" not in cache.artists["spectrum_raw"]:
         ax.clear()
         style_ax(
             ax,
-            "Espectro (Señal Original — Sin Filtrar)",
+            f"Espectro (Señal Original — Sin Filtrar) {time_str}",
             "Frecuencia (MHz)",
             "Potencia (dBFS)",
         )
@@ -282,6 +301,7 @@ def chart_spectrum_raw() -> str:
         
         nf = engine_instance.db_noise_floor_raw
         hline.set_ydata([nf, nf])
+        ax.set_title(f"Espectro (Señal Original — Sin Filtrar) {time_str}", color="#ECEFF1", fontsize=11, fontweight="bold", pad=12)
 
     cfg = engine_instance.charts_config["mon_raw_spec"]
     safe_set_ylim(ax, cfg["ymin"], cfg["ymax"])
@@ -591,90 +611,90 @@ def chart_ar_spectrum(result: dict) -> str:
     return fig_to_b64(fig)
 
 
-def chart_cwt_map(result: dict) -> str:
+def chart_cwt_map(result: dict = None) -> str:
     """
-    Escalograma CWT 2D: Frecuencia (MHz) vs Tiempo (s).
-    Usa el mismo patrón visual y de ejes que el waterfall FFT.
+    Escalograma CWT/Morlet — cascada continua.
+    Lee la matriz circular cwt_wf_data del motor (igual que chart_spectrogram con waterfall_data).
+    El parámetro 'result' se ignora; se mantiene por compatibilidad de firmas.
     """
     dyn_size = get_dynamic_figsize(19.0, 5.6)
     name = "cwt_map"
     fig, ax, is_new = get_cached_fig(name, figsize=dyn_size)
 
-    matrix    = result["matrix"]          # (n_blocks × n_scales_vis)
-    times_s   = result["times_s"]         # (n_blocks,)
-    freqs_mhz = result["freqs_mhz"]       # (n_scales_vis,)
-    v_min     = result.get("v_min",  float(np.percentile(matrix, 2)))
-    v_max     = result.get("v_max",  float(np.percentile(matrix, 98)))
-    if v_max <= v_min: v_max = v_min + 20.0
-    fc_hi = engine_instance.center_freq
-    history_sec = engine_instance.waterfall_history_sec
+    # Leer buffer circular
+    wf_data  = getattr(engine_instance, "cwt_wf_data", None)
+    wf_idx   = getattr(engine_instance, "cwt_wf_idx",  0)
+    if wf_data is None or wf_data.size == 0:
+        return fig_to_b64(fig)
 
-    f0 = freqs_mhz[0] if len(freqs_mhz) > 0 else fc_hi - 1.0
-    f1 = freqs_mhz[-1] if len(freqs_mhz) > 0 else fc_hi + 1.0
+    data = np.roll(wf_data, -wf_idx, axis=0)   # fila 0 = más reciente
+
+    fc      = engine_instance.center_freq
+    fs_mhz  = engine_instance.sample_rate / 1_000_000
+    f0, f1  = fc - fs_mhz / 2, fc + fs_mhz / 2
+    secs_per_line = engine_instance.analysis_window_sec
+    total_secs    = data.shape[0] * secs_per_line
+
+    cfg = engine_instance.charts_config.get("spec_cwt", {})
+    if cfg.get("auto_y", True):
+        raw_vmin = float(np.percentile(data, 2))
+        raw_vmax = float(np.percentile(data, 98))
+        if raw_vmax <= raw_vmin:
+            raw_vmax = raw_vmin + 20.0
+
+        if "ema_vmin" not in cache.artists[name]:
+            cache.artists[name]["ema_vmin"] = raw_vmin
+            cache.artists[name]["ema_vmax"] = raw_vmax
+        else:
+            _a = 0.15
+            cache.artists[name]["ema_vmin"] = (1 - _a) * cache.artists[name]["ema_vmin"] + _a * raw_vmin
+            cache.artists[name]["ema_vmax"] = (1 - _a) * cache.artists[name]["ema_vmax"] + _a * raw_vmax
+        v_min = cache.artists[name]["ema_vmin"]
+        v_max = cache.artists[name]["ema_vmax"]
+        cfg["ymin"] = round(v_min, 3)
+        cfg["ymax"] = round(v_max, 3)
+    else:
+        v_min = cfg.get("ymin", -100.0)
+        v_max = cfg.get("ymax", -20.0)
 
     if is_new or "im" not in cache.artists[name]:
         ax.clear()
         style_ax(ax, "Escalograma CWT/Morlet 2D", "Frecuencia (MHz)", "Tiempo (s)")
         ax.xaxis.get_major_formatter().set_useOffset(False)
         ax.xaxis.get_major_formatter().set_scientific(False)
-        current_sec = history_sec if engine_instance._corr_buf_full else (engine_instance._corr_buf_idx / max(1, engine_instance.sample_rate))
         im = ax.imshow(
-            matrix,
-            aspect="auto", origin="upper",
-            extent=[f0, f1, current_sec, 0.0],
-            cmap="inferno",
-            vmin=v_min, vmax=v_max,
-            interpolation="nearest",
+            data, aspect="auto", origin="upper",
+            extent=[f0, f1, total_secs, 0.0],
+            cmap="inferno", vmin=v_min, vmax=v_max, interpolation="nearest",
         )
-        vline = ax.axvline(x=fc_hi, color=ACCENT_RED, linestyle="--",
-                   linewidth=0.9, alpha=0.8, label=f"HI {fc_hi:.2f} MHz")
-        legend = ax.legend(loc="upper right", fontsize=7,
-                  facecolor=MPL_AXBG, edgecolor=BORDER_COL)
-
+        vline = ax.axvline(x=fc, color=ACCENT_RED, linestyle="--",
+                           linewidth=0.9, alpha=0.8, label=f"HI {fc:.2f} MHz")
+        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL)
         from mpl_toolkits.axes_grid1 import make_axes_locatable
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="2%", pad=0.05)
+        cax = make_axes_locatable(ax).append_axes("right", size="2%", pad=0.05)
         cbar = fig.colorbar(im, cax=cax)
-        cbar.set_label("PSD (dBm)", fontsize=7, color=TEXT_MUTED)
+        cbar.set_label("PSD (dB)", fontsize=7, color=TEXT_MUTED)
         cbar.ax.tick_params(labelsize=6, colors=TEXT_MUTED)
         cbar.outline.set_edgecolor(BORDER_COL)
-        
-        cache.artists[name]["im"] = im
+        cache.artists[name]["im"]    = im
         cache.artists[name]["vline"] = vline
-        cache.artists[name]["legend"] = legend
-        cache.artists[name]["cbar"] = cbar
-        
-        try:
-            fig.tight_layout(pad=0.2)
-        except:
-            pass
+        cache.artists[name]["cbar"]  = cbar
+        try: fig.tight_layout(pad=0.2)
+        except: pass
     else:
-        im = cache.artists[name]["im"]
-        im.set_data(matrix)
+        im    = cache.artists[name]["im"]
         vline = cache.artists[name]["vline"]
-        vline.set_xdata([fc_hi, fc_hi])
-        vline.set_label(f"HI {fc_hi:.2f} MHz")
-        legend = cache.artists[name]["legend"]
-        legend.get_texts()[0].set_text(f"HI {fc_hi:.2f} MHz")
+        im.set_data(data)
+        vline.set_xdata([fc, fc])
 
-    ax.set_ylim([history_sec, 0.0])
-    im = cache.artists[name]["im"]
-    current_sec = history_sec if engine_instance._corr_buf_full else (engine_instance._corr_buf_idx / max(1, engine_instance.sample_rate))
-    im.set_extent([f0, f1, current_sec, 0.0])
-
-    cfg = engine_instance.charts_config.get("spec_cwt", {})
-    safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
-    
-    if cfg.get('auto_y', True):
-        cfg["ymin"] = v_min
-        cfg["ymax"] = v_max
-        im.set_clim(v_min, v_max)
-    else:
-        im.set_clim(cfg["ymin"], cfg["ymax"])
-
+    im.set_extent([f0, f1, total_secs, 0.0])
+    ax.set_ylim([total_secs, 0.0])
+    im.set_clim(v_min, v_max)
     if "cbar" in cache.artists[name]:
         cache.artists[name]["cbar"].update_normal(im)
 
+    cfg = engine_instance.charts_config.get("spec_cwt", {})
+    safe_set_xlim(ax, cfg.get("xmin", f0), cfg.get("xmax", f1))
     return fig_to_b64(fig, dpi=96)
 
 
@@ -812,206 +832,174 @@ def chart_correlogram_spectrum(result: dict) -> str:
     return fig_to_b64(fig)
 
 
-def chart_ar_spectrogram(result: dict) -> str:
+def chart_ar_spectrogram(result: dict = None) -> str:
     """
-    Espectrograma 2D AR/Burg paramétrico.
-    Usa el mismo patrón visual y de ejes que el waterfall FFT.
+    Espectrograma AR/Burg 2D — cascada continua.
+    Lee la matriz circular ar_wf_data del motor.
+    El parámetro 'result' se ignora; se mantiene por compatibilidad.
     """
     dyn_size = get_dynamic_figsize(19.0, 5.6)
     name = "ar_spectrogram"
     fig, ax, is_new = get_cached_fig(name, figsize=dyn_size)
 
-    matrix    = result["matrix"]          # (n_segs × n_freqs_vis)
-    times_s   = result["times_s"]         # (n_segs,)
-    freqs_mhz = result["freqs_mhz"]       # (n_freqs_vis,)
-    
-    # Calcular limites percentiles crudos
-    raw_vmin = float(np.percentile(matrix, 1))
-    raw_vmax = float(np.percentile(matrix, 99))
-    
-    if "ema_vmin" not in cache.artists[name]:
-        cache.artists[name]["ema_vmin"] = raw_vmin
-        cache.artists[name]["ema_vmax"] = raw_vmax
+    wf_data = getattr(engine_instance, "ar_wf_data",  None)
+    wf_idx  = getattr(engine_instance, "ar_wf_idx",   0)
+    if wf_data is None or wf_data.size == 0:
+        return fig_to_b64(fig)
+
+    data = np.roll(wf_data, -wf_idx, axis=0)
+
+    fc      = engine_instance.center_freq
+    fs_mhz  = engine_instance.sample_rate / 1_000_000
+    f0, f1  = fc - fs_mhz / 2, fc + fs_mhz / 2
+    secs_per_line = engine_instance.analysis_window_sec
+    total_secs    = data.shape[0] * secs_per_line
+
+    cfg = engine_instance.charts_config.get("spec_ar", {})
+    if cfg.get("auto_y", True):
+        raw_vmin = float(np.percentile(data, 2))
+        raw_vmax = float(np.percentile(data, 98))
+        if raw_vmax <= raw_vmin:
+            raw_vmax = raw_vmin + 20.0
+
+        if "ema_vmin" not in cache.artists[name]:
+            cache.artists[name]["ema_vmin"] = raw_vmin
+            cache.artists[name]["ema_vmax"] = raw_vmax
+        else:
+            _a = 0.15
+            cache.artists[name]["ema_vmin"] = (1 - _a) * cache.artists[name]["ema_vmin"] + _a * raw_vmin
+            cache.artists[name]["ema_vmax"] = (1 - _a) * cache.artists[name]["ema_vmax"] + _a * raw_vmax
+        v_min = cache.artists[name]["ema_vmin"]
+        v_max = cache.artists[name]["ema_vmax"]
+        cfg["ymin"] = round(v_min, 3)
+        cfg["ymax"] = round(v_max, 3)
     else:
-        # Suavizado exponencial (EMA)
-        alpha = 0.15
-        cache.artists[name]["ema_vmin"] = (1 - alpha) * cache.artists[name]["ema_vmin"] + alpha * raw_vmin
-        cache.artists[name]["ema_vmax"] = (1 - alpha) * cache.artists[name]["ema_vmax"] + alpha * raw_vmax
-
-    v_min = cache.artists[name]["ema_vmin"]
-    v_max = cache.artists[name]["ema_vmax"]
-    
-    if v_max <= v_min: v_max = v_min + 20.0
-    fc_hi = engine_instance.center_freq
-    history_sec = engine_instance.waterfall_history_sec
-
-    f0 = freqs_mhz[0] if len(freqs_mhz) > 0 else fc_hi - 1.0
-    f1 = freqs_mhz[-1] if len(freqs_mhz) > 0 else fc_hi + 1.0
+        v_min = cfg.get("ymin", -100.0)
+        v_max = cfg.get("ymax", -20.0)
 
     if is_new or "im" not in cache.artists[name]:
         ax.clear()
         style_ax(ax, "Espectrograma AR/Burg 2D (Paramétrico)", "Frecuencia (MHz)", "Tiempo (s)")
         ax.xaxis.get_major_formatter().set_useOffset(False)
         ax.xaxis.get_major_formatter().set_scientific(False)
-        current_sec = history_sec if engine_instance._corr_buf_full else (engine_instance._corr_buf_idx / max(1, engine_instance.sample_rate))
         im = ax.imshow(
-            matrix,
-            aspect="auto", origin="upper",
-            extent=[f0, f1, current_sec, 0.0],
-            cmap="inferno",
-            vmin=v_min, vmax=v_max,
-            interpolation="nearest",
+            data, aspect="auto", origin="upper",
+            extent=[f0, f1, total_secs, 0.0],
+            cmap="inferno", vmin=v_min, vmax=v_max, interpolation="nearest",
         )
-        vline = ax.axvline(x=fc_hi, color=ACCENT_RED, linestyle="--",
-                   linewidth=0.9, alpha=0.8, label=f"HI {fc_hi:.2f} MHz")
-        legend = ax.legend(loc="upper right", fontsize=7,
-                  facecolor=MPL_AXBG, edgecolor=BORDER_COL)
-
+        vline = ax.axvline(x=fc, color=ACCENT_RED, linestyle="--",
+                           linewidth=0.9, alpha=0.8, label=f"HI {fc:.2f} MHz")
+        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL)
         from mpl_toolkits.axes_grid1 import make_axes_locatable
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="2%", pad=0.05)
+        cax = make_axes_locatable(ax).append_axes("right", size="2%", pad=0.05)
         cbar = fig.colorbar(im, cax=cax)
-        cbar.set_label("PSD (dBm)", fontsize=7, color=TEXT_MUTED)
+        cbar.set_label("PSD (dB)", fontsize=7, color=TEXT_MUTED)
         cbar.ax.tick_params(labelsize=6, colors=TEXT_MUTED)
         cbar.outline.set_edgecolor(BORDER_COL)
-        
-        cache.artists[name]["im"] = im
+        cache.artists[name]["im"]    = im
         cache.artists[name]["vline"] = vline
-        cache.artists[name]["legend"] = legend
-        cache.artists[name]["cbar"] = cbar
-        
-        try:
-            fig.tight_layout(pad=0.2)
-        except:
-            pass
+        cache.artists[name]["cbar"]  = cbar
+        try: fig.tight_layout(pad=0.2)
+        except: pass
     else:
-        im = cache.artists[name]["im"]
-        im.set_data(matrix)
+        im    = cache.artists[name]["im"]
         vline = cache.artists[name]["vline"]
-        vline.set_xdata([fc_hi, fc_hi])
-        vline.set_label(f"HI {fc_hi:.2f} MHz")
-        legend = cache.artists[name]["legend"]
-        legend.get_texts()[0].set_text(f"HI {fc_hi:.2f} MHz")
+        im.set_data(data)
+        vline.set_xdata([fc, fc])
 
-    ax.set_ylim([history_sec, 0.0])
-    im = cache.artists[name]["im"]
-    current_sec = history_sec if engine_instance._corr_buf_full else (engine_instance._corr_buf_idx / max(1, engine_instance.sample_rate))
-    im.set_extent([f0, f1, current_sec, 0.0])
-
-    cfg = engine_instance.charts_config.get("spec_ar", {})
-    safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
-    
-    if cfg.get("auto_y", True):
-        cfg["ymin"] = v_min
-        cfg["ymax"] = v_max
-        im.set_clim(v_min, v_max)
-    else:
-        im.set_clim(cfg["ymin"], cfg["ymax"])
-
+    im.set_extent([f0, f1, total_secs, 0.0])
+    ax.set_ylim([total_secs, 0.0])
+    im.set_clim(v_min, v_max)
     if "cbar" in cache.artists[name]:
         cache.artists[name]["cbar"].update_normal(im)
 
+    cfg = engine_instance.charts_config.get("spec_ar", {})
+    safe_set_xlim(ax, cfg.get("xmin", f0), cfg.get("xmax", f1))
     return fig_to_b64(fig, dpi=96)
 
-
-def chart_correlogram_spectrogram(result: dict) -> str:
+def chart_correlogram_spectrogram(result: dict = None) -> str:
     """
-    Correlograma 2D — Blackman-Tukey (Wiener-Khinchin).
+    Correlograma 2D — cascada continua.
+    Lee la matriz circular corr_wf_data del motor.
+    El parámetro 'result' se ignora; se mantiene por compatibilidad.
     """
     dyn_size = get_dynamic_figsize(19.0, 5.6)
     name = "corr_spectrogram"
     fig, ax, is_new = get_cached_fig(name, figsize=dyn_size)
 
-    matrix    = result["matrix"]        # (n_segs × n_freqs)
-    times_s   = result["times_s"]       # (n_segs,)
-    freqs_mhz = result["freqs_mhz"]    # (n_freqs,)
-    
-    # Calcular limites percentiles crudos
-    raw_vmin = float(np.percentile(matrix, 1))
-    raw_vmax = float(np.percentile(matrix, 99))
-    
-    if "ema_vmin" not in cache.artists[name]:
-        cache.artists[name]["ema_vmin"] = raw_vmin
-        cache.artists[name]["ema_vmax"] = raw_vmax
+    wf_data = getattr(engine_instance, "corr_wf_data", None)
+    wf_idx  = getattr(engine_instance, "corr_wf_idx",  0)
+    if wf_data is None or wf_data.size == 0:
+        return fig_to_b64(fig)
+
+    data = np.roll(wf_data, -wf_idx, axis=0)
+
+    fc      = engine_instance.center_freq
+    fs_mhz  = engine_instance.sample_rate / 1_000_000
+    f0, f1  = fc - fs_mhz / 2, fc + fs_mhz / 2
+    secs_per_line = engine_instance.analysis_window_sec
+    total_secs    = data.shape[0] * secs_per_line
+
+    cfg = engine_instance.charts_config.get("spec_corr", {})
+    if cfg.get("auto_y", True):
+        raw_vmin = float(np.percentile(data, 2))
+        raw_vmax = float(np.percentile(data, 98))
+        if raw_vmax <= raw_vmin:
+            raw_vmax = raw_vmin + 20.0
+
+        if "ema_vmin" not in cache.artists[name]:
+            cache.artists[name]["ema_vmin"] = raw_vmin
+            cache.artists[name]["ema_vmax"] = raw_vmax
+        else:
+            _a = 0.15
+            cache.artists[name]["ema_vmin"] = (1 - _a) * cache.artists[name]["ema_vmin"] + _a * raw_vmin
+            cache.artists[name]["ema_vmax"] = (1 - _a) * cache.artists[name]["ema_vmax"] + _a * raw_vmax
+        v_min = cache.artists[name]["ema_vmin"]
+        v_max = cache.artists[name]["ema_vmax"]
+        cfg["ymin"] = round(v_min, 3)
+        cfg["ymax"] = round(v_max, 3)
     else:
-        # Suavizado exponencial (EMA) para evitar el "flicker" o "cambio de color" abrupto
-        alpha = 0.15
-        cache.artists[name]["ema_vmin"] = (1 - alpha) * cache.artists[name]["ema_vmin"] + alpha * raw_vmin
-        cache.artists[name]["ema_vmax"] = (1 - alpha) * cache.artists[name]["ema_vmax"] + alpha * raw_vmax
-
-    v_min = cache.artists[name]["ema_vmin"]
-    v_max = cache.artists[name]["ema_vmax"]
-    
-    if v_max <= v_min: v_max = v_min + 20.0
-    fc_hi     = engine_instance.center_freq
-    history_sec = engine_instance.waterfall_history_sec
-
-    f0 = freqs_mhz[0] if len(freqs_mhz) > 0 else fc_hi - 1.0
-    f1 = freqs_mhz[-1] if len(freqs_mhz) > 0 else fc_hi + 1.0
+        v_min = cfg.get("ymin", -100.0)
+        v_max = cfg.get("ymax", -20.0)
 
     if is_new or "im" not in cache.artists[name]:
         ax.clear()
         style_ax(ax, "Correlograma 2D — Blackman-Tukey (Wiener-Khinchin)", "Frecuencia (MHz)", "Tiempo (s)")
         ax.xaxis.get_major_formatter().set_useOffset(False)
         ax.xaxis.get_major_formatter().set_scientific(False)
-        current_sec = history_sec if engine_instance._corr_buf_full else (engine_instance._corr_buf_idx / max(1, engine_instance.sample_rate))
         im = ax.imshow(
-            matrix,
-            aspect="auto", origin="upper",
-            extent=[f0, f1, current_sec, 0.0],
-            cmap="inferno",
-            vmin=v_min, vmax=v_max,
-            interpolation="nearest",
+            data, aspect="auto", origin="upper",
+            extent=[f0, f1, total_secs, 0.0],
+            cmap="inferno", vmin=v_min, vmax=v_max, interpolation="nearest",
         )
-        vline = ax.axvline(x=fc_hi, color=ACCENT_RED, linestyle="--",
-                   linewidth=0.9, alpha=0.8, label=f"HI {fc_hi:.2f} MHz")
-        legend = ax.legend(loc="upper right", fontsize=7,
-                  facecolor=MPL_AXBG, edgecolor=BORDER_COL)
-
+        vline = ax.axvline(x=fc, color=ACCENT_RED, linestyle="--",
+                           linewidth=0.9, alpha=0.8, label=f"HI {fc:.2f} MHz")
+        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL)
         from mpl_toolkits.axes_grid1 import make_axes_locatable
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="2%", pad=0.05)
+        cax = make_axes_locatable(ax).append_axes("right", size="2%", pad=0.05)
         cbar = fig.colorbar(im, cax=cax)
-        cbar.set_label("PSD (dBm)", fontsize=7, color=TEXT_MUTED)
+        cbar.set_label("PSD (dB)", fontsize=7, color=TEXT_MUTED)
         cbar.ax.tick_params(labelsize=6, colors=TEXT_MUTED)
         cbar.outline.set_edgecolor(BORDER_COL)
-        
-        cache.artists[name]["im"] = im
+        cache.artists[name]["im"]    = im
         cache.artists[name]["vline"] = vline
-        cache.artists[name]["legend"] = legend
-        cache.artists[name]["cbar"] = cbar
-        
-        try:
-            fig.tight_layout(pad=0.2)
-        except:
-            pass
+        cache.artists[name]["cbar"]  = cbar
+        try: fig.tight_layout(pad=0.2)
+        except: pass
     else:
-        im = cache.artists[name]["im"]
-        im.set_data(matrix)
+        im    = cache.artists[name]["im"]
         vline = cache.artists[name]["vline"]
-        vline.set_xdata([fc_hi, fc_hi])
-        vline.set_label(f"HI {fc_hi:.2f} MHz")
-        legend = cache.artists[name]["legend"]
-        legend.get_texts()[0].set_text(f"HI {fc_hi:.2f} MHz")
+        im.set_data(data)
+        vline.set_xdata([fc, fc])
 
-    ax.set_ylim([history_sec, 0.0])
-    im = cache.artists[name]["im"]
-    current_sec = history_sec if engine_instance._corr_buf_full else (engine_instance._corr_buf_idx / max(1, engine_instance.sample_rate))
-    im.set_extent([f0, f1, current_sec, 0.0])
-
-    cfg = engine_instance.charts_config.get("spec_corr", {})
-    safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
-    
-    if cfg.get('auto_y', True):
-        cfg["ymin"] = v_min
-        cfg["ymax"] = v_max
-        im.set_clim(v_min, v_max)
-    else:
-        im.set_clim(cfg["ymin"], cfg["ymax"])
-
+    im.set_extent([f0, f1, total_secs, 0.0])
+    ax.set_ylim([total_secs, 0.0])
+    im.set_clim(v_min, v_max)
     if "cbar" in cache.artists[name]:
         cache.artists[name]["cbar"].update_normal(im)
 
+    cfg = engine_instance.charts_config.get("spec_corr", {})
+    safe_set_xlim(ax, cfg.get("xmin", f0), cfg.get("xmax", f1))
     return fig_to_b64(fig, dpi=96)
 
 

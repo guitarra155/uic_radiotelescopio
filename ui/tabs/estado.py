@@ -89,13 +89,60 @@ def build_estado(page: ft.Page) -> ft.Control:
 
     freq_f = txt_field("Frecuencia (MHz)", f"{engine_instance.center_freq:.8f}", "e.g. 1420.40")
     
+    # --- Selector de Sample Rate tipo Chips (Flawless Wrap) ---
+    rate_container = ft.Column([
+        ft.Text("Sample Rate (MSps)", color=TEXT_MUTED, size=11),
+        ft.Container(height=4),
+    ], spacing=0)
+    
+    buttons_list = []
+    
+    def on_rate_click(e, rate_val):
+        val = float(rate_val) * 1e6
+        engine_instance.sample_rate = val
+        engine_instance._retune_requested = True
+        engine_instance.save_config()
+        
+        # Refrescar visualmente todos los botones en este panel
+        for btn in buttons_list:
+            if btn.data == rate_val:
+                btn.bgcolor = ACCENT_CYAN
+                btn.content.color = DARK_BG
+            else:
+                btn.bgcolor = PANEL_BG
+                btn.content.color = TEXT_MAIN
+            try: btn.update()
+            except: pass
+            
+        try:
+            e.control.page.pubsub.send_all("refresh_charts")
+        except: pass
+
     current_sr = engine_instance.sample_rate / 1e6
     sr_str = f"{current_sr:.1f}" if current_sr.is_integer() else str(current_sr).rstrip('0').rstrip('.')
     if '.' not in sr_str: sr_str += ".0"
+
     rate_opts = ["40.0", "20.0", "10.0", "5.0", "2.5", "1.25", "0.625", "0.3125"]
-    if sr_str not in rate_opts: rate_opts.append(sr_str)
+    buttons_row = ft.Row(wrap=True, spacing=5, run_spacing=5)
     
-    rate_f = dd("Sample Rate (MSps)", sr_str, rate_opts)
+    for opt in rate_opts:
+        is_selected = (opt == sr_str)
+        btn = ft.Container(
+            content=ft.Text(opt, size=10, weight=ft.FontWeight.BOLD, color=DARK_BG if is_selected else TEXT_MAIN),
+            bgcolor=ACCENT_CYAN if is_selected else PANEL_BG,
+            border=ft.border.all(1, BORDER_COL),
+            border_radius=6,
+            padding=ft.padding.all(0),
+            alignment=ft.Alignment(0, 0),
+            width=50,
+            height=28,
+            on_click=lambda e, opt_val=opt: on_rate_click(e, opt_val),
+            data=opt
+        )
+        buttons_list.append(btn)
+        buttons_row.controls.append(btn)
+        
+    rate_container.controls.append(buttons_row)
     span_visual_f = txt_field("Span Visual (Zoom MHz)", f"{engine_instance.visual_span_mhz:.8f}", "e.g. 1.0")
 
     ref_level_f = txt_field("Nivel Ref. (dBm)", f"{engine_instance.bb60c_ref_level:.8f}", "-100 a +20")
@@ -123,14 +170,12 @@ def build_estado(page: ft.Page) -> ft.Control:
         except ValueError: pass
 
     freq_f.on_submit = lambda e: on_global_change(e, "center_freq")
-    rate_f.on_change = lambda e: on_global_change(e, "sample_rate", factor=1e6)
     ref_level_f.on_submit = lambda e: on_global_change(e, "bb60c_ref_level")
     rbw_f.on_submit       = lambda e: on_global_change(e, "bb60c_iq_bw")
     vbw_alpha_f.on_submit = lambda e: on_global_change(e, "vbw_alpha")
     
     # También aplicar a on_blur para que guarde si hacen click fuera del campo
     freq_f.on_blur = lambda e: on_global_change(e, "center_freq")
-    # rate_f is a Dropdown, so it only needs on_change
     ref_level_f.on_blur = lambda e: on_global_change(e, "bb60c_ref_level")
     rbw_f.on_blur       = lambda e: on_global_change(e, "bb60c_iq_bw")
     vbw_alpha_f.on_blur = lambda e: on_global_change(e, "vbw_alpha")
@@ -195,13 +240,28 @@ def build_estado(page: ft.Page) -> ft.Control:
     waterfall_f.on_submit = on_waterfall_change
     waterfall_f.on_blur = on_waterfall_change
 
+    def on_lock_toggle_change(e):
+        engine_instance.auto_spectral_lock = e.control.value
+        engine_instance.save_config()
+        if not e.control.value:
+            engine_instance._needs_spectral_lock = False
+            
+    lock_chk = ft.Checkbox(
+        label="Auto-Calibración Espectral Fina",
+        value=engine_instance.auto_spectral_lock,
+        on_change=on_lock_toggle_change,
+        active_color=ACCENT_CYAN,
+        label_style=ft.TextStyle(color=TEXT_MUTED, size=11)
+    )
+
     # Tarjeta 2: SDR & Frecuencia
     freq_card = panel(
         content=ft.Column([
             section_title("🌍", "SDR & Frecuencia", ACCENT_GREEN),
             freq_f,
+            lock_chk,
             span_visual_f,
-            rate_f,
+            rate_container,
             ft.Divider(color=BORDER_COL, height=10),
             ft.Text("Ventana de Adquisicion", color=ACCENT_AMBER, size=12, weight=ft.FontWeight.W_600),
             analysis_f,
@@ -401,6 +461,33 @@ def build_estado(page: ft.Page) -> ft.Control:
         window_card,
         info_card
     ], spacing=20, expand=4, scroll=ft.ScrollMode.AUTO)
+
+    def on_refresh(msg):
+        if msg == "refresh_charts":
+            current_sr = engine_instance.sample_rate / 1e6
+            sr_str = f"{current_sr:.1f}" if current_sr.is_integer() else str(current_sr).rstrip('0').rstrip('.')
+            if '.' not in sr_str: sr_str += ".0"
+            
+            # Actualizar todos los inputs y los chips
+            freq_f.value = f"{engine_instance.center_freq:.8f}"
+            span_visual_f.value = f"{engine_instance.visual_span_mhz:.8f}"
+            ref_level_f.value = f"{engine_instance.bb60c_ref_level:.8f}"
+            rbw_f.value = f"{engine_instance.bb60c_iq_bw:.8f}"
+            vbw_alpha_f.value = f"{engine_instance.vbw_alpha:.8f}"
+            lock_chk.value = engine_instance.auto_spectral_lock
+            
+            for f_input in [freq_f, span_visual_f, ref_level_f, rbw_f, vbw_alpha_f, lock_chk]:
+                try: f_input.update()
+                except: pass
+
+            for btn in buttons_list:
+                is_sel = (btn.data == sr_str)
+                btn.bgcolor = ACCENT_CYAN if is_sel else PANEL_BG
+                btn.content.color = DARK_BG if is_sel else TEXT_MAIN
+                try: btn.update()
+                except: pass
+                
+    page.pubsub.subscribe(on_refresh)
 
     return ft.Container(
         content=ft.Row([left_col, mid_col, right_col], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.START, spacing=30, expand=True),

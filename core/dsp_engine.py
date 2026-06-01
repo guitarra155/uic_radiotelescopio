@@ -110,12 +110,21 @@ class DSPEngine:
         self._corr_buf_idx   = 0            # próximo índice de escritura
         self._corr_buf_full  = False        # True una vez que el buffer ha sido llenado al menos una vez
 
+        # Matrices 2D tipo cascada para métodos avanzados (CWT, AR/Burg, Correlograma)
+        # Mismas dimensiones que waterfall_data; se actualizan línea a línea en _process_dsp_core
+        self.cwt_wf_data  = np.full((self.waterfall_steps, self.fft_size), -100.0, dtype=np.float32)
+        self.cwt_wf_idx   = 0
+        self.ar_wf_data   = np.full((self.waterfall_steps, self.fft_size), -100.0, dtype=np.float32)
+        self.ar_wf_idx    = 0
+        self.corr_wf_data = np.full((self.waterfall_steps, self.fft_size), -100.0, dtype=np.float32)
+        self.corr_wf_idx  = 0
+
         # Histogram samples
         self.histogram_mode = "Magnitud"
         self.histogram_data = np.random.normal(0, 1, 1000)
 
-        # Power vs Time buffer (dBFS instantáneo, 2000 muestras)
-        self.power_time_data = np.full(2000, -100.0)
+        # Power vs Time buffer (dBFS instantáneo, sincronizado con waterfall_steps)
+        self.power_time_data = np.full(self.waterfall_steps, -100.0)
         self.power_samples_written = 0
 
         # SNR por bin de frecuencia (misma longitud que spectrum_data)
@@ -203,6 +212,7 @@ class DSPEngine:
         self._frames_since_autoscale = 0
         self._autoscale_enabled = True
         self._needs_spectral_lock = False  # Flag para auto-calibración al cargar archivos
+        self.auto_spectral_lock = True     # Habilitar/Deshabilitar auto-calibración fina (Checkbox)
         self._file_initialized = False     # Evita bucles de detección al cargar metadatos
 
         # NUEVO: Configuración granular por gráfica
@@ -292,15 +302,44 @@ class DSPEngine:
         print(f"🔄 Sample Rate ajustado a valor nativo BB60C: {self._sample_rate/1e6} MSps (Decimación {self.bb60c_decimation})")
 
     def _resize_corr_buffer(self):
-        """Redimensiona el buffer IQ del correlograma al sample rate e historial actual."""
+        """Redimensiona el buffer IQ del correlograma al sample rate e historial actual.
+        También redimensiona las matrices 2D (cascada continua) de CWT, AR/Burg y Correlograma.
+        """
         target_sec  = self.waterfall_history_sec
         new_size    = max(50_000, int(self._sample_rate * target_sec))
+        
+        # 🛸 LÍMITE DE SEGURIDAD (CAP DE RAM):
+        # Limitamos el buffer IQ a un máximo de 10,000,000 muestras (~80MB de RAM).
+        MAX_SAFE_SAMPLES = 10_000_000
+        if new_size > MAX_SAFE_SAMPLES:
+            new_size = MAX_SAFE_SAMPLES
+
         if new_size != getattr(self, "_corr_buf_size", 0):
             self._corr_buf_size = new_size
             self.corr_iq_buffer = np.zeros(new_size, dtype=np.complex64)
             self._corr_buf_idx  = 0
             self._corr_buf_full = False
-            print(f"[Correlograma] Buffer redimensionado: {new_size} muestras = {target_sec:.1f}s @ {self._sample_rate/1e6:.2f} MSps")
+            print(f"[Correlograma] Buffer redimensionado: {new_size} muestras = {target_sec:.1f}s @ {self._sample_rate/1e6:.2f} MSps (Cap de Seguridad Activo)")
+
+        # ── Matrices 2D tipo cascada para métodos avanzados (igual que waterfall_data) ──
+        # Mismo número de pasos que el waterfall clásico, columnas = fft_size
+        n_steps = max(1, int(self.waterfall_history_sec / self.analysis_window_sec))
+        n_cols  = self.fft_size
+
+        # Reusar si las dimensiones no cambiaron (evita sobreescribir historial)
+        cur_cwt  = getattr(self, "cwt_wf_data",  None)
+        cur_ar   = getattr(self, "ar_wf_data",   None)
+        cur_corr = getattr(self, "corr_wf_data", None)
+
+        if cur_cwt  is None or cur_cwt.shape  != (n_steps, n_cols):
+            self.cwt_wf_data  = np.full((n_steps, n_cols), -100.0, dtype=np.float32)
+            self.cwt_wf_idx   = 0
+        if cur_ar   is None or cur_ar.shape   != (n_steps, n_cols):
+            self.ar_wf_data   = np.full((n_steps, n_cols), -100.0, dtype=np.float32)
+            self.ar_wf_idx    = 0
+        if cur_corr is None or cur_corr.shape != (n_steps, n_cols):
+            self.corr_wf_data = np.full((n_steps, n_cols), -100.0, dtype=np.float32)
+            self.corr_wf_idx  = 0
 
     @property
     def analysis_window_sec(self):
@@ -324,7 +363,9 @@ class DSPEngine:
         if new_steps != self.waterfall_steps:
             self.waterfall_steps = new_steps
             self.waterfall_data = np.full((self.waterfall_steps, self.fft_size), -100.0)
+            self.power_time_data = np.full(self.waterfall_steps, -100.0)
             self.waterfall_idx = 0
+            self.power_samples_written = 0
         
         # Redimensionar el buffer del correlograma para que coincida con el nuevo historial
         self._resize_corr_buffer()
@@ -341,11 +382,25 @@ class DSPEngine:
             self.corr_iq_buffer.fill(0j)
             self._corr_buf_idx = 0
             self._corr_buf_full = False
-            
+
+        # Limpiar matrices 2D de métodos avanzados (cascada continua)
+        for attr, idx_attr in [("cwt_wf_data", "cwt_wf_idx"),
+                                ("ar_wf_data",  "ar_wf_idx"),
+                                ("corr_wf_data","corr_wf_idx")]:
+            if hasattr(self, attr):
+                getattr(self, attr).fill(-100.0)
+                setattr(self, idx_attr, 0)
+
         # Limpiar potencia y estadísticas
         if hasattr(self, 'power_time_data'):
             self.power_time_data.fill(-100.0)
             self.power_samples_written = 0
+            
+        # Limpiar variables globales de tiempo y conteos
+        self.elapsed_samples = 0
+        self.rfi_event_count = 0
+        if hasattr(self, 'current_file_time'):
+            self.current_file_time = 0.0
 
     def start_stream(self, mode, params):
         # Si ya hay un hilo reproduciendo, lo apagamos y esperamos a que muera para evitar solapamientos
@@ -561,6 +616,25 @@ class DSPEngine:
                 pwr_avg += np.abs(fft_complex) ** 2
             pwr = 10 * np.log10(pwr_avg / (max(1, batches) * self.window_raw_pwr) + 1e-12)
 
+        # ---- Estabilización Absoluta del Piso de Ruido (Anti-Flicker / Anti-Líneas) ----
+        # Esto fuerza a que todos los frames tengan exactamente la misma mediana de ruido base.
+        # Elimina por completo las fluctuaciones horizontales sin importar qué tan estricta sea la escala de color.
+        current_median = float(np.median(pwr))
+        
+        if not hasattr(self, '_baseline_noise'):
+            self._baseline_noise = current_median
+            self._pwr_history = pwr.copy()
+            
+        # Si la mediana salta más de 3 dB, asumimos que es pura estática/RFI y clonamos el frame anterior
+        if current_median > self._baseline_noise + 3.0:
+            pwr = self._pwr_history.copy()
+        else:
+            # Alinear el frame actual a la línea base para que la energía térmica no 'parpadee'
+            pwr = pwr - current_median + self._baseline_noise
+            self._pwr_history = pwr.copy()
+            # Dejar que la línea base se adapte muuuuuy lentamente a cambios térmicos reales del LNA
+            self._baseline_noise = 0.99 * self._baseline_noise + 0.01 * current_median
+
         # IIR simple sobre el tiempo (suavizado VBW)
         self.spectrum_data = (1 - alpha_eff) * self.spectrum_data + alpha_eff * pwr
 
@@ -569,6 +643,118 @@ class DSPEngine:
         # por lo que añadimos una línea directamente para mantener el cronómetro real.
         self.waterfall_idx = (self.waterfall_idx - 1) % self.waterfall_steps
         self.waterfall_data[self.waterfall_idx, :] = self.spectrum_data
+
+        # ── 5b. Cascada Continua para métodos avanzados (CWT, AR/Burg, Correlograma) ──
+        # Computa UNA línea 1D por frame con algoritmos ultrarrápidos y la inserta
+        # en el buffer circular correspondiente. Lee los parámetros del usuario.
+        _active_method = getattr(self, "active_spec_method", "waterfall")
+        if _active_method != "waterfall" and self.active_tab == 2:
+            _iq_frame = iq_f.astype(np.complex64)
+            _n_frame  = len(_iq_frame)
+            _sr       = float(self.sample_rate)
+            _offset   = float(self.db_noise_floor) - 20.0
+            _N_out    = self.fft_size   # columnas de salida
+
+            try:
+                if _active_method == "cwt" and hasattr(self, "cwt_wf_data"):
+                    # CWT rápida: banco Morlet con N_SC escalas (configurado por el usuario)
+                    # Cap: máximo 4096 escalas. Cacheado para máxima velocidad.
+                    _N_SC    = max(32, min(4096, int(self.algo_params.get("cwt_n_scales", 512))))
+                    _dt      = 1.0 / _sr
+                    _pwr_lin = 10.0 ** ((pwr - _offset) / 10.0)
+                    
+                    # Cachear la matriz de wavelets (sólo recalcular si cambian parámetros)
+                    cache_key = (_sr, self.fft_size, _N_SC)
+                    if not hasattr(self, "_cwt_cache_key") or self._cwt_cache_key != cache_key:
+                        _omega   = (2 * np.pi * np.linspace(-_sr/2, _sr/2, self.fft_size, endpoint=False)).astype(np.float32)
+                        # Aumentar omega0 de 6 a 24 mejora drásticamente la resolución en frecuencia (hace el pico más fino)
+                        _omega0  = 2 * np.pi * 24.0 
+                        _fq_hz   = np.linspace(-_sr * 0.49, _sr * 0.49, _N_SC, dtype=np.float32)
+                        _fq_safe = np.where(_fq_hz == 0, 1e-5, _fq_hz)
+                        _s_col   = (_omega0 / (2 * np.pi * np.abs(_fq_safe)))[:, None]
+                        _sgn_col = np.sign(_fq_safe)[:, None]
+                        _arg     = (_s_col * _omega[None, :] - _sgn_col * _omega0).astype(np.float32)
+                        _supp    = (_sgn_col * _omega[None, :] > 0).astype(np.float32)
+                        _nrm     = (np.pi ** -0.25) * np.sqrt(2 * np.pi * _s_col / _dt)
+                        _psi_pw  = ((_nrm ** 2) * np.exp(-(_arg ** 2)) * _supp).astype(np.float32)
+                        _psi_pw_sum = np.sum(_psi_pw, axis=1, keepdims=True)
+                        _psi_pw_sum = np.where(_psi_pw_sum == 0, 1.0, _psi_pw_sum)
+                        _psi_pw /= _psi_pw_sum
+                        self._cwt_cached_matrix = _psi_pw
+                        self._cwt_cache_key = cache_key
+
+                    _line_lin = self._cwt_cached_matrix @ _pwr_lin.astype(np.float32)
+                    _line_db  = (10.0 * np.log10(_line_lin + 1e-30) + _offset).astype(np.float32)
+                    # Interpolar N_SC → N_out con np.interp (vectorizado, <1ms)
+                    if _N_SC != _N_out:
+                        _x_in  = np.linspace(0, 1, _N_SC)
+                        _x_out = np.linspace(0, 1, _N_out)
+                        _line_db = np.interp(_x_out, _x_in, _line_db).astype(np.float32)
+                    self.cwt_wf_idx = (self.cwt_wf_idx - 1) % self.cwt_wf_data.shape[0]
+                    self.cwt_wf_data[self.cwt_wf_idx, :] = _line_db
+
+                elif _active_method == "ar_burg_2d" and hasattr(self, "ar_wf_data"):
+                    # AR/Burg 1D: usa el orden configurado por el usuario.
+                    # Cap: orden ≤ 50 (costo O(N*order) con N=1024 → manejable ~5ms)
+                    _ORDER  = max(2, min(50, int(self.algo_params.get("ar_order", 20))))
+                    _N_SIG  = min(1024, _n_frame)  # usar más muestras para mejor resolución
+                    _sig    = (_iq_frame[:_N_SIG] - _iq_frame[:_N_SIG].mean()).astype(np.complex64)
+                    _ef, _eb = _sig[1:].copy(), _sig[:-1].copy()
+                    _ar_c   = np.zeros(_ORDER, dtype=np.complex64)
+                    _t_err  = float(np.dot(_sig, _sig.conj()).real) / _N_SIG
+                    for _m in range(_ORDER):
+                        _num = -2.0 * float(np.dot(_ef, _eb.conj()))
+                        _den = float(np.dot(_ef, _ef.conj())) + float(np.dot(_eb, _eb.conj()))
+                        _km  = _num / (_den + 1e-30)
+                        if _m > 0:
+                            _ar_c[:_m] = _ar_c[:_m] + _km * _ar_c[:_m][::-1].conj()
+                        _ar_c[_m]  = _km
+                        _ef_n = _ef[1:] + _km * _eb[1:]
+                        _eb_n = _eb[:-1] + np.conj(_km) * _ef[:-1]
+                        _ef, _eb = _ef_n, _eb_n
+                        _t_err *= max(0.0, 1.0 - abs(_km) ** 2)
+                    # Evaluación del polinomio AR vectorizada en N_out puntos
+                    _fn   = np.linspace(-0.5, 0.5, _N_out, dtype=np.float32)
+                    _z    = np.exp((2j * np.pi * _fn).astype(np.complex64))
+                    _dnom = np.ones(_N_out, dtype=np.complex64)
+                    for _ki in range(_ORDER):
+                        _dnom += _ar_c[_ki] * (_z ** (-(_ki + 1)))
+                    _psd_lin = float(_t_err) / (np.abs(_dnom) ** 2 + 1e-30)
+                    _psd_db  = (10.0 * np.log10(_psd_lin + 1e-30) + _offset).astype(np.float32)
+                    self.ar_wf_idx = (self.ar_wf_idx - 1) % self.ar_wf_data.shape[0]
+                    self.ar_wf_data[self.ar_wf_idx, :] = _psd_db
+
+                elif _active_method == "correlogram_2d" and hasattr(self, "corr_wf_data"):
+                    # Correlograma 1D: usa el lag configurado por el usuario.
+                    # Cap: lag ≤ 200 con N_SIG adaptado (4×lag) para mantener velocidad
+                    _MAX_LAG = max(4, min(200, int(self.algo_params.get("corr_max_lag", 37))))
+                    _N_SIG   = min(max(4 * _MAX_LAG, 512), _n_frame)  # N adaptado al lag
+                    _sig2    = _iq_frame[:_N_SIG].astype(np.complex64)
+                    _sig2   -= _sig2.mean()
+                    _p = max(1e-30, float(np.dot(_sig2, _sig2.conj()).real) / _N_SIG)
+                    _sig2 /= np.sqrt(_p)
+                    # ACF vectorizada: correlate full → tomar lags 0.._MAX_LAG
+                    _acf_full = np.correlate(_sig2, _sig2, mode="full")  # len=2*N_SIG-1
+                    _mid      = _N_SIG - 1
+                    _acf_1s   = _acf_full[_mid : _mid + _MAX_LAG + 1] / _N_SIG
+                    # Reconstruir ACF simétrica, ventana Bartlett y FFT
+                    _lag_vec  = 2 * _MAX_LAG + 1
+                    _acf_sym  = np.zeros(_lag_vec, dtype=np.complex64)
+                    _acf_sym[_MAX_LAG:] = _acf_1s
+                    _acf_sym[:_MAX_LAG] = np.conj(_acf_1s[1:])[::-1]
+                    _bart     = np.bartlett(_lag_vec).astype(np.float32)
+                    _n_fft2   = max(_N_out, 2 * _lag_vec)
+                    _psd_r    = np.abs(np.fft.fftshift(np.fft.fft(_acf_sym * _bart, n=_n_fft2)))
+                    _psd_db2  = (10.0 * np.log10(_psd_r + 1e-30)).astype(np.float32)
+                    if len(_psd_db2) != _N_out:
+                        _x_in2  = np.linspace(0, 1, len(_psd_db2))
+                        _x_out2 = np.linspace(0, 1, _N_out)
+                        _psd_db2 = np.interp(_x_out2, _x_in2, _psd_db2).astype(np.float32)
+                    _psd_db2 += _offset
+                    self.corr_wf_idx = (self.corr_wf_idx - 1) % self.corr_wf_data.shape[0]
+                    self.corr_wf_data[self.corr_wf_idx, :] = _psd_db2
+            except Exception:
+                pass  # Nunca detener el stream por un error de DSP avanzado
 
         # ── 6. Histograma (Distribución) ────────────────────────
         if getattr(self, "histogram_mode", "Magnitud") == "Magnitud":
@@ -1032,7 +1218,7 @@ class DSPEngine:
         # --- Fase 2: Análisis Espectral Ciego (Si no hay metadatos) ---
         # Si seguimos en 1420.4 pero el archivo no dice nada, intentamos 'lock-on' al pico
         # Esto se ejecutará en el primer frame de _process_file_loop
-        self._needs_spectral_lock = not meta_found
+        self._needs_spectral_lock = not meta_found and getattr(self, "auto_spectral_lock", True)
         if not meta_found:
             self.file_center_freq = 1420.40575
         else:
@@ -1040,6 +1226,10 @@ class DSPEngine:
 
     def _perform_spectral_lock(self, iq_data):
         """Analiza el primer bloque de datos para detectar la frecuencia central real."""
+        if not getattr(self, "auto_spectral_lock", True):
+            print("✅ Auto-calibración fina desactivada por el usuario. Mapeando a frecuencia manual.", flush=True)
+            self.file_center_freq = self.center_freq
+            return
         # Calculamos una FFT rápida del primer bloque
         spec = np.abs(np.fft.fftshift(np.fft.fft(iq_data[:self.fft_size] * self.window_raw)))
         spec = 20 * np.log10(spec + 1e-12)
@@ -1185,6 +1375,7 @@ class DSPEngine:
             "window_res": getattr(self, "window_res", "Auto-Detect (Pantalla Actual)"),
             "window_mode": getattr(self, "window_mode", "Normal"),
             "chart_line_width": getattr(self, "chart_line_width", 1.0),
+            "auto_spectral_lock": getattr(self, "auto_spectral_lock", True),
         }
         try:
             import json, os
@@ -1241,12 +1432,12 @@ class DSPEngine:
                 )
                 self.use_welch = False  # Forzar apagado incluso si hay una config vieja guardada
 
-                # --- NUEVO: Cargar parámetros de hardware BB60C ---
                 self.bb60c_ref_level = conf.get("bb60c_ref_level", self.bb60c_ref_level)
                 self.bb60c_iq_bw = conf.get("bb60c_iq_bw", self.bb60c_iq_bw)
                 self.vbw_alpha = conf.get("vbw_alpha", self.vbw_alpha)
                 self.ma_enabled = conf.get("ma_enabled", self.ma_enabled)
                 self.raw_mode = conf.get("raw_mode", self.raw_mode)
+                self.auto_spectral_lock = conf.get("auto_spectral_lock", True)
                 if "visual_span_mhz" in conf:
                     self.update_visual_span(conf["visual_span_mhz"])
 
