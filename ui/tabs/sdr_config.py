@@ -98,15 +98,21 @@ def build_config(page: ft.Page) -> ft.Control:
         tf_ymin = make_input(f"{cfg.get('ymin', 0):.8f}", lambda e: set_val(e, "y", "ymin"))
         tf_ymax = make_input(f"{cfg.get('ymax', 0):.8f}", lambda e: set_val(e, "y", "ymax"))
         
-        _live_fields[chart_id] = {"xmin": tf_xmin, "xmax": tf_xmax, "ymin": tf_ymin, "ymax": tf_ymax, "cfg_key": chart_id}
+        btn_auto_x = make_toggle(cfg.get("auto_x", True), lambda e: toggle_auto(e, "x"))
+        btn_auto_y = make_toggle(cfg.get("auto_y", True), lambda e: toggle_auto(e, "y"))
+        
+        _live_fields[chart_id] = {
+            "xmin": tf_xmin, "xmax": tf_xmax, "ymin": tf_ymin, "ymax": tf_ymax,
+            "btn_auto_x": btn_auto_x, "btn_auto_y": btn_auto_y, "cfg_key": chart_id
+        }
 
         return ft.Column([
             ft.Text(f"📊 {title}", color=ACCENT_CYAN, size=12, weight=ft.FontWeight.BOLD),
-            row("Auto Eje X", make_toggle(cfg.get("auto_x"), lambda e: toggle_auto(e, "x"))),
+            row("Auto Eje X", btn_auto_x),
             row("X Mín", tf_xmin),
             row("X Máx", tf_xmax),
             ft.Container(height=5),
-            row("Auto Eje Y", make_toggle(cfg.get("auto_y"), lambda e: toggle_auto(e, "y"))),
+            row("Auto Eje Y", btn_auto_y),
             row("Y Mín", tf_ymin),
             row("Y Máx", tf_ymax),
             ft.Divider(height=20, color="#303030")
@@ -175,21 +181,30 @@ def build_config(page: ft.Page) -> ft.Control:
             tf_ymin = make_input(f"{cfg_spec.get('ymin', -100.0):.3f}", lambda e: set_val(e, "y", "ymin"))
             tf_ymax = make_input(f"{cfg_spec.get('ymax', -20.0):.3f}", lambda e: set_val(e, "y", "ymax"))
             
-            _live_fields[cfg_key] = {"xmin": tf_xmin, "xmax": tf_xmax, "ymin": tf_ymin, "ymax": tf_ymax, "cfg_key": cfg_key}
+            btn_auto_x = make_toggle(cfg_spec.get("auto_x", True), lambda e: toggle_auto(e, "x"))
+            btn_auto_y = make_toggle(cfg_spec.get("auto_y", True), lambda e: toggle_auto(e, "y"))
+            
+            _live_fields[cfg_key] = {
+                "xmin": tf_xmin, "xmax": tf_xmax, "ymin": tf_ymin, "ymax": tf_ymax,
+                "btn_auto_x": btn_auto_x, "btn_auto_y": btn_auto_y, "cfg_key": cfg_key
+            }
 
             method_name = {"waterfall": "Waterfall FFT", "cwt": "CWT / Morlet", "ar_burg_2d": "AR / Burg 2D", "correlogram_2d": "Correlograma 2D"}.get(active_method, "Espectrograma 2D")
 
             tab_content = ft.Column([
                 ft.Text(f"📊 {method_name}", color=ACCENT_CYAN, size=12, weight=ft.FontWeight.BOLD),
-                row("Auto Eje X", make_toggle(cfg_spec.get("auto_x", True), lambda e: toggle_auto(e, "x"))),
+                row("Auto Eje X", btn_auto_x),
                 row("X Mín (MHz)", tf_xmin),
                 row("X Máx (MHz)", tf_xmax),
                 ft.Divider(height=5, color=BORDER_COL),
-                row("Auto Color", make_toggle(cfg_spec.get("auto_y", True), lambda e: toggle_auto(e, "y"))),
+                row("Auto Color", btn_auto_y),
                 row("Color Mín", tf_ymin),
                 row("Color Máx", tf_ymax),
             ])
-        elif idx == 3: tab_content = build_axis_group("Histograma", "stat_hist")
+        elif idx == 3: 
+            mode = getattr(engine_instance, "histogram_mode", "Magnitud")
+            cfg_id = "stat_hist_mag" if mode == "Magnitud" else "stat_hist_fase"
+            tab_content = build_axis_group(f"Histograma ({mode})", cfg_id)
         elif idx == 4: tab_content = build_axis_group("Potencia", "pow_time")
         elif idx == 5: tab_content = build_axis_group("SNR", "snr_freq")
         elif idx == 6: tab_content = build_axis_group("Algoritmo", "mon_filt_spec")
@@ -248,6 +263,28 @@ def build_config(page: ft.Page) -> ft.Control:
                             tf.value = new_val
                             updated.append(tf)
                     except: pass
+            
+            # Sincronizar toggles visuales (checkboxes) si el backend forzó el Auto Scale
+            btn_x = fields.get("btn_auto_x")
+            if btn_x and btn_x.page:
+                is_x = cfg.get("auto_x", False)
+                new_icon_x = ft.Icons.CHECK_BOX if is_x else ft.Icons.CHECK_BOX_OUTLINE_BLANK
+                new_color_x = ACCENT_GREEN if is_x else TEXT_MUTED
+                if btn_x.icon != new_icon_x:
+                    btn_x.icon = new_icon_x
+                    btn_x.icon_color = new_color_x
+                    updated.append(btn_x)
+
+            btn_y = fields.get("btn_auto_y")
+            if btn_y and btn_y.page:
+                is_y = cfg.get("auto_y", False)
+                new_icon_y = ft.Icons.CHECK_BOX if is_y else ft.Icons.CHECK_BOX_OUTLINE_BLANK
+                new_color_y = ACCENT_GREEN if is_y else TEXT_MUTED
+                if btn_y.icon != new_icon_y:
+                    btn_y.icon = new_icon_y
+                    btn_y.icon_color = new_color_y
+                    updated.append(btn_y)
+                    
         for tf in updated:
             try: tf.update()
             except: pass

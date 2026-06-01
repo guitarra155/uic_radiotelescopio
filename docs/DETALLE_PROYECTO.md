@@ -80,14 +80,24 @@ Maneja el "Header" dinámico. Muestra la configuración central exactas de frecu
 * `/ui/tabs`: Configuración, Monitoreo, Espectrograma, etc.
 * `main.py`: Punto de entrada universal.
 
-## 9. Implementación del Histograma (Distribución de Magnitud)
-Procesa la distribución de magnitud absoluta (`np.abs(amplitude_ma_data)`).
-*   **Corrección de Bins Estáticos:** Los bins se mantienen anclados desde la magnitud $0.0$. Esto previene la falsa recreación de campanas enteras si solo hay ruido bajo en frecuencias carentes de emisión.
-*   **Ajuste Dinámico:** El autoescalado permite revelar verdaderas emisiones que rompan el umbral de ruido térmico base.
+## 9. Implementación del Histograma (Distribución Matemática)
+Procesa la distribución de las muestras complejas I/Q según la selección del usuario en la interfaz (`ui/tabs/statistics.py`):
+*   **Modo Magnitud:** Extrae el valor absoluto de la señal (`np.abs(amplitude_ma_data)`). Los bins se mantienen anclados estrictamente desde la magnitud $0.0$. Esto previene la falsa recreación de distribuciones simétricas si solo hay ruido en frecuencias carentes de emisión.
+*   **Modo Fase:** Extrae el ángulo de la matriz compleja (`np.angle(amplitude_ma_data)`). El eje X respeta los límites físicos de radianes entre $-\pi$ y $\pi$ ($-3.14$ a $3.14$).
+*   **Visualización (Matplotlib):** Se dibuja el área rellenada con densidad de probabilidad real empírica frente al modelo de ruido térmico base (Gauss) con una densidad total de 100 *bins*.
 *   *Referencia:* PySDR. (n.d.). IQ Data: Complex Numbers and Magnitude Distribution Analysis. PySDR: A Guide to SDR and DSP using Python. Recuperado de https://pysdr.org/content/iq_files.html
 
 ## 10. Mejoras e Implementaciones Actuales
 - Corrección del filtro Moving Average (complejos separados I/Q).
 - Cabecera y paneles sin sesgos forzados (generalización del uso del SDR en lugar de textos fijos sobre Hidrógeno).
 - Decimales variables habilitados en la interfaz visual.
-- Histogramas de distribución de magnitud funcionales y fieles a la física real de la adquisición SDR, previniendo falsos positivos del auto-escalador visual de Python.
+- Histogramas de Distribución dual (Magnitud y Fase) seleccionables en vivo con densidad de curva rellenada y corrección geométrica de auto-escalado.
+- **Límites Automáticos y Persistencia en Histograma:**
+  - Cuando "Auto Eje X" está activado, la Magnitud fuerza un rango de `[0.0, 0.05]` y la Fase un rango de `[-pi, pi]`.
+  - Cuando el usuario desactiva "Auto Eje X" e introduce límites manuales en la interfaz, estos se graban de manera persistente y totalmente independiente en las secciones `stat_hist_mag` y `stat_hist_fase` de la configuración JSON, preservando el estado original la próxima vez que se inicie la aplicación.
+- **Sintonía Simulada en Reproducción de Archivos:**
+  - Se implementó un algoritmo de **desplazamiento digital de frecuencia (digital down/upconversion)** en la reproducción de archivos `.iq`.
+  - Cuando el usuario sintoniza una frecuencia central en la interfaz (`center_freq`), el backend calcula la diferencia espectral $\Delta f = f_{archivo} - f_{sintonizada}$.
+  - Si hay diferencia, las muestras se multiplican por un exponente complejo ($e^{j 2 \pi \Delta f t}$) para trasladar la señal espectralmente en tiempo real. Esto permite que el usuario "busque" la señal de hidrógeno variando la frecuencia y que el pico se desplace o desaparezca físicamente tal como ocurriría operando un hardware SDR real.
+
+

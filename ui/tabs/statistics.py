@@ -132,11 +132,37 @@ def build_statistics(page: ft.Page, key_state: dict) -> ft.Control:
             
         engine_instance.save_config()
 
+    def on_hist_mode_change(e):
+        from core.dsp_engine import engine_instance
+        engine_instance.histogram_mode = e.control.value
+        
+        # Usar perfiles de configuración separados para no destruir los ajustes manuales del usuario
+        cfg_id = "stat_hist_mag" if engine_instance.histogram_mode == "Magnitud" else "stat_hist_fase"
+        if cfg_id not in engine_instance.charts_config:
+            engine_instance.charts_config[cfg_id] = {"auto_x": True, "auto_y": True, "xmin": 0.0, "xmax": 1.0, "ymin": 0.0, "ymax": 100.0}
+            
+        engine_instance._frames_since_autoscale = 10
+        engine_instance.save_config()
+        
+        if e.control.page:
+            engine_instance.metadata_updated = True
+            e.control.page.pubsub.send_all("tab_changed")  # Reconstruye el panel derecho con la nueva llave JSON
+            e.control.page.pubsub.send_all("refresh_charts")
+
+    hist_mode_dd = ft.RadioGroup(
+        content=ft.Row([
+            ft.Radio(value="Magnitud", label="Magnitud", fill_color=ACCENT_CYAN),
+            ft.Radio(value="Fase", label="Fase", fill_color=ACCENT_CYAN)
+        ], spacing=10),
+        value="Magnitud",
+        on_change=on_hist_mode_change,
+    )
+
     chart_area = ft.Container(
         content=ft.Column([
             ft.Row([
                 ft.Text("HISTOGRAMA / DISTRIBUCIÓN", color=ACCENT_CYAN, size=10, weight=ft.FontWeight.BOLD),
-                btn_fs
+                ft.Row([hist_mode_dd, btn_fs], spacing=5, vertical_alignment=ft.CrossAxisAlignment.CENTER)
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             ft.Container(
                 content=ft.GestureDetector(

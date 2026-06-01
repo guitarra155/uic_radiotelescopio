@@ -353,18 +353,31 @@ def chart_histogram() -> str:
     fig, ax, is_new = get_cached_fig("histogram", figsize=dyn_size)
     samples = engine_instance.histogram_data
 
+    mode = getattr(engine_instance, "histogram_mode", "Magnitud")
     ax.clear()
-    style_ax(ax, "Distribución de Magnitud de Señal (Histograma)", "Magnitud", "Cantidad de Datos (Bins)")
+
+    if mode == "Magnitud":
+        style_ax(ax, "Distribución de Magnitud de Señal (Histograma)", "Magnitud de la Señal", "Conteo de Muestras")
+    else:
+        style_ax(ax, "Distribución de Fase de Señal (Histograma)", "Fase (Radianes)", "Conteo de Muestras")
 
     if len(samples) > 2 and np.std(samples) > 0:
-        # Forzar rango desde 0 hasta al menos 0.5 para que el ruido bajo quede aplastado contra el eje Y
-        max_val = max(0.5, float(np.max(samples)))
-        bins_range = np.linspace(0.0, max_val, 100)
-        
-        # Se genera el histograma con cuentas absolutas (sin density=True)
-        counts, bins, _ = ax.hist(samples, bins=bins_range, color=ACCENT_CYAN, alpha=0.4, label="Datos Medidos")
+        if mode == "Magnitud":
+            # Usar el máximo real de las muestras (+10% margen) para que los 100 bins se distribuyan correctamente
+            max_val = float(np.max(samples))
+            max_val = max_val * 1.1 if max_val > 0 else 0.1
+            bins_range = np.linspace(0.0, max_val, 100)
+        else:
+            bins_range = np.linspace(-np.pi, np.pi, 100)
+            
+        # Se genera el histograma como área rellenada (stepfilled)
+        counts, bins, _ = ax.hist(samples, bins=bins_range, color=ACCENT_CYAN, alpha=0.4, label="Datos Medidos", histtype='stepfilled')
         mu, std = np.mean(samples), np.std(samples)
-        x = np.linspace(0.0, max_val, 100)
+        
+        if mode == "Magnitud":
+            x = np.linspace(0.0, max_val, 100)
+        else:
+            x = np.linspace(-np.pi, np.pi, 100)
         
         # Ecuación de la PDF Gaussiana estándar
         gauss = (1 / (std * math.sqrt(2 * math.pi))) * np.exp(
@@ -385,7 +398,21 @@ def chart_histogram() -> str:
         
         ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL)
 
-    cfg = engine_instance.charts_config["stat_hist"]
+    cfg_id = "stat_hist_mag" if mode == "Magnitud" else "stat_hist_fase"
+    cfg = engine_instance.charts_config.get(cfg_id)
+    if not cfg:
+        cfg = {"auto_x": True, "auto_y": True, "xmin": 0.0, "xmax": 0.05, "ymin": 0.0, "ymax": 100.0}
+        engine_instance.charts_config[cfg_id] = cfg
+
+    # Si el checkbox de Auto Eje X está seleccionado (True), forzamos los límites que pidió el usuario
+    if cfg.get("auto_x", True):
+        if mode == "Magnitud":
+            cfg["xmin"] = 0.0
+            cfg["xmax"] = 0.05
+        else:
+            cfg["xmin"] = -round(np.pi, 5)
+            cfg["xmax"] = round(np.pi, 5)
+
     safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
 
     # Sincronizar ymin/ymax para el eje Y de cuentas absolutas
@@ -396,13 +423,12 @@ def chart_histogram() -> str:
     else:
         safe_set_ylim(ax, cfg["ymin"], cfg["ymax"])
 
-    # Sincronizar xmin/xmax para el eje X de dBFS
-    if cfg.get("auto_x", True):
-        x_lo, x_hi = ax.get_xlim()
-        cfg["xmin"] = round(x_lo, 5)
-        cfg["xmax"] = round(x_hi, 5)
+    # Sincronizar xmin/xmax para el eje X
+    if not cfg.get("auto_x", True):
+        safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
 
     return fig_to_b64(fig)
+
 
 
 def chart_signal_time() -> str:

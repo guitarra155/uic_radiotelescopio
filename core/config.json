@@ -1,5 +1,5 @@
 {
-    "center_freq": 1420.405751786,
+    "center_freq": 1420.0,
     "sample_rate": 2500000,
     "trigger_high": 15.0,
     "trigger_low": 5.0,
@@ -26,7 +26,7 @@
         "corr_max_lag": 2048,
         "ar_n_freqs": 1024,
         "cwt_n_scales": 2048,
-        "spec2d_method": "correlogram_2d"
+        "spec2d_method": "cwt"
     },
     "analysis_window_sec": 0.1,
     "moving_avg_samples": 2,
@@ -39,92 +39,100 @@
     "visual_span_mhz": 2.5,
     "charts_config": {
         "mon_raw_spec": {
-            "xmin": 1419.155751786,
-            "xmax": 1421.655751786,
-            "ymin": -100.0,
-            "ymax": -20.0,
+            "xmin": 1418.75,
+            "xmax": 1421.25,
+            "ymin": -42.06201686280562,
+            "ymax": -29.298011539723994,
             "auto_x": 0,
             "auto_y": 1
         },
         "mon_raw_amp": {
             "xmin": 0.0,
-            "xmax": 1.0,
-            "ymin": 0.0,
-            "ymax": 1.0,
+            "xmax": 0.1,
+            "ymin": -0.03420716151595116,
+            "ymax": 0.03420716151595116,
             "auto_x": 1,
             "auto_y": 1
         },
         "mon_filt_spec": {
-            "xmin": 1419.155751786,
-            "xmax": 1421.655751786,
-            "ymin": -100.0,
-            "ymax": -20.0,
+            "xmin": 1418.75,
+            "xmax": 1421.25,
+            "ymin": -42.06201686280562,
+            "ymax": -29.298011539723994,
             "auto_x": 0,
             "auto_y": 1
         },
         "mon_filt_amp": {
             "xmin": 0.0,
-            "xmax": 1.0,
-            "ymin": 0.0,
-            "ymax": 1.0,
+            "xmax": 0.1,
+            "ymin": -0.024687485396862028,
+            "ymax": 0.024687485396862028,
             "auto_x": 1,
             "auto_y": 1
         },
         "spec_wf": {
-            "xmin": 1419.0,
-            "xmax": 1421.0,
-            "ymin": -100.0,
-            "ymax": -20.0,
+            "xmin": 1419.0625,
+            "xmax": 1420.9375,
+            "ymin": -42.06201686280562,
+            "ymax": -29.298011539723994,
             "auto_x": 1,
             "auto_y": 1
         },
         "spec_cwt": {
-            "xmin": 1419.0,
-            "xmax": 1421.0,
+            "xmin": 1419.0625,
+            "xmax": 1420.9375,
             "ymin": -100.0,
             "ymax": -20.0,
             "auto_x": 1,
             "auto_y": 1
         },
         "spec_ar": {
-            "xmin": 1419.0,
-            "xmax": 1421.0,
+            "xmin": 1419.0625,
+            "xmax": 1420.9375,
             "ymin": -100.0,
             "ymax": -20.0,
             "auto_x": 1,
             "auto_y": 1
         },
         "spec_corr": {
-            "xmin": 1419.0,
-            "xmax": 1421.0,
-            "ymin": -100.0,
-            "ymax": -20.0,
+            "xmin": 1419.0625,
+            "xmax": 1420.9375,
+            "ymin": -64.80070008803193,
+            "ymax": -54.91269135352371,
             "auto_x": 1,
             "auto_y": 1
         },
         "stat_hist": {
-            "xmin": 0.0,
-            "xmax": 1.5,
+            "xmin": -0.9997831747459713,
+            "xmax": 1.0197891406714916,
             "ymin": 0.0,
-            "ymax": 100.0,
+            "ymax": 73.5,
             "auto_x": 1,
             "auto_y": 1
         },
         "pow_time": {
             "xmin": 0.0,
-            "xmax": 20.0,
-            "ymin": -100.0,
-            "ymax": -20.0,
+            "xmax": 200.0,
+            "ymin": -60.086646495254115,
+            "ymax": -49.7337180691474,
             "auto_x": 1,
             "auto_y": 1
         },
         "snr_freq": {
-            "xmin": 1419.0,
-            "xmax": 1421.0,
-            "ymin": -5.0,
-            "ymax": 40.0,
+            "xmin": 1419.0625,
+            "xmax": 1420.9375,
+            "ymin": -10.0,
+            "ymax": 10.0,
             "auto_x": 1,
             "auto_y": 1
+        },
+        "stat_hist_mag": {
+            "auto_x": 1,
+            "auto_y": 1,
+            "xmin": 0.0,
+            "xmax": 0.05,
+            "ymin": 0.0,
+            "ymax": 77.7
         }
     },
     "window_res": "1366x768",

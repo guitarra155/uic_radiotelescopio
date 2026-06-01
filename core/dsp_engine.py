@@ -111,6 +111,7 @@ class DSPEngine:
         self._corr_buf_full  = False        # True una vez que el buffer ha sido llenado al menos una vez
 
         # Histogram samples
+        self.histogram_mode = "Magnitud"
         self.histogram_data = np.random.normal(0, 1, 1000)
 
         # Power vs Time buffer (dBFS instantáneo, 2000 muestras)
@@ -562,8 +563,11 @@ class DSPEngine:
         self.waterfall_idx = (self.waterfall_idx - 1) % self.waterfall_steps
         self.waterfall_data[self.waterfall_idx, :] = self.spectrum_data
 
-        # ── 6. Histograma (Distribución de Magnitud) ────────────────────────
-        self.histogram_data = np.abs(self.amplitude_ma_data).copy()
+        # ── 6. Histograma (Distribución) ────────────────────────
+        if getattr(self, "histogram_mode", "Magnitud") == "Magnitud":
+            self.histogram_data = np.abs(self.amplitude_ma_data).copy()
+        else:
+            self.histogram_data = np.angle(self.amplitude_ma_data).copy()
 
         # ── 7. Potencia instantánea vs Tiempo ────────────────────────────
         inst_pwr_db = float(np.mean(pwr))
@@ -919,6 +923,16 @@ class DSPEngine:
                         self._needs_spectral_lock = False
                         self._perform_spectral_lock(iq)
 
+                    # --- Desplazamiento de Frecuencia Digital para Simular Sintonía en Archivos ---
+                    file_cf = getattr(self, "file_center_freq", 1420.40575179)
+                    tuned_cf = self.center_freq
+                    delta_f = file_cf - tuned_cf
+                    
+                    if abs(delta_f) > 1e-6:
+                        n = np.arange(len(iq))
+                        phase = 2.0 * np.pi * (delta_f * 1e6) * n / self.sample_rate
+                        iq = iq * np.exp(1j * phase)
+
                     self._process_dsp_core(iq, batches=None)
 
                     # Sincronización con playback_speed
@@ -984,6 +998,7 @@ class DSPEngine:
         # Si seguimos en 1420.4 pero el archivo no dice nada, intentamos 'lock-on' al pico
         # Esto se ejecutará en el primer frame de _process_file_loop
         self._needs_spectral_lock = not meta_found
+        self.file_center_freq = self.center_freq
 
     def _perform_spectral_lock(self, iq_data):
         """Analiza el primer bloque de datos para detectar la frecuencia central real."""
@@ -1011,6 +1026,8 @@ class DSPEngine:
                 print("✨ Auto-calibrado a Línea de Hidrógeno (1420.4 MHz)", flush=True)
             else:
                 print("✅ Ya sintonizado en la banda de interés.", flush=True)
+        
+        self.file_center_freq = self.center_freq
 
     def update_visual_span(self, span_mhz: float):
         """Ajusta el zoom visual de las gráficas de espectro."""
