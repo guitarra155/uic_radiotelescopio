@@ -20,7 +20,6 @@ from ui.tabs.statistics import build_statistics
 from ui.tabs.sdr_config import build_config
 from ui.tabs.signal_analysis import build_signal_analysis
 from ui.tabs.freq_snr import build_freq_snr
-from ui.tabs.algo_result import build_algo_result
 from ui.tabs.estado import build_estado
 
 def main(page: ft.Page):
@@ -102,7 +101,6 @@ def main(page: ft.Page):
         "📊  Histograma & Estadística",# 3
         "⚡  Potencia vs. Tiempo",        # 4
         "📶  SNR vs. Frecuencia",        # 5
-        "🔬  Algoritmo DSP",             # 6
     ]
 
     # Renderizamos los componentes visuales de cada módulo
@@ -113,7 +111,6 @@ def main(page: ft.Page):
         build_statistics(page, key_state),            # 3
         build_signal_analysis(page, key_state),      # 4
         build_freq_snr(page, key_state),             # 5
-        build_algo_result(page),                     # 6
     ]
 
     selected = [0]  # índice activo

@@ -354,13 +354,17 @@ def chart_histogram() -> str:
     samples = engine_instance.histogram_data
 
     ax.clear()
-    style_ax(ax, "Histograma de Relación Señal/Ruido (SNR)", "SNR (dB)", "Cantidad de Datos (Bins)")
+    style_ax(ax, "Distribución de Magnitud de Señal (Histograma)", "Magnitud", "Cantidad de Datos (Bins)")
 
     if len(samples) > 2 and np.std(samples) > 0:
+        # Forzar rango desde 0 hasta al menos 0.5 para que el ruido bajo quede aplastado contra el eje Y
+        max_val = max(0.5, float(np.max(samples)))
+        bins_range = np.linspace(0.0, max_val, 100)
+        
         # Se genera el histograma con cuentas absolutas (sin density=True)
-        counts, bins, _ = ax.hist(samples, bins=50, color=ACCENT_CYAN, alpha=0.4, label="Datos Medidos")
+        counts, bins, _ = ax.hist(samples, bins=bins_range, color=ACCENT_CYAN, alpha=0.4, label="Datos Medidos")
         mu, std = np.mean(samples), np.std(samples)
-        x = np.linspace(np.min(samples), np.max(samples), 100)
+        x = np.linspace(0.0, max_val, 100)
         
         # Ecuación de la PDF Gaussiana estándar
         gauss = (1 / (std * math.sqrt(2 * math.pi))) * np.exp(

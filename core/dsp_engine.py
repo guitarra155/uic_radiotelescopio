@@ -21,7 +21,7 @@ class DSPEngine:
     def __init__(self):
         self.is_playing = False
         self.filename = None
-        self._center_freq = 1420.40
+        self._center_freq = 1420.00
         self._sample_rate = 2_400_000
         self.data_format = "int16"
         self.fft_size = 4096
@@ -230,7 +230,7 @@ class DSPEngine:
 
     @property
     def center_freq(self):
-        return getattr(self, "_center_freq", 1420.40)
+        return getattr(self, "_center_freq", 1420.00)
 
     @center_freq.setter
     def center_freq(self, val):
@@ -562,8 +562,8 @@ class DSPEngine:
         self.waterfall_idx = (self.waterfall_idx - 1) % self.waterfall_steps
         self.waterfall_data[self.waterfall_idx, :] = self.spectrum_data
 
-        # ── 6. Histograma (Relación Señal/Ruido SNR en dB) ──────────────────
-        self.histogram_data = self.snr_data.copy()
+        # ── 6. Histograma (Distribución de Magnitud) ────────────────────────
+        self.histogram_data = np.abs(self.amplitude_ma_data).copy()
 
         # ── 7. Potencia instantánea vs Tiempo ────────────────────────────
         inst_pwr_db = float(np.mean(pwr))

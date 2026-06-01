@@ -15,7 +15,7 @@ def build_header(page: ft.Page) -> ft.Control:
     timer_lbl = ft.Text("", color=ACCENT_AMBER, size=14, weight=ft.FontWeight.W_700)
     
     header_title = ft.Text(
-        f"Radiotelescopio ({engine_instance.center_freq:.2f} MHz)",
+        f"Frecuencia Central SDR: {engine_instance.center_freq} MHz",
         color=ACCENT_CYAN, size=14, weight=ft.FontWeight.BOLD, expand=True,
     )
 
@@ -33,7 +33,7 @@ def build_header(page: ft.Page) -> ft.Control:
             on_emergency(None)
         elif msg == "refresh_charts":
             # Actualizar el título con la frecuencia real
-            header_title.value = f"Radiotelescopio ({engine_instance.center_freq:.2f} MHz)"
+            header_title.value = f"Frecuencia Central SDR: {engine_instance.center_freq} MHz"
             header_title.update()
             
             if engine_instance.stream_mode == "file":
@@ -143,8 +143,6 @@ def build_footer() -> ft.Control:
         padding=ft.Padding(left=20, top=6, right=20, bottom=6),
         content=ft.Row([
             ft.Text("UIC Radiotelescopio  •  v1.0.0",         color=TEXT_MUTED, size=10),
-            ft.Text("•",                                        color=BORDER_COL, size=10),
-            ft.Text("HI 1420.405751 MHz",                      color=TEXT_MUTED, size=10),
             ft.Text("•",                                        color=BORDER_COL, size=10),
             ft.Text("Backend: RTL-SDR / Signal Hound BB60C",   color=TEXT_MUTED, size=10),
             ft.Container(expand=True),
