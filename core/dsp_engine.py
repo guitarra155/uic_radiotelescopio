@@ -527,12 +527,8 @@ class DSPEngine:
                     self.trigger_state = 0
                     self.trigger_active = False # Auto-desarmar tras capturar
 
-        # ── 2. Buffer RAW: Guardar primeras 2000 muestras contiguas (Alta Resolución, sin diezmado) ──
-        n_samples = len(self.amplitude_data)
-        if len(iq) >= n_samples:
-            self.amplitude_data[:] = iq[:n_samples]
-        else:
-            self.amplitude_data[:] = np.pad(iq, (0, n_samples - len(iq)), mode='constant')
+        # ── 2. Buffer RAW: Guardar el bloque completo para permitir Zoom de Alta Resolución ──
+        self.amplitude_data = iq.copy()
 
         # ── 3. Moving Average Filter (IMPLEMENTACIÓN ULTRA-RÁPIDA Y CORRECTA) ────────
         win_len = max(1, int(self.moving_avg_samples))
@@ -565,11 +561,8 @@ class DSPEngine:
             if end >= buf_sz:
                 self._corr_buf_full = True
 
-        # Buffer de amplitud filtrada (primeras 2000 muestras contiguas sin diezmado)
-        if len(iq_f) >= n_samples:
-            self.amplitude_ma_data[:] = iq_f[:n_samples]
-        else:
-            self.amplitude_ma_data[:] = np.pad(iq_f, (0, n_samples - len(iq_f)), mode='constant')
+        # Buffer de amplitud filtrada completo para permitir Zoom de Alta Resolución
+        self.amplitude_ma_data = iq_f.copy()
 
         # ── 3b. Espectro RAW (FFT sobre señal sin filtrar) → solo para Tab 1 ───
         pwr_raw_avg = np.zeros(self.fft_size)
@@ -703,8 +696,8 @@ class DSPEngine:
                     _ar_c   = np.zeros(_ORDER, dtype=np.complex64)
                     _t_err  = float(np.dot(_sig, _sig.conj()).real) / _N_SIG
                     for _m in range(_ORDER):
-                        _num = -2.0 * float(np.dot(_ef, _eb.conj()))
-                        _den = float(np.dot(_ef, _ef.conj())) + float(np.dot(_eb, _eb.conj()))
+                        _num = -2.0 * complex(np.dot(_ef, _eb.conj()))
+                        _den = float(np.dot(_ef, _ef.conj()).real) + float(np.dot(_eb, _eb.conj()).real)
                         _km  = _num / (_den + 1e-30)
                         if _m > 0:
                             _ar_c[:_m] = _ar_c[:_m] + _km * _ar_c[:_m][::-1].conj()
@@ -777,8 +770,12 @@ class DSPEngine:
 
         # ── 8. SNR logarítmico por bin ─────────────────────────────────
         # Fórmula: SNR[dB] = P_señal[dBFS] - P_ruido[dBFS]
-        # El piso de ruido se estima con la mediana (estimador robusto)
-        noise_floor = np.median(self.spectrum_data)
+        # El piso de ruido se estima con un filtro de mediana local (baseline dinámico)
+        # para que las señales fuertes no levanten artificialmente el fondo.
+        import scipy.signal
+        _k_size = max(3, int(len(self.spectrum_data) * 0.04))
+        if _k_size % 2 == 0: _k_size += 1
+        noise_floor = scipy.signal.medfilt(self.spectrum_data, kernel_size=_k_size)
         self.snr_data = self.spectrum_data - noise_floor
 
         # ── 9. Detectar señales de interés: bins con SNR > umbral ──────────

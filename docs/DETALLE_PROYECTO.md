@@ -141,3 +141,6 @@ Procesa la distribución de las muestras complejas I/Q según la selección del 
   - Se integró un algoritmo que extrae la mediana frecuencial en tiempo real de cada ráfaga.
   - El piso de ruido se alinea a un ancla pre-grabada (`self._baseline_noise`), compensando la fluctuación térmica natural temporal (`pwr - current_median + self._baseline_noise`). Esto suprime definitivamente las rayas horizontales y el parpadeo de contraste.
   - Incorpora un rechazo de transitorios de banda ancha (estática): Si la mediana salta repentinamente > 3.0 dB, el frame anómalo es descartado y reemplazado por la referencia limpia previa.
+- **Zoom Temporal de Alta Resolución en Gráficos de Amplitud:**
+  - Se eliminó el truncamiento heredado de 2000 muestras fijas que limitaba a `amplitude_data` y `amplitude_ma_data`. Ahora se almacena el bloque IQ original completo capturado del receptor (ej. 2,500,000 muestras para una ventana de 1.0s a 2.5 MSps).
+  - Al realizar zoom vertical/horizontal desde la interfaz, el motor de rendering (`ui/charts.py`) extrae exactamente la porción temporal visible (slicing) a partir de los datos completos y la renderiza dinámicamente con alta resolución. Esto permite observar las oscilaciones senoidales de la portadora sin la distorsión del submuestreo severo previo, igualando la capacidad de análisis visual de MATLAB.

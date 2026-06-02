@@ -158,10 +158,33 @@ def chart_amplitude() -> str:
     dyn_size = get_dynamic_figsize(bw, bh)
     fig, ax, is_new = get_cached_fig("amplitude", figsize=dyn_size)
     sig = engine_instance.amplitude_data
-    n = len(sig)
-    # Tiempo RELATIVO: siempre de 0 a la duración de la ventana
+    n_raw = len(sig)
     duration_sec = engine_instance.analysis_window_sec
-    t = np.linspace(0.0, duration_sec, n)
+    
+    cfg = engine_instance.charts_config["mon_raw_amp"]
+    xmin = cfg.get("xmin", 0.0)
+    xmax = cfg.get("xmax", duration_sec)
+    
+    # Restringir zoom a los límites del buffer
+    xmin = max(0.0, min(xmin, duration_sec))
+    xmax = max(xmin + 1e-6, min(xmax, duration_sec))
+    
+    # 1. Recortar (slicing) SOLO la porción visible en el eje X
+    idx_min = int((xmin / duration_sec) * n_raw) if duration_sec > 0 else 0
+    idx_max = int((xmax / duration_sec) * n_raw) if duration_sec > 0 else n_raw
+    idx_max = max(idx_min + 1, min(idx_max, n_raw))
+    
+    sig_slice = sig[idx_min:idx_max]
+    n_slice = len(sig_slice)
+    
+    # 2. Decimación Dinámica (Level of Detail): 1500 pts sólo del recorte
+    MAX_PTS = 1500
+    if n_slice > MAX_PTS:
+        step = n_slice // MAX_PTS
+        sig_slice = sig_slice[::step]
+    
+    sig = sig_slice
+    t = np.linspace(xmin, xmax, len(sig_slice))
     
     # Rango de tiempo absoluto para el título
     c = engine_instance.current_file_time if engine_instance.stream_mode == "file" else (engine_instance.elapsed_samples / engine_instance.sample_rate)
@@ -731,10 +754,30 @@ def chart_amplitude_ma() -> str:
     dyn_size = get_dynamic_figsize(bw, bh)
     fig, ax, is_new = get_cached_fig("amplitude_ma", figsize=dyn_size)
     sig = engine_instance.amplitude_ma_data
-    n = len(sig)
-
+    n_raw = len(sig)
     duration_sec = engine_instance.analysis_window_sec
-    t = np.linspace(0.0, duration_sec, n)
+    
+    cfg = engine_instance.charts_config["mon_filt_amp"]
+    xmin = cfg.get("xmin", 0.0)
+    xmax = cfg.get("xmax", duration_sec)
+    
+    xmin = max(0.0, min(xmin, duration_sec))
+    xmax = max(xmin + 1e-6, min(xmax, duration_sec))
+    
+    idx_min = int((xmin / duration_sec) * n_raw) if duration_sec > 0 else 0
+    idx_max = int((xmax / duration_sec) * n_raw) if duration_sec > 0 else n_raw
+    idx_max = max(idx_min + 1, min(idx_max, n_raw))
+    
+    sig_slice = sig[idx_min:idx_max]
+    n_slice = len(sig_slice)
+    
+    MAX_PTS = 1500
+    if n_slice > MAX_PTS:
+        step = n_slice // MAX_PTS
+        sig_slice = sig_slice[::step]
+        
+    sig = sig_slice
+    t = np.linspace(xmin, xmax, len(sig_slice))
 
     if is_new or "line_i" not in cache.artists["amplitude_ma"]:
         ax.clear()
