@@ -4,6 +4,9 @@ venv/
 .env
 *.iq
 .tmp.driveupload/
+.tmp.drivedownload/
+.tmp.driveupdate/
+.venv/
 *.tmp
 debug.txt
 # IA, Entorno y Caché (Prevención de errores ENAMETOOLONG)
