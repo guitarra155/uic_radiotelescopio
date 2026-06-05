@@ -159,22 +159,24 @@ def build_dual_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
         return ft.Container(
             content=ft.Column([
                 ft.Row([
-                    ft.Text(title, color=accent, size=10, weight=ft.FontWeight.BOLD),
-                    ft.Row([btn, btn_fs], spacing=0)
-                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                    ft.Text(title, color=accent, size=9, weight=ft.FontWeight.BOLD),
+                    ft.Row([btn, btn_fs], spacing=0),
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                   vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                   height=20),
                 ft.GestureDetector(
                     mouse_cursor=ft.MouseCursor.ZOOM_IN,
                     on_scroll=lambda e: on_zoom_scroll(e, chart_id),
                     content=img,
                     expand=True,
                 )
-            ], spacing=2, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
+            ], spacing=1, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
             expand=True,
             bgcolor=PANEL_BG,
             border_radius=8,
-            border=ft.Border(top=ft.BorderSide(2, accent), right=ft.BorderSide(1, BORDER_COL), 
+            border=ft.Border(top=ft.BorderSide(2, accent), right=ft.BorderSide(1, BORDER_COL),
                              bottom=ft.BorderSide(1, BORDER_COL), left=ft.BorderSide(1, BORDER_COL)),
-            padding=6,
+            padding=ft.Padding(left=6, top=2, right=2, bottom=4),
         )
 
     box_spec_raw = _chart_box(img_spec_raw, "mon_raw_spec", "ESPECTRO ORIGINAL", ACCENT_CYAN)

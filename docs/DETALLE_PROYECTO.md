@@ -149,3 +149,11 @@ Procesa la distribución de las muestras complejas I/Q según la selección del 
 - **Mejora en Títulos y Legibilidad de Gráficas:**
   - Se agregó la etiqueta de tiempo real (`[inicio - fin]`) al título de la gráfica "Amplitud Filtrada (MA)", la cual había quedado omitida en la implementación anterior.
   - Se forzó el uso del color claro `labelcolor='#ECEFF1'` en todas las leyendas generadas por Matplotlib en `ui/charts.py`, garantizando que textos descriptivos como "I Filtrado", "Q Filtrado" o "Piso de Ruido" sean completamente legibles bajo la paleta de modo oscuro sin mimetizarse con el fondo gris de los paneles.
+- **Navegación de Frames en Pausa (Review Mode):**
+  - Se implementó un sistema de retroceso y avance por frames durante la pausa para revisar señales que pasaron demasiado rápido.
+  - **`dsp_engine.py` — Historial de Snapshots:** Al finalizar cada iteración de `_process_dsp_core`, se guarda un snapshot compacto (dict numpy de arrays) en `_frame_snapshots`, un `deque` circular de hasta 300 frames. Esto equivale aproximadamente a 5 minutos de historial a 1s/frame sin consumo excesivo de RAM.
+  - **`dsp_engine.seek_frames(delta)`:** Mueve el puntero `_review_offset` en el historial. `delta > 0` retrocede, `delta < 0` avanza. Restaura los buffers de renderizado (`spectrum_data`, `amplitude_data`, etc.) directamente desde el snapshot seleccionado. En modo archivo ajusta `file_position` para que al reanudar el playback continúe exactamente desde ese punto.
+  - **`dsp_engine.exit_review_mode()`:** Llamado al reanudar. Resetea el offset y la bandera `_review_active` para que los nuevos frames vuelvan a grabarse normalmente en el historial.
+  - **`ui/components/layout.py` — Máquina de Estados:** El botón principal ahora maneja 3 estados explícitos: `stopped` (▶ Iniciar), `playing` (⏸ Pausar) y `paused` (▶ Reanudar). Al entrar en modo pausa aparece el panel de review con botones: `⏮ -10`, `⏭ -1`, etiqueta `Frame -N / Total`, `+1 ⏭`, `+10 ⏮` y `⏭| Último`. Al reanudar SDR, se descarta el historial y se vuelve al tiempo real del hardware.
+  - **Stop = Reinicio Completo:** `stop_stream()` ahora resetea `file_position = 0`, `current_file_time = 0.0`, limpia `_frame_snapshots`, resetea `_review_offset / _review_active` y llama a `reset_buffers()`. Equivale a abrir el programa de nuevo.
+

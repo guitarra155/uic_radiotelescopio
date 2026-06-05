@@ -20,6 +20,7 @@ except ImportError:
 class DSPEngine:
     def __init__(self):
         self.is_playing = False
+        self.is_paused = False   # True = pausa voluntaria del usuario (no stop)
         self.filename = None
         self._center_freq = 1420.00
         self._sample_rate = 2_400_000
@@ -239,6 +240,13 @@ class DSPEngine:
         self.trigger_state = 0
         self.trigger_ring_buffer = collections.deque()
 
+        # ── Navegación de Frames en Pausa ──────────────────────────────────
+        # Almacena snapshots compactos de los outputs DSP para review post-pausa.
+        # Máx 300 frames ≈ 300 ventanas de análisis de 1s ≈ 5 minutos de historial.
+        self._frame_snapshots = collections.deque(maxlen=300)
+        self._review_offset = 0      # 0 = frame más reciente, N = N frames atrás
+        self._review_active = False  # True cuando el usuario navega frames en pausa
+
     @property
     def center_freq(self):
         return getattr(self, "_center_freq", 1420.00)
@@ -402,6 +410,66 @@ class DSPEngine:
         if hasattr(self, 'current_file_time'):
             self.current_file_time = 0.0
 
+    def seek_frames(self, delta: int) -> int:
+        """Navega delta frames en el historial de snapshots.
+        delta > 0 = hacia atrás (frames más antiguos).
+        delta < 0 = hacia adelante (frames más recientes).
+        Retorna el offset actual tras el movimiento.
+        """
+        n = len(self._frame_snapshots)
+        if n == 0:
+            return 0
+
+        self._review_active = True
+        new_offset = max(0, min(n - 1, self._review_offset + delta))
+
+        # En modo archivo: no retroceder más allá del frame cuyo tiempo es 0
+        if delta > 0 and self.stream_mode == "file":
+            snaps = list(self._frame_snapshots)
+            candidate_idx = n - 1 - new_offset
+            candidate_time = snaps[candidate_idx]["file_time"]
+            if candidate_time <= 0.0:
+                # Buscar el último frame con tiempo > 0 que sí es retrocedible
+                for off in range(new_offset, self._review_offset):
+                    t = snaps[n - 1 - off]["file_time"]
+                    if t > 0.0:
+                        new_offset = off
+                        break
+                else:
+                    # Ya estamos en el primero disponible, no retroceder
+                    return self._review_offset
+
+        self._review_offset = new_offset
+        snaps = list(self._frame_snapshots)
+        idx = n - 1 - self._review_offset
+        snap = snaps[idx]
+
+        # Restaurar los buffers de renderizado con los datos de ese frame
+        np.copyto(self.spectrum_data,     snap["spectrum"])
+        np.copyto(self.spectrum_raw_data, snap["spectrum_raw"])
+        self.amplitude_data    = snap["amplitude"].copy()
+        self.amplitude_ma_data = snap["amplitude_ma"].copy()
+        self.current_file_time = snap["file_time"]
+        self.elapsed_samples   = snap["elapsed"]
+
+        # En modo archivo ajustar file_position para que al reanudar continúe desde aquí
+        if self.stream_mode == "file":
+            self.file_position = snap["file_pos"]
+
+        return self._review_offset
+
+    def exit_review_mode(self):
+        """Sale del modo review — vuelve al frame más reciente y reanuda la grabación."""
+        if self._review_offset != 0 and len(self._frame_snapshots) > 0:
+            # Restaurar el snapshot más reciente antes de reanudar
+            snap = list(self._frame_snapshots)[-1]
+            np.copyto(self.spectrum_data,     snap["spectrum"])
+            np.copyto(self.spectrum_raw_data, snap["spectrum_raw"])
+            self.amplitude_data    = snap["amplitude"].copy()
+            self.amplitude_ma_data = snap["amplitude_ma"].copy()
+        self._review_offset = 0
+        self._review_active = False
+
     def start_stream(self, mode, params):
         # Si ya hay un hilo reproduciendo, lo apagamos y esperamos a que muera para evitar solapamientos
         if hasattr(self, "stream_thread") and self.stream_thread and self.stream_thread.is_alive():
@@ -441,6 +509,13 @@ class DSPEngine:
 
     def stop_stream(self):
         self.is_playing = False
+        # ── Reset completo (equivalente a abrir el programa de nuevo) ──
+        self.file_position = 0
+        self.current_file_time = 0.0
+        self._review_offset = 0
+        self._review_active = False
+        self._frame_snapshots.clear()
+        self.reset_buffers()
         with self._hw_lock:
             if self.sdr_handle != -1:
                 try:
@@ -829,6 +904,20 @@ class DSPEngine:
 
         self.data_ready = True # Notificar a la UI
 
+        # ── 11. Snapshot de frame para navegación en pausa ───────────────────
+        # Solo guardar si NO estamos en modo review (para no sobreescribir historial con datos del seek)
+        if not self._review_active:
+            snap = {
+                "spectrum":     self.spectrum_data.copy(),
+                "spectrum_raw": self.spectrum_raw_data.copy(),
+                "amplitude":    self.amplitude_data.copy(),
+                "amplitude_ma": self.amplitude_ma_data.copy(),
+                "file_time":    getattr(self, "current_file_time", 0.0),
+                "file_pos":     getattr(self, "file_position", 0),
+                "elapsed":      self.elapsed_samples,
+            }
+            self._frame_snapshots.append(snap)
+
     def _auto_detect_ranges(self):
         """Auto-detecta los rangos óptimos basándose en los datos actuales, evitando NaNs."""
         if not self.is_playing:
@@ -941,6 +1030,10 @@ class DSPEngine:
             print("Error: API de Signal Hound no encontrada.")
             self.is_playing = False
             return
+
+        # Al reanudar SDR en live: salir del modo review, el historial anterior se descarta
+        self._review_active = False
+        self._review_offset = 0
 
         try:
             with self._hw_lock:
@@ -1057,8 +1150,15 @@ class DSPEngine:
                 # Leer ráfagas según la ventana de análisis
                 chunk_bytes = int(self.sample_rate * self.analysis_window_sec) * bytes_per_sample
 
-                self.current_file_time = 0.0
+                # Solo resetear el tiempo si estamos empezando desde el inicio
+                resuming_from_seek = hasattr(self, "file_position") and self.file_position > 0
+                if not resuming_from_seek:
+                    self.current_file_time = 0.0
                 self.total_file_time = (file_size / bytes_per_sample) / self.sample_rate
+
+                # Salir del modo review para que los nuevos frames vuelvan a grabarse
+                self._review_active = False
+                self._review_offset = 0
 
                 import time
 
@@ -1339,6 +1439,10 @@ class DSPEngine:
         if getattr(self, "_initializing", False):
             return
         self._do_save_config()
+        # Si el motor está pausado, marcar para que el refresh_loop
+        # redibuje la gráfica activa con los nuevos límites de ejes
+        if getattr(self, "is_paused", False):
+            self._seek_refresh = True
 
     def _do_save_config(self):
         conf = {

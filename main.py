@@ -232,8 +232,14 @@ def main(page: ft.Page):
                     engine_instance.data_ready = False
                     if engine_instance.active_tab != 0:
                         page.pubsub.send_all("refresh_charts")
+                elif getattr(engine_instance, "_seek_refresh", False):
+                    # Seek manual en pausa: refrescar la pestaña activa independientemente
+                    engine_instance._seek_refresh = False
+                    if engine_instance.active_tab != 0:
+                        page.pubsub.send_all("refresh_charts")
                 elif was_playing and not is_p:
-                    page.pubsub.send_all("stream_stopped")
+                    if not getattr(engine_instance, "is_paused", False):
+                        page.pubsub.send_all("stream_stopped")
             except RuntimeError:
                 break
 
