@@ -6,6 +6,8 @@ Usa una caché persistente de figuras para permitir refrescos de 10ms sin satura
 
 import math
 import io
+import os
+import datetime
 import base64
 import matplotlib as mpl
 mpl.use('Agg') # Backend ultra-rápido sin UI
@@ -25,7 +27,6 @@ from core.dsp_engine import engine_instance
 # Esto delega la renderización del texto a Flet, haciéndolo 100% nítido.
 matplotlib.rcParams['svg.fonttype'] = 'none'
 
-
 # --- Caché de Objetos Matplotlib (Singleton persistente) ---
 class ChartCache:
     def __init__(self):
@@ -34,9 +35,52 @@ class ChartCache:
         self.artists = {}  # {name: [Line2D, ...]}
         self.colorbars = {}  # {name: Colorbar}
 
-
 cache = ChartCache()
 
+def export_active_chart(format_type='png'):
+    idx = getattr(engine_instance, "active_tab", 0)
+    chart_id = None
+    if idx == 1:
+        max_id = getattr(engine_instance, "maximized_dual_chart", None)
+        if max_id:
+            dual_map = {
+                "mon_raw_spec": "spectrum_raw",
+                "mon_filt_spec": "spectrum",
+                "mon_raw_amp": "amplitude",
+                "mon_filt_amp": "amplitude_ma"
+            }
+            chart_id = dual_map.get(max_id)
+        else:
+            return None, "En Monitoreo Dual, maximiza una gráfica primero con el ícono [ ]."
+    elif idx == 2:
+        # cache.figs keys for spectrogram 2D methods
+        method_map = {
+            "waterfall": "waterfall", 
+            "cwt": "cwt_map", 
+            "ar_burg_2d": "ar_spectrogram", 
+            "correlogram_2d": "corr_spectrogram"
+        }
+        chart_id = method_map.get(getattr(engine_instance, "active_spec_method", "waterfall"), "waterfall")
+    elif idx == 3:
+        chart_id = "histogram"
+    elif idx == 4:
+        chart_id = "power_time"
+    elif idx == 5:
+        chart_id = "freq_snr"
+        
+    if not chart_id or chart_id not in cache.figs:
+        return None, "No hay gráfica activa para exportar en esta pestaña."
+        
+    os.makedirs("Resultados_Datos", exist_ok=True)
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    filepath = os.path.join("Resultados_Datos", f"captura_{chart_id}_{ts}.{format_type}")
+    
+    fig = cache.figs[chart_id]
+    try:
+        fig.savefig(filepath, format=format_type, bbox_inches='tight', facecolor=fig.get_facecolor(), edgecolor='none', dpi=300)
+    except Exception as e:
+        return None, f"Error al guardar: {e}"
+    return filepath, None
 
 def get_dynamic_figsize(base_width=9.5, base_height=2.8):
     """Calcula un tamaño dinámico con aspect ratio PERFECTO según la ventana."""
@@ -570,9 +614,16 @@ def chart_power_time() -> str:
         hline.set_ydata([nf, nf])
         
     cfg = engine_instance.charts_config["pow_time"]
-    # Eje X: Mostrar el historial acumulado (crece hasta el máximo del buffer)
-    x_max = max(1.0, float(t[-1]))
-    safe_set_xlim(ax, 0.0, x_max)
+    
+    if cfg.get("auto_x", True):
+        # Auto Eje X: Mostrar el historial acumulado (crece hasta el máximo del buffer)
+        x_max = max(1.0, float(t[-1]) if len(t) > 0 else 1.0)
+        cfg["xmin"] = 0.0
+        cfg["xmax"] = x_max
+        safe_set_xlim(ax, 0.0, x_max)
+    else:
+        # Modo Manual: Respetar límites configurados por el usuario
+        safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
     
     # Eje Y: Auto-ajuste dinámico o manual
     safe_set_ylim(ax, cfg["ymin"], cfg["ymax"])

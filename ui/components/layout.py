@@ -99,6 +99,34 @@ def build_header(page: ft.Page) -> ft.Control:
         on_click=lambda e: on_seek(-9999),
         padding=2,
     )
+    
+    def do_export(e, fmt):
+        from ui.charts import export_active_chart
+        path, err = export_active_chart(fmt)
+        if err:
+            sb = ft.SnackBar(ft.Text(err, color="#FFFFFF"), bgcolor=ACCENT_RED)
+        else:
+            sb = ft.SnackBar(ft.Text(f"Exportado: {path}", color="#FFFFFF"), bgcolor=ACCENT_GREEN)
+        e.control.page.overlay.append(sb)
+        sb.open = True
+        e.control.page.update()
+
+    btn_export_png = ft.IconButton(
+        icon=ft.Icons.IMAGE,
+        icon_color=ft.Colors.WHITE,
+        icon_size=20,
+        tooltip="Exportar Vista Actual (PNG)",
+        on_click=lambda e: do_export(e, "png"),
+        padding=2,
+    )
+    btn_export_pdf = ft.IconButton(
+        icon=ft.Icons.PICTURE_AS_PDF,
+        icon_color=ft.Colors.RED_300,
+        icon_size=20,
+        tooltip="Exportar Vista Actual (PDF Vectorial)",
+        on_click=lambda e: do_export(e, "pdf"),
+        padding=2,
+    )
 
     seek_panel = ft.Container(
         content=ft.Row(
@@ -110,6 +138,9 @@ def build_header(page: ft.Page) -> ft.Control:
                 btn_next1,
                 btn_next10,
                 btn_latest,
+                ft.Container(width=10), # Separador
+                btn_export_png,
+                btn_export_pdf,
             ],
             spacing=2,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
