@@ -115,27 +115,27 @@ def fig_to_b64(fig: Figure, dpi: int = 96) -> str:
 def safe_set_ylim(ax, ymin, ymax, fallback_span=10.0):
     """Evita que Matplotlib se queje si ymin == ymax."""
     ymin, ymax = float(ymin), float(ymax)
+    if ymin > ymax:
+        ymin, ymax = ymax, ymin
     if abs(ymax - ymin) < 1e-9:
         ymin -= 5.0
         ymax += 5.0
 
     current_ymin, current_ymax = ax.get_ylim()
-    span = max(abs(ymax - ymin), 1e-12)
-    # Tolerancia relativa: actualizar si cambió más de 0.01% del span
-    if abs(current_ymin - ymin) / span > 1e-4 or abs(current_ymax - ymax) / span > 1e-4:
+    if abs(current_ymin - ymin) > 1e-9 or abs(current_ymax - ymax) > 1e-9:
         ax.set_ylim([ymin, ymax])
 
 def safe_set_xlim(ax, xmin, xmax, fallback_span=1.0):
     """Evita que Matplotlib se queje si xmin == xmax. Usa tolerancia relativa."""
     xmin, xmax = float(xmin), float(xmax)
+    if xmin > xmax:
+        xmin, xmax = xmax, xmin
     if abs(xmax - xmin) < 1e-15:
         xmin -= 0.5
         xmax += 0.5
 
     current_xmin, current_xmax = ax.get_xlim()
-    span = max(abs(xmax - xmin), 1e-15)
-    # Tolerancia relativa: actualizar si cambió más de 0.01% del span
-    if abs(current_xmin - xmin) / span > 1e-4 or abs(current_xmax - xmax) / span > 1e-4:
+    if abs(current_xmin - xmin) > 1e-9 or abs(current_xmax - xmax) > 1e-9:
         ax.set_xlim([xmin, xmax])
 
 def style_ax(ax, title="", xlabel="", ylabel=""):

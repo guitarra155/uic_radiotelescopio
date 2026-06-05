@@ -449,6 +449,15 @@ class DSPEngine:
         np.copyto(self.spectrum_raw_data, snap["spectrum_raw"])
         self.amplitude_data    = snap["amplitude"].copy()
         self.amplitude_ma_data = snap["amplitude_ma"].copy()
+
+        if "histogram" in snap:
+            self.histogram_data = snap["histogram"].copy()
+        if "snr" in snap:
+            self.snr_data = snap["snr"].copy()
+        if "power_time" in snap:
+            self.power_time_data = snap["power_time"].copy()
+            self.power_samples_written = snap["power_samples"]
+
         self.current_file_time = snap["file_time"]
         self.elapsed_samples   = snap["elapsed"]
 
@@ -467,6 +476,15 @@ class DSPEngine:
             np.copyto(self.spectrum_raw_data, snap["spectrum_raw"])
             self.amplitude_data    = snap["amplitude"].copy()
             self.amplitude_ma_data = snap["amplitude_ma"].copy()
+            
+            if "histogram" in snap:
+                self.histogram_data = snap["histogram"].copy()
+            if "snr" in snap:
+                self.snr_data = snap["snr"].copy()
+            if "power_time" in snap:
+                self.power_time_data = snap["power_time"].copy()
+                self.power_samples_written = snap["power_samples"]
+                
         self._review_offset = 0
         self._review_active = False
 
@@ -912,6 +930,10 @@ class DSPEngine:
                 "spectrum_raw": self.spectrum_raw_data.copy(),
                 "amplitude":    self.amplitude_data.copy(),
                 "amplitude_ma": self.amplitude_ma_data.copy(),
+                "histogram":    getattr(self, "histogram_data", np.array([])).copy(),
+                "snr":          getattr(self, "snr_data", np.array([])).copy(),
+                "power_time":   getattr(self, "power_time_data", np.array([])).copy(),
+                "power_samples": getattr(self, "power_samples_written", 0),
                 "file_time":    getattr(self, "current_file_time", 0.0),
                 "file_pos":     getattr(self, "file_position", 0),
                 "elapsed":      self.elapsed_samples,

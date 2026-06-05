@@ -29,7 +29,7 @@
         "spec2d_method": "ar_burg_2d"
     },
     "analysis_window_sec": 0.1,
-    "moving_avg_samples": 5,
+    "moving_avg_samples": 20,
     "bb60c_ref_level": -30.0,
     "bb60c_iq_bw": 20.0,
     "vbw_alpha": 0.3,
@@ -41,48 +41,48 @@
         "mon_raw_spec": {
             "xmin": 1419.15575,
             "xmax": 1421.65575,
-            "ymin": -48.439530636160924,
-            "ymax": -27.435064290805904,
+            "ymin": -65.94529231017133,
+            "ymax": -23.063846533033228,
             "auto_x": 0,
             "auto_y": 1
         },
         "mon_raw_amp": {
-            "xmin": 0.0,
-            "xmax": 6e-05,
-            "ymin": -0.05130380094051361,
-            "ymax": 0.05130380094051361,
+            "xmin": 0.02,
+            "xmax": 0.0205,
+            "ymin": -0.05630350112915039,
+            "ymax": 0.05630350112915039,
             "auto_x": 0,
             "auto_y": 1
         },
         "mon_filt_spec": {
             "xmin": 1419.15575,
             "xmax": 1421.65575,
-            "ymin": -48.704882958739866,
-            "ymax": -23.652250378216827,
+            "ymin": -65.94529231017133,
+            "ymax": -23.063846533033228,
             "auto_x": 0,
-            "auto_y": 0
+            "auto_y": 1
         },
         "mon_filt_amp": {
-            "xmin": 0.0,
-            "xmax": 0.1,
-            "ymin": -0.02,
-            "ymax": 0.02,
+            "xmin": 0.02,
+            "xmax": 0.0205,
+            "ymin": -0.022425547242164612,
+            "ymax": 0.022425547242164612,
             "auto_x": 0,
-            "auto_y": 0
+            "auto_y": 1
         },
         "spec_wf": {
             "xmin": 1419.46825,
             "xmax": 1421.34325,
-            "ymin": -48.439530636160924,
-            "ymax": -27.435064290805904,
+            "ymin": -65.94529231017133,
+            "ymax": -23.063846533033228,
             "auto_x": 1,
             "auto_y": 1
         },
         "spec_cwt": {
             "xmin": 1419.46825,
             "xmax": 1421.34325,
-            "ymin": -112.253,
-            "ymax": -41.354,
+            "ymin": -100.0,
+            "ymax": -20.0,
             "auto_x": 1,
             "auto_y": 1
         },
@@ -90,21 +90,21 @@
             "xmin": 1419.46825,
             "xmax": 1421.34325,
             "ymin": -100.0,
-            "ymax": -80.0,
+            "ymax": -20.0,
             "auto_x": 1,
-            "auto_y": 0
+            "auto_y": 1
         },
         "spec_corr": {
             "xmin": 1419.46825,
             "xmax": 1421.34325,
             "ymin": -100.0,
-            "ymax": -80.0,
+            "ymax": -20.0,
             "auto_x": 1,
             "auto_y": 1
         },
         "stat_hist": {
-            "xmin": -0.9998320701124612,
-            "xmax": 1.0175049845129251,
+            "xmin": -0.9999104398739291,
+            "xmax": 1.0151522690430284,
             "ymin": 0.0,
             "ymax": 100.0,
             "auto_x": 1,
@@ -113,8 +113,8 @@
         "pow_time": {
             "xmin": 0.0,
             "xmax": 30.0,
-            "ymin": -68.46429824751198,
-            "ymax": -58.08892276111575,
+            "ymin": -78.79366952106628,
+            "ymax": -56.356577851092425,
             "auto_x": 1,
             "auto_y": 1
         },
@@ -132,11 +132,11 @@
             "xmin": 0.0,
             "xmax": 0.05,
             "ymin": 0.0,
-            "ymax": 1.24967
+            "ymax": 1.3271
         }
     },
     "window_res": "1366x768",
     "window_mode": "Pantalla Completa",
-    "chart_line_width": 0.5,
+    "chart_line_width": 1.0,
     "auto_spectral_lock": 0
 }

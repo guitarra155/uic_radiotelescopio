@@ -52,10 +52,10 @@ def build_config(page: ft.Page) -> ft.Control:
             pass
         return btn
 
-    def make_input(value, on_submit):
+    def make_input(value, on_submit, input_width=INPUT_WIDTH):
         return ft.TextField(
             value=str(value),
-            width=INPUT_WIDTH,
+            width=input_width,
             height=28,
             text_size=11,
             content_padding=ft.Padding(8, 0, 8, 0),
@@ -125,6 +125,73 @@ def build_config(page: ft.Page) -> ft.Control:
     # Columna principal persistente para mantener el scroll y el foco de los inputs
     main_col = ft.Column(scroll=ft.ScrollMode.AUTO, spacing=10, expand=True)
 
+    def build_dual_axis_group(title, raw_id, filt_id):
+        cfg_r = engine_instance.charts_config.get(raw_id, {})
+        cfg_f = engine_instance.charts_config.get(filt_id, {})
+
+        def toggle_r(e, axis):
+            cfg_r[f"auto_{axis}"] = not cfg_r.get(f"auto_{axis}", True)
+            engine_instance.save_config()
+            on_ui_event(e)
+
+        def toggle_f(e, axis):
+            cfg_f[f"auto_{axis}"] = not cfg_f.get(f"auto_{axis}", True)
+            engine_instance.save_config()
+            on_ui_event(e)
+
+        def set_r(e, axis, key):
+            try:
+                cfg_r[key] = float(e.control.value)
+                cfg_r[f"auto_{axis}"] = False
+                engine_instance.save_config()
+                on_ui_event(e)
+            except: pass
+
+        def set_f(e, axis, key):
+            try:
+                cfg_f[key] = float(e.control.value)
+                cfg_f[f"auto_{axis}"] = False
+                engine_instance.save_config()
+                on_ui_event(e)
+            except: pass
+
+        w = 80
+        tfx_min_r = make_input(f"{cfg_r.get('xmin', 0):.6f}", lambda e: set_r(e, "x", "xmin"), w)
+        tfx_max_r = make_input(f"{cfg_r.get('xmax', 0):.6f}", lambda e: set_r(e, "x", "xmax"), w)
+        tfy_min_r = make_input(f"{cfg_r.get('ymin', 0):.6f}", lambda e: set_r(e, "y", "ymin"), w)
+        tfy_max_r = make_input(f"{cfg_r.get('ymax', 0):.6f}", lambda e: set_r(e, "y", "ymax"), w)
+        bx_r = make_toggle(cfg_r.get("auto_x", True), lambda e: toggle_r(e, "x"))
+        by_r = make_toggle(cfg_r.get("auto_y", True), lambda e: toggle_r(e, "y"))
+
+        tfx_min_f = make_input(f"{cfg_f.get('xmin', 0):.6f}", lambda e: set_f(e, "x", "xmin"), w)
+        tfx_max_f = make_input(f"{cfg_f.get('xmax', 0):.6f}", lambda e: set_f(e, "x", "xmax"), w)
+        tfy_min_f = make_input(f"{cfg_f.get('ymin', 0):.6f}", lambda e: set_f(e, "y", "ymin"), w)
+        tfy_max_f = make_input(f"{cfg_f.get('ymax', 0):.6f}", lambda e: set_f(e, "y", "ymax"), w)
+        bx_f = make_toggle(cfg_f.get("auto_x", True), lambda e: toggle_f(e, "x"))
+        by_f = make_toggle(cfg_f.get("auto_y", True), lambda e: toggle_f(e, "y"))
+
+        _live_fields[raw_id] = {"xmin": tfx_min_r, "xmax": tfx_max_r, "ymin": tfy_min_r, "ymax": tfy_max_r, "btn_auto_x": bx_r, "btn_auto_y": by_r, "cfg_key": raw_id}
+        _live_fields[filt_id] = {"xmin": tfx_min_f, "xmax": tfx_max_f, "ymin": tfy_min_f, "ymax": tfy_max_f, "btn_auto_x": bx_f, "btn_auto_y": by_f, "cfg_key": filt_id}
+
+        def triple(label, c1, c2):
+            if isinstance(c1, ft.IconButton):
+                c1 = ft.Container(c1, width=w, alignment=ft.Alignment(0, 0))
+                c2 = ft.Container(c2, width=w, alignment=ft.Alignment(0, 0))
+            return ft.Row([ft.Container(ft.Text(label, color=TEXT_MUTED, size=11), width=65), c1, c2], spacing=5, alignment=ft.MainAxisAlignment.START)
+
+        return ft.Column([
+            ft.Text(f"📊 {title}", color=ACCENT_CYAN, size=12, weight=ft.FontWeight.BOLD),
+            ft.Row([ft.Container(width=65), ft.Container(ft.Text("RAW", color=TEXT_MUTED, size=10, weight="bold"), width=w, alignment=ft.Alignment(0, 0)), ft.Container(ft.Text("FILTRADA", color=TEXT_MUTED, size=10, weight="bold"), width=w, alignment=ft.Alignment(0, 0))], spacing=5),
+            triple("Auto Eje X", bx_r, bx_f),
+            triple("X Mín", tfx_min_r, tfx_min_f),
+            triple("X Máx", tfx_max_r, tfx_max_f),
+            ft.Container(height=3),
+            triple("Auto Eje Y", by_r, by_f),
+            triple("Y Mín", tfy_min_r, tfy_min_f),
+            triple("Y Máx", tfy_max_r, tfy_max_f),
+            ft.Divider(height=15, color="#303030")
+        ], spacing=2)
+
     def render_panel():
         """Genera la estructura de controles. Solo se llama al cambiar de pestaña."""
         _live_fields.clear()
@@ -135,17 +202,18 @@ def build_config(page: ft.Page) -> ft.Control:
                 ft.Text("🛡️ MONITOREO DUAL", color=ACCENT_CYAN, size=12, weight=ft.FontWeight.BOLD),
                 row("Modo RAW", make_toggle(engine_instance.raw_mode, 
                     lambda e: (setattr(engine_instance, "raw_mode", not engine_instance.raw_mode), engine_instance.save_config(), on_ui_event(e)))),
-                
                 ft.Divider(height=10, color=BORDER_COL),
-                build_axis_group("Espectro RAW", "mon_raw_spec"),
-                build_axis_group("Amplitud RAW", "mon_raw_amp"),
-                ft.Divider(height=20, color=ACCENT_AMBER),
-                row("Filtro MA", make_toggle(engine_instance.ma_enabled, 
+                
+                build_dual_axis_group("Amplitud", "mon_raw_amp", "mon_filt_amp"),
+                
+                ft.Text("⚙️ FILTRO MEDIA MÓVIL", color=ACCENT_AMBER, size=11, weight="bold"),
+                row("Activado", make_toggle(engine_instance.ma_enabled, 
                     lambda e: (setattr(engine_instance, "ma_enabled", not engine_instance.ma_enabled), engine_instance.save_config(), on_ui_event(e)))),
-                row("Ventana (muestras)", make_input(f"{int(engine_instance.moving_avg_samples)}", 
-                    lambda e: (setattr(engine_instance, "moving_avg_samples", max(1, int(float(e.control.value)))), engine_instance.save_config(), on_ui_event(e)))),
-                build_axis_group("Espectro Filtrado", "mon_filt_spec"),
-                build_axis_group("Amplitud Filtrada", "mon_filt_amp"),
+                row("Ventana (N)", make_input(f"{int(engine_instance.moving_avg_samples)}", 
+                    lambda e: (setattr(engine_instance, "moving_avg_samples", max(1, int(float(e.control.value)))), engine_instance.save_config(), on_ui_event(e)), 80)),
+                ft.Divider(height=10, color="#303030"),
+
+                build_dual_axis_group("Espectro", "mon_raw_spec", "mon_filt_spec"),
             ])
         elif idx == 2:
             method_map = {
