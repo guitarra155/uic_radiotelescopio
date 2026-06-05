@@ -115,23 +115,27 @@ def fig_to_b64(fig: Figure, dpi: int = 96) -> str:
 def safe_set_ylim(ax, ymin, ymax, fallback_span=10.0):
     """Evita que Matplotlib se queje si ymin == ymax."""
     ymin, ymax = float(ymin), float(ymax)
-    if abs(ymax - ymin) < 1e-6:
+    if abs(ymax - ymin) < 1e-9:
         ymin -= 5.0
         ymax += 5.0
-    
+
     current_ymin, current_ymax = ax.get_ylim()
-    if abs(current_ymin - ymin) > 1e-3 or abs(current_ymax - ymax) > 1e-3:
+    span = max(abs(ymax - ymin), 1e-12)
+    # Tolerancia relativa: actualizar si cambió más de 0.01% del span
+    if abs(current_ymin - ymin) / span > 1e-4 or abs(current_ymax - ymax) / span > 1e-4:
         ax.set_ylim([ymin, ymax])
 
 def safe_set_xlim(ax, xmin, xmax, fallback_span=1.0):
-    """Evita que Matplotlib se queje si xmin == xmax."""
+    """Evita que Matplotlib se queje si xmin == xmax. Usa tolerancia relativa."""
     xmin, xmax = float(xmin), float(xmax)
-    if abs(xmax - xmin) < 1e-6:
+    if abs(xmax - xmin) < 1e-15:
         xmin -= 0.5
         xmax += 0.5
-        
+
     current_xmin, current_xmax = ax.get_xlim()
-    if abs(current_xmin - xmin) > 1e-3 or abs(current_xmax - xmax) > 1e-3:
+    span = max(abs(xmax - xmin), 1e-15)
+    # Tolerancia relativa: actualizar si cambió más de 0.01% del span
+    if abs(current_xmin - xmin) / span > 1e-4 or abs(current_xmax - xmax) / span > 1e-4:
         ax.set_xlim([xmin, xmax])
 
 def style_ax(ax, title="", xlabel="", ylabel=""):
@@ -210,10 +214,18 @@ def chart_amplitude() -> str:
         line_q.set_data(t, sig.imag)
         ax.set_title(f"Amplitud vs Tiempo (Streaming) {time_str}", color=ACCENT_CYAN, fontsize=9, pad=6)
         
-    # El eje X siempre cubre exactamente la ventana de análisis actual
-    cfg = engine_instance.charts_config["mon_raw_amp"]
+    # Aplicar límites de eje configurados por el usuario
     safe_set_ylim(ax, cfg["ymin"], cfg["ymax"])
     safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
+
+    # Notación científica automática en eje X cuando el rango es pequeño
+    x_span = abs(cfg["xmax"] - cfg["xmin"])
+    if x_span < 0.01:   # < 10ms → usar notación exponencial
+        ax.xaxis.set_major_formatter(mpl.ticker.ScalarFormatter(useMathText=True))
+        ax.ticklabel_format(axis='x', style='sci', scilimits=(-3, 3))
+    else:
+        ax.xaxis.set_major_formatter(mpl.ticker.ScalarFormatter(useMathText=False))
+        ax.ticklabel_format(axis='x', style='plain')
 
     return fig_to_b64(fig)
 
@@ -812,6 +824,15 @@ def chart_amplitude_ma() -> str:
     cfg = engine_instance.charts_config["mon_filt_amp"]
     safe_set_ylim(ax, cfg["ymin"], cfg["ymax"])
     safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
+
+    # Notación científica automática en eje X cuando el rango es pequeño
+    x_span = abs(cfg["xmax"] - cfg["xmin"])
+    if x_span < 0.01:   # < 10ms → usar notación exponencial
+        ax.xaxis.set_major_formatter(mpl.ticker.ScalarFormatter(useMathText=True))
+        ax.ticklabel_format(axis='x', style='sci', scilimits=(-3, 3))
+    else:
+        ax.xaxis.set_major_formatter(mpl.ticker.ScalarFormatter(useMathText=False))
+        ax.ticklabel_format(axis='x', style='plain')
 
     return fig_to_b64(fig)
 
