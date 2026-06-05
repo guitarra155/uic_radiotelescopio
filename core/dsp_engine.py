@@ -618,15 +618,17 @@ class DSPEngine:
             self._baseline_noise = current_median
             self._pwr_history = pwr.copy()
             
-        # Si la mediana salta más de 3 dB, asumimos que es pura estática/RFI y clonamos el frame anterior
-        if current_median > self._baseline_noise + 3.0:
+        # Si la mediana salta más de 10 dB, asumimos que es pura estática/RFI y clonamos el frame anterior
+        if current_median > self._baseline_noise + 10.0:
             pwr = self._pwr_history.copy()
+            # EVITAR CONGELAMIENTO: Permitir que se adapte lentamente aunque sea un salto grande
+            self._baseline_noise = 0.95 * self._baseline_noise + 0.05 * current_median
         else:
             # Alinear el frame actual a la línea base para que la energía térmica no 'parpadee'
             pwr = pwr - current_median + self._baseline_noise
             self._pwr_history = pwr.copy()
             # Dejar que la línea base se adapte muuuuuy lentamente a cambios térmicos reales del LNA
-            self._baseline_noise = 0.99 * self._baseline_noise + 0.01 * current_median
+            self._baseline_noise = 0.90 * self._baseline_noise + 0.10 * current_median
 
         # IIR simple sobre el tiempo (suavizado VBW)
         self.spectrum_data = (1 - alpha_eff) * self.spectrum_data + alpha_eff * pwr

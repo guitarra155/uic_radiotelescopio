@@ -198,7 +198,7 @@ def chart_amplitude() -> str:
         )
         (line_i,) = ax.plot(t, sig.real, color=ACCENT_CYAN, linewidth=engine_instance.chart_line_width, alpha=0.85, label="I (Real)", rasterized=True)
         (line_q,) = ax.plot(t, sig.imag, color="#E040FB", linewidth=engine_instance.chart_line_width, alpha=0.85, label="Q (Imaginario)", rasterized=True)
-        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL)
+        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL, labelcolor='#ECEFF1')
         cache.artists["amplitude"]["line_i"] = line_i
         cache.artists["amplitude"]["line_q"] = line_q
     else:
@@ -208,7 +208,7 @@ def chart_amplitude() -> str:
         line_q.set_linewidth(engine_instance.chart_line_width)
         line_i.set_data(t, sig.real)
         line_q.set_data(t, sig.imag)
-        ax.set_title(f"Amplitud vs Tiempo (Streaming) {time_str}", color="#ECEFF1", fontsize=11, fontweight="bold", pad=12)
+        ax.set_title(f"Amplitud vs Tiempo (Streaming) {time_str}", color=ACCENT_CYAN, fontsize=9, pad=6)
         
     # El eje X siempre cubre exactamente la ventana de análisis actual
     cfg = engine_instance.charts_config["mon_raw_amp"]
@@ -254,7 +254,7 @@ def chart_spectrum() -> str:
         )
         leg = ax.legend(
             loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL
-        )
+        , labelcolor='#ECEFF1')
         cache.artists["spectrum"]["line"] = line
         cache.artists["spectrum"]["hline"] = hline
     else:
@@ -267,7 +267,7 @@ def chart_spectrum() -> str:
         # Actualizar piso de ruido dinámico sin regenerar leyenda
         nf = engine_instance.db_noise_floor
         hline.set_ydata([nf, nf])
-        ax.set_title(f"Espectro de Frecuencia (Señal Filtrada) {time_str}", color="#ECEFF1", fontsize=11, fontweight="bold", pad=12)
+        ax.set_title(f"Espectro de Frecuencia (Señal Filtrada) {time_str}", color=ACCENT_CYAN, fontsize=9, pad=6)
 
     cfg = engine_instance.charts_config["mon_filt_spec"]
     safe_set_ylim(ax, cfg["ymin"], cfg["ymax"])
@@ -312,7 +312,7 @@ def chart_spectrum_raw() -> str:
         )
         leg = ax.legend(
             loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL
-        )
+        , labelcolor='#ECEFF1')
         cache.artists["spectrum_raw"]["line"] = line
         cache.artists["spectrum_raw"]["hline"] = hline
     else:
@@ -324,7 +324,7 @@ def chart_spectrum_raw() -> str:
         
         nf = engine_instance.db_noise_floor_raw
         hline.set_ydata([nf, nf])
-        ax.set_title(f"Espectro (Señal Original — Sin Filtrar) {time_str}", color="#ECEFF1", fontsize=11, fontweight="bold", pad=12)
+        ax.set_title(f"Espectro (Señal Original — Sin Filtrar) {time_str}", color=ACCENT_CYAN, fontsize=9, pad=6)
 
     cfg = engine_instance.charts_config["mon_raw_spec"]
     safe_set_ylim(ax, cfg["ymin"], cfg["ymax"])
@@ -443,7 +443,7 @@ def chart_histogram() -> str:
             ax.plot(x, kde_vals, color=ACCENT_AMBER, linewidth=1.5, linestyle="-", label="Real Observado (KDE)")
         except Exception:
             pass
-        leg = ax.legend(loc="upper right", fontsize=8, facecolor=MPL_AXBG, edgecolor=BORDER_COL)
+        leg = ax.legend(loc="upper right", fontsize=8, facecolor=MPL_AXBG, edgecolor=BORDER_COL, labelcolor='#ECEFF1')
         for text in leg.get_texts():
             text.set_color("#ECEFF1")  # Color claro y visible en modo oscuro
 
@@ -496,7 +496,7 @@ def chart_signal_time() -> str:
         style_ax(ax, "Señal en el Tiempo (I / Q)", "Tiempo (s)", "Amplitud (V)")
         (li,) = ax.plot(t, raw.real, color=ACCENT_CYAN, linewidth=0.8, label="I", rasterized=True)
         (lq,) = ax.plot(t, raw.imag, color="#E040FB", linewidth=0.8, label="Q", rasterized=True)
-        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL)
+        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL, labelcolor='#ECEFF1')
         cache.artists["signal_time"]["line_i"] = li
         cache.artists["signal_time"]["line_q"] = lq
     else:
@@ -545,7 +545,7 @@ def chart_power_time() -> str:
         )
         leg = ax.legend(
             loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL
-        )
+        , labelcolor='#ECEFF1')
         cache.artists["power_time"]["line"] = line
         cache.artists["power_time"]["hline"] = hline
     else:
@@ -589,7 +589,7 @@ def chart_freq_snr() -> str:
         )
         ax.legend(
             loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL
-        )
+        , labelcolor='#ECEFF1')
         cache.artists["freq_snr"]["line"] = line
     else:
         line = cache.artists["freq_snr"]["line"]
@@ -692,7 +692,7 @@ def chart_cwt_map(result: dict = None) -> str:
         )
         vline = ax.axvline(x=fc, color=ACCENT_RED, linestyle="--",
                            linewidth=0.9, alpha=0.8, label=f"HI {fc:.2f} MHz")
-        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL)
+        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL, labelcolor='#ECEFF1')
         from mpl_toolkits.axes_grid1 import make_axes_locatable
         cax = make_axes_locatable(ax).append_axes("right", size="2%", pad=0.05)
         cbar = fig.colorbar(im, cax=cax)
@@ -779,17 +779,22 @@ def chart_amplitude_ma() -> str:
     sig = sig_slice
     t = np.linspace(xmin, xmax, len(sig_slice))
 
+    c = engine_instance.current_file_time if engine_instance.stream_mode == "file" else (engine_instance.elapsed_samples / engine_instance.sample_rate)
+    w = engine_instance.analysis_window_sec
+    start_t = max(0.0, c - w)
+    time_str = f"[{start_t:.1f}s - {c:.1f}s]"
+
     if is_new or "line_i" not in cache.artists["amplitude_ma"]:
         ax.clear()
         style_ax(
             ax,
-            f"Amplitud Filtrada — MA ({int(engine_instance.moving_avg_samples)} muestras)",
+            f"Amplitud Filtrada — MA ({int(engine_instance.moving_avg_samples)} muestras) {time_str}",
             "Tiempo (s)",
             "Amplitud (V)",
         )
         (line_i,) = ax.plot(t, sig.real, color=ACCENT_GREEN, linewidth=0.9, alpha=0.9, label="I Filtrado", rasterized=True)
         (line_q,) = ax.plot(t, sig.imag, color=ACCENT_AMBER, linewidth=0.9, alpha=0.9, label="Q Filtrado", rasterized=True)
-        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL)
+        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL, labelcolor='#ECEFF1')
         cache.artists["amplitude_ma"]["line_i"] = line_i
         cache.artists["amplitude_ma"]["line_q"] = line_q
     else:
@@ -798,7 +803,7 @@ def chart_amplitude_ma() -> str:
         line_i.set_data(t, sig.real)
         line_q.set_data(t, sig.imag)
         ax.set_title(
-            f"Amplitud Filtrada — MA ({int(engine_instance.moving_avg_samples)} muestras)",
+            f"Amplitud Filtrada — MA ({int(engine_instance.moving_avg_samples)} muestras) {time_str}",
             color=ACCENT_CYAN,
             fontsize=9,
             pad=6,
@@ -932,7 +937,7 @@ def chart_ar_spectrogram(result: dict = None) -> str:
         )
         vline = ax.axvline(x=fc, color=ACCENT_RED, linestyle="--",
                            linewidth=0.9, alpha=0.8, label=f"HI {fc:.2f} MHz")
-        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL)
+        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL, labelcolor='#ECEFF1')
         from mpl_toolkits.axes_grid1 import make_axes_locatable
         cax = make_axes_locatable(ax).append_axes("right", size="2%", pad=0.05)
         cbar = fig.colorbar(im, cax=cax)
@@ -1017,7 +1022,7 @@ def chart_correlogram_spectrogram(result: dict = None) -> str:
         )
         vline = ax.axvline(x=fc, color=ACCENT_RED, linestyle="--",
                            linewidth=0.9, alpha=0.8, label=f"HI {fc:.2f} MHz")
-        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL)
+        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL, labelcolor='#ECEFF1')
         from mpl_toolkits.axes_grid1 import make_axes_locatable
         cax = make_axes_locatable(ax).append_axes("right", size="2%", pad=0.05)
         cbar = fig.colorbar(im, cax=cax)
