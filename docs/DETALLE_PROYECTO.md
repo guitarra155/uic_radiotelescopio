@@ -156,4 +156,13 @@ Procesa la distribución de las muestras complejas I/Q según la selección del 
   - **`dsp_engine.exit_review_mode()`:** Llamado al reanudar. Resetea el offset y la bandera `_review_active` para que los nuevos frames vuelvan a grabarse normalmente en el historial.
   - **`ui/components/layout.py` — Máquina de Estados:** El botón principal ahora maneja 3 estados explícitos: `stopped` (▶ Iniciar), `playing` (⏸ Pausar) y `paused` (▶ Reanudar). Al entrar en modo pausa aparece el panel de review con botones: `⏮ -10`, `⏭ -1`, etiqueta `Frame -N / Total`, `+1 ⏭`, `+10 ⏮` y `⏭| Último`. Al reanudar SDR, se descarta el historial y se vuelve al tiempo real del hardware.
   - **Stop = Reinicio Completo:** `stop_stream()` ahora resetea `file_position = 0`, `current_file_time = 0.0`, limpia `_frame_snapshots`, resetea `_review_offset / _review_active` y llama a `reset_buffers()`. Equivale a abrir el programa de nuevo.
-
+- **Límite de Rebobinado en Modo Archivo (Time Machine):**
+  - Se implementó una barrera lógica en `seek_frames` que impide retroceder a un tiempo negativo (`file_time <= 0.0`) cuando se analizan archivos `.iq`, evitando crasheos o desbordamientos del buffer.
+- **Re-dibujo Reactivo de Ejes en Modo Pausa:**
+  - Se modificó la arquitectura de configuración para que, al estar el motor en pausa, cualquier cambio manual en las cajas de texto de los límites X/Y (ejes) dispare un evento `_seek_refresh`. Esto redibuja instantáneamente las gráficas (incluyendo Histograma, SNR y Potencia) sobre el frame congelado actual sin tener que presionar *Play*.
+- **Precisión Microscópica en Visualización (Zoom Absoluto 1e-9):**
+  - Se reemplazó el antiguo algoritmo de tolerancia relativa en `safe_set_xlim` y `safe_set_ylim` (que ignoraba cambios visuales menores al 0.01% del span) por una tolerancia absoluta estricta de `1e-9`. Esto soluciona el "falso congelamiento" de las etiquetas de los ejes y permite realizar acercamientos de ultra-precisión (ej: acercar la vista de `0.0` a `0.00002` segundos) actualizando de inmediato la graduación numérica de la gráfica.
+  - Se agregó una protección matemática (swap) que invierte los límites automáticamente si el usuario ingresa por accidente un `X Mín` mayor que el `X Máx`, impidiendo que Matplotlib invierta la gráfica de forma inesperada.
+- **Rediseño Compacto del Panel de Configuración (Monitoreo Dual):**
+  - Se reconstruyó por completo el panel lateral de configuración en `sdr_config.py` pasando de una extensa lista de una sola columna a un **layout de matriz de 3 columnas (Etiquetas | RAW | Filtrada)**.
+  - Este diseño agrupa de forma paralela los parámetros de los componentes paralelos (Amplitud y Espectro), reduciendo drásticamente la altura de la interfaz y eliminando la necesidad de hacer *scroll* vertical. Se reorganizó el orden visual colocando los bloques de *Amplitud* al tope, *Filtro Media Móvil* al centro y *Espectro* en la parte inferior.
