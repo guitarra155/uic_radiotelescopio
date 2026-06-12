@@ -1,168 +1,60 @@
-# Documentación y Detalle del Proyecto: Plataforma DSP Radiotelescopio
+# Detalle Técnico del Proyecto: Plataforma DSP para Radiotelescopio (UIC)
 
-## 1. ¿Qué es este proyecto?
-Este proyecto es una **Plataforma de Procesamiento Digital de Señales (DSP)** diseñada para funcionar como un radiotelescopio en tiempo real. Su objetivo principal es detectar y analizar señales de radiofrecuencia provenientes del espacio o de barrido local (como la banda L, tradicionalmente usada para la frecuencia del Hidrógeno Neutro HI a 1420.405 MHz, aunque es configurable).
-Opera convirtiendo las ondas de radio del espacio en gráficas visuales para que los científicos puedan estudiar la composición del universo o analizar interferencias y frecuencias a voluntad.
+## 1. Arquitectura del Sistema
+El proyecto es una aplicación de escritorio desarrollada en Python enfocada en el Procesamiento Digital de Señales (DSP) para un radiotelescopio. Utiliza **Flet** (basado en Flutter) para la Interfaz de Usuario (UI) y un motor interno de DSP altamente optimizado en el backend. 
 
-## 2. ¿Para qué sirve?
-- **Observación Astronómica y Espectral**: Detectar radiación y perfilar el espectro en vivo.
-- **Análisis de Señales**: Procesar millones de datos por segundo (hasta 40 millones de muestras) para separar las señales útiles del ruido o interferencias.
-- **Visualización en Tiempo Real**: Mostrar espectrogramas (mapas de calor), distribuciones de magnitud y estadísticas instantáneas para entender las transmisiones.
+La arquitectura se divide en dos capas principales:
+- **Core (Backend & DSP):** Encargado de la comunicación con el hardware SDR (Signal Hound BB60C u otros) y de la ejecución asíncrona de algoritmos matemáticos complejos.
+- **UI (Frontend):** Responsable de la visualización en tiempo real de los datos mediante gráficas renderizadas de `matplotlib` a base64, controlando el flujo y estado global.
 
----
+## 2. Flujo de Funcionamiento
+1. **Inicialización:** `main.py` levanta la ventana de Flet e inicializa el motor `DSPEngine` (Singleton).
+2. **Adquisición de Datos:** El módulo `bbdevice/bb_api.py` interactúa con el dispositivo físico en C/C++ vía ctypes. Obtiene datos IQ en bruto (raw).
+3. **Procesamiento:** `DSPEngine` aloja un bucle asíncrono que extrae muestras, las normaliza y aplica filtros. Para el procesamiento avanzado, delega en `advanced_dsp.py` (Burg, CWT, MUSIC, Welch, Correlogram, etc.).
+4. **Renderizado:** La interfaz se suscribe a los eventos del motor. Cuando hay nuevos datos, las pestañas activas solicitan a `charts.py` la generación de la gráfica correspondiente.
+5. **Visualización:** El componente renderizado en Base64 se muestra en los contenedores Flet en tiempo real.
 
-## 3. Manual de Usuario (Paso a Paso)
+## 3. Modularización y Estructura de Directorios
 
-### A. Preparación de los Equipos
-- **Conectar el equipo**: Conecta el receptor SDR (BB60C o RTL-SDR) a tu computadora. Si usas el BB60C, asegúrate de conectar ambos extremos del cable USB "en Y" a puertos USB 3.0 de tu PC para que tenga suficiente energía.
-- **Archivos de datos**: Si no tienes una antena conectada, puedes usar grabaciones previas en formato `.iq` o `.npy`.
+- `main.py`: Punto de entrada, configuración de ventana, manejo de teclado y orquestador de pestañas de Flet.
+- `core/`:
+  - `dsp_engine.py`: Clase `DSPEngine`, maneja el buffer circular, hilos de lectura/escritura (SDR/Fichero), y estado de reproducción.
+  - `advanced_dsp.py`: Implementación matemática de algoritmos avanzados (AR Burg, Transformada Wavelet Continua 1D/2D, Pseudo-MUSIC, ESPRIT, Welch, Correlograma, ASLT).
+  - `bbdevice/`: Librerías y wrappers (`bb_api.py`) para comunicarse con el hardware de Signal Hound.
+  - `constants.py` / `config.json`: Valores constantes y persistencia de la configuración.
+- `ui/`:
+  - `components/`: Elementos reutilizables de UI (`layout.py` para header/footer, `shared.py`).
+  - `tabs/`: Controladores de cada vista (`monitoring.py`, `spectrogram.py`, `statistics.py`, `signal_analysis.py`, `freq_snr.py`, `sdr_config.py`, `algo_tab.py`, `algo_result.py`).
+  - `charts.py`: Generador de gráficos con Matplotlib. Cachea figuras para optimizar el rendimiento.
+- `data/`, `docs/`, `research/`, `scripts/`: Carpetas auxiliares.
 
-### B. Iniciar la Observación
-Abre el programa y ve a la pestaña **Configuración SDR**:
-- **Origen de los datos (Source Mode)**: Elige `sdr` para captar señales en vivo o `file` para reproducir un archivo grabado.
-- **Frecuencia Central**: Escribe la frecuencia de interés (ej. 1420.00 MHz).
-- **Tasa de Muestreo (Sample Rate)**: Controla cuánta información se procesa. Usa 1.0 a 5.0 MSps para observaciones generales.
-- **Nivel de Señal (Reference Level)**: Configúralo en -30 o -40 dBm, si aparece el aviso ADC OVERFLOW súbelo a -10 o 0 dBm.
+## 4. Descripción Detallada de Funciones y Dependencias
+### 4.1 Dependencias Clave
+- **Flet:** Framework UI reactivo.
+- **NumPy / SciPy:** Manejo vectorial de datos IQ y funciones de señal.
+- **Matplotlib:** Generación de espectrogramas e histogramas.
+- **ctypes:** Llamadas a la API compilada del dispositivo BB60C.
 
-### C. Entendiendo las Gráficas
-- **Auto-Escala**: A la derecha de la pantalla verás botones de "Auto X" y "Auto Y". Mantenlos encendidos para que el programa ajuste el zoom dinámicamente y encuadre la señal y el ruido térmico de fondo.
-- **Distribución de Magnitud (Histograma)**: Calcula automáticamente la presencia de la señal respecto al ruido. Si solo hay ruido térmico bajo, el gráfico mostrará barras pegadas al cero.
-- **Sintonía Automática**: Al cargar archivos, el programa detecta el metadata para alinear la emisión.
+### 4.2 Motor DSP (`dsp_engine.py`)
+- Mantiene hilos separados para no bloquear la UI.
+- `DSPEngine.load_config() / save_config()`: Persistencia de estado.
+- `DSPEngine._worker_read_sdr()`: Lectura del buffer de entrada desde el dispositivo físico usando las APIs BB.
 
-### D. Limpiando Interferencias y Captura Automática
-- **Filtro Moving Average (Pestaña Monitoreo)**: Actívalo para suavizar interferencias rápidas manteniendo una base compleja de datos I/Q.
-- **Smart Trigger (Pestaña Estadística)**: Define un umbral. Si se supera, el sistema guardará la ráfaga de datos en `/data`.
+### 4.3 UI (`charts.py` y `tabs`)
+- Sistema de Caché (`ChartCache`): Evita instanciar múltiples figuras `matplotlib` en memoria por cada frame.
+- Se utilizan funciones decoradas con `make_synchronized` para evitar colisiones de hilos de Flet sobre el renderizador de Matplotlib (que no es thread-safe).
 
----
+## 5. Identificación de Acciones/Funciones Obsoletas o No Utilizadas
 
-## 4. Instalación y Entorno de Desarrollo
-Nuestro entorno utiliza diversas librerías ("skills") avanzadas:
-- **Ciencia y Matemáticas**: Funciones integradas estadísticas (`statsmodels`) y procesamiento simbólico de señales (`scipy` para estimaciones Kernel Density KDE).
-- **Interfaz y Arquitectura**: Renderizado nativo de Flet impulsado por una codificación agresiva en Base64 SVG de Matplotlib, logrando visualizaciones de 30 FPS.
-- **Optimización de Rendimiento**: Vectorización profunda con NumPy para procesar y filtrar a 40 MSps en tiempo real sin saturar hilos (Threads asíncronos).
+Tras un análisis del código fuente, se identifican las siguientes áreas con código muerto, obsoleto o en desarrollo (Placeholders):
 
----
+1. **Funciones del API BB60C (`core/bbdevice/bb_api.py`) no utilizadas**:
+   - De las decenas de funciones mapeadas de la API en C (ej. `bb_self_cal`, `bb_get_serial_number_list`, `bb_get_device_diagnostics`, `bb_configure_IO`, `bb_sync_CPU_to_GPS`, sweeps de UART), solo un pequeño subconjunto vital (`bb_open_device`, `bb_configure_IQ`, `bb_initiate`, `bb_get_IQ_unpacked`, `bb_abort`, `bb_close_device`) es llamado realmente desde `dsp_engine.py`. El resto del envoltorio (wrapper) es código muerto (o "latente" preparado para futuras versiones, pero actualmente sin uso en la aplicación).
 
-## 5. Arquitectura del Sistema
-El sistema se divide en dos grandes bloques desacoplados:
-- **Backend / Motor DSP (`core/dsp_engine.py`):** Ejecuta la adquisición, gestiona los hilos (`threads`) de forma asíncrona, calcula transformadas rápidas de Fourier (FFT), distribuciones de magnitud y promedios móviles (MA). Aplica los filtros base y rellena los buffers circulares.
-- **Frontend / UI (`ui/` y `main.py`):** Construida utilizando **Flet (Python)**. Las gráficas se generan usando **Matplotlib** operando a través de una caché SVG (`ui/charts.py`) de memoria que es incrustada como imagen en base64.
+## 6. Actualizaciones Recientes
+- Se ajustó la ventana de auto-escalado (auto_y) para la gráfica de "Potencia vs. Tiempo" (`pow_time`), pasando de un margen de ±5.0 dB a ±15.0 dB.
+- Se modificó el escalado automático del Eje X (`auto_x`) en todas las gráficas espectrales para mostrar el **100% del ancho de banda (Sample Rate)** en lugar del 75%. El usuario ahora visualiza todo el espectro capturado o los rangos manuales que seleccione sin recortes predeterminados.
 
-## 6. Flujo de Funcionamiento
-1. **Inicialización:** `engine_instance` carga la configuración. Flet construye las distintas pestañas.
-2. **Adquisición:** Al iniciar, un hilo lee de forma continua datos IQ, calculando magnitudes y espectros.
-3. **Procesamiento Baseband:**
-   - Lectura del ADC.
-   - Filtro *Moving Average* independiente para la fase (I) y cuadratura (Q).
-   - Memorización de la amplitud pura (`amplitude_data`) y amplitud filtrada (`amplitude_ma_data`).
-   - Cálculo del Waterfall y Espectro (`spectrum_data`).
-4. **Visualización y Actualización UI:** La UI recibe el estado por PubSub y renderiza el SVG extraído desde `charts.py`.
-
-## 7. Descripción Detallada de Funciones y Módulos
-
-### Módulo `core/dsp_engine.py`
-Contiene la clase estática y singleton `DSPEngine`. 
-- **`start_stream` / `stop_stream`:** Hilos de hardware y archivos.
-- **`_process_dsp_core`:** El núcleo matemático, con la filtración MA, FFTs, Histogramas y SNR.
-- **`_auto_detect_ranges`:** Un sistema heurístico de percentiles que calibra las pantallas según el nivel de ruido (noise floor).
-
-### Módulo `ui/charts.py`
-Módulo de procesamiento gráfico en hilo separado.
-- **`get_cached_fig`:** Optimización tipo caché de Matplotlib Figures (`plt.Figure`).
-- **`fig_to_b64`:** Transforma los gráficos vectoriales en Base64 SVG.
-
-### Rutas y Cabeceras (`ui/components/layout.py`)
-Maneja el "Header" dinámico. Muestra la configuración central exactas de frecuencia provista por el SDR sin omitir los decimales ingresados por el usuario.
-
-## 8. Modularización y Dependencias
-* `/core`: Constantes universales (`constants.py`), Motor Principal (`dsp_engine.py`).
-* `/ui`: Cabeceras (`layout.py`) y motor vectorial (`charts.py`).
-* `/ui/tabs`: Configuración, Monitoreo, Espectrograma, etc.
-* `main.py`: Punto de entrada universal.
-
-## 9. Implementación del Histograma (Distribución Matemática)
-Procesa la distribución de las muestras complejas I/Q según la selección del usuario en la interfaz (`ui/tabs/statistics.py`):
-*   **Modo Magnitud:** Extrae el valor absoluto de la señal (`np.abs(amplitude_ma_data)`). Los bins se mantienen anclados estrictamente desde la magnitud $0.0$. Esto previene la falsa recreación de distribuciones simétricas si solo hay ruido en frecuencias carentes de emisión.
-*   **Modo Fase:** Extrae el ángulo de la matriz compleja (`np.angle(amplitude_ma_data)`). El eje X respeta los límites físicos de radianes entre $-\pi$ y $\pi$ ($-3.14$ a $3.14$).
-*   **Visualización (Matplotlib):** Se dibuja el área rellenada transformando el histograma en una **Función de Densidad de Probabilidad (PDF)** (`density=True`), calculando la probabilidad real en lugar del conteo bruto. Se superponen los modelos empíricos (KDE) y térmicos (Gauss) escalados a densidad total.
-*   *Referencia:* PySDR. (n.d.). IQ Data: Complex Numbers and Magnitude Distribution Analysis. PySDR: A Guide to SDR and DSP using Python. Recuperado de https://pysdr.org/content/iq_files.html
-
-## 10. Mejoras e Implementaciones Actuales
-- Corrección del filtro Moving Average (complejos separados I/Q).
-- Cabecera y paneles sin sesgos forzados (generalización del uso del SDR en lugar de textos fijos sobre Hidrógeno).
-- Decimales variables habilitados en la interfaz visual.
-- Histogramas de Distribución dual (Magnitud y Fase) seleccionables en vivo con densidad de curva rellenada y corrección geométrica de auto-escalado.
-- **Límites Automáticos y Persistencia en Histograma:**
-  - Cuando "Auto Eje X" está activado, la Magnitud fuerza un rango de `[0.0, 0.05]` y la Fase un rango de `[-pi, pi]`.
-  - Cuando el usuario desactiva "Auto Eje X" e introduce límites manuales en la interfaz, estos se graban de manera persistente y totalmente independiente en las secciones `stat_hist_mag` y `stat_hist_fase` de la configuración JSON, preservando el estado original la próxima vez que se inicie la aplicación.
-- **Sintonía Simulada en Reproducción de Archivos:**
-  - Se implementó un algoritmo de **desplazamiento digital de frecuencia (digital down/upconversion)** en la reproducción de archivos `.iq`.
-  - Cuando el usuario sintoniza una frecuencia central en la interfaz (`center_freq`), el backend calcula la diferencia espectral $\Delta f = f_{archivo} - f_{sintonizada}$.
-  - Si hay diferencia y esta es menor que el límite físico de Nyquist ($\pm f_s / 2$), las muestras se multiplican por un exponente complejo ($e^{j 2 \pi \Delta f t}$) para trasladar la señal espectralmente en tiempo real.
-  - Si la diferencia de frecuencia supera el límite de Nyquist, significa que la frecuencia sintonizada está completamente fuera del ancho de banda capturado en el archivo. En este caso, el motor **reemplaza las muestras grabadas por ruido térmico de bajísima amplitud** ($0.005$ V), logrando que los picos espectrales y de histograma desaparezcan por completo de la pantalla tal como ocurre en un receptor SDR real de hardware.
-- **Propagación en Caliente de Parámetros Globales:**
-  - Se habilitó la reactividad total cuando se altera la **Frecuencia Central** (`center_freq`) u otros atributos desde la pestaña de Estado.
-  - El setter de `center_freq` ahora activa el flag de sintonía en caliente (`_retune_requested`) incondicionalmente para modo SDR y Archivos.
-  - La UI en `estado.py` emite un evento PubSub de difusión (`refresh_charts`) al presionar Enter o quitar el cursor, refrescando en caliente todas las gráficas y cabeceras dinámicas de todas las pestañas de manera instantánea y coherente.
-- **Corrección de Lógica de Auto-Calibración en Archivos:**
-  - Se corrigió la condición de calibración espectral ciega (`_perform_spectral_lock`). Anteriormente, si el usuario sintonizaba una frecuencia lejana como $1410.0\text{ MHz}$, la condición invertida forzaba el retorno a $1420.4\text{ MHz}$ automáticamente.
-  - La nueva lógica solo realiza el ajuste fino de auto-calibración si la frecuencia ingresada ya se encuentra cerca de la banda de interés ($\le 1.0\text{ MHz}$ de diferencia), permitiendo al usuario explorar libremente sintonías manuales lejanas (como $1410.0\text{ MHz}$) y ver la banda completamente desierta sin que el software anule su decisión.
-- **Rango Temporal del Bloque de Análisis en Todas las Gráficas Principales:**
-  - Se incorporó la visualización dinámica del instante de tiempo analizado en el título de todas las gráficas principales de la interfaz (Amplitud, Espectro e Histograma en `ui/charts.py`), así como en la tabla estadística lateral (`ui/tabs/statistics.py`). Se calcula y muestra el rango exacto `[t_inicio - t_fin]` relativo al archivo o streaming en vivo. Esto permite realizar comparaciones temporales cruzadas y congelar visualizaciones exactas al pulsar "Pausa", correlacionándolas fácilmente con la escala de tiempo del Espectrograma.
-- **Mejora de Contraste en Leyendas para Modo Oscuro:**
-  - Se corrigió el problema de legibilidad en la leyenda del histograma. El texto por defecto heredaba un tono oscuro casi invisible contra el fondo gris del panel. Se forzó explícitamente un color de fuente claro (`#ECEFF1`) y un tamaño de letra ligeramente mayor (`fontsize=8`) para asegurar una lectura óptima y descansada bajo cualquier iluminación de la pantalla.
-- **Protección de Sintonía al Pausar / Reanudar:**
-  - Se implementó un control en `_try_load_metadata()` que detecta si el archivo se está reanudando desde una pausa (`file_position > 0`). Si es el caso, se omite por completo la inicialización de la búsqueda de metadatos y el flag de calibración espectral ciega (`_needs_spectral_lock = False`). Esto evita que el sistema sobreescriba o fuerce calibraciones repetidas de la frecuencia central si el usuario no ha realizado ningún cambio en los controles.
-- **Optimización de Latencia y Prevención de Solapamiento de Hilos:**
-  - **Sincronización por Fraccionamiento (Micro-Sleeping) y Escape Rápido:** Se sustituyó el retardo largo `time.sleep(sleep_time)` por un bucle de micro-intervalos de 30ms. Asimismo, se añadieron múltiples puntos de control e interrupción rápida (`if not self.is_playing: break`) a lo largo del flujo de lectura, conversión de formato y procesamiento DSP en `_process_file_loop()`. Esto causa que el hilo cese operaciones y libere recursos inmediatamente (en menos de 3ms) tras pulsar "Pausa".
-  - **Exclusión Mutua de Hilos (Safe Thread Re-use) y No-Bloqueo de UI:**
-  - En `start_stream()`, se realiza una espera segura mediante `.join(timeout=0.02)` (reducido de 300ms a tan solo 20ms). Al ser combinada con el escape rápido, garantiza que el hilo anterior muere de inmediato y evita congelar o bloquear el hilo principal de la interfaz visual (UI de Flet), logrando transiciones fluidas de play/pausa sin saltos ni congelamientos.
-- **Selector de Sample Rate de Tipo Chip (Flawless Row Wrap):**
-  - Se eliminó el antiguo desplegable (`ft.Dropdown`) para el Sample Rate en la pestaña de Estado (`ui/tabs/estado.py`). Este componente generaba fallos visuales de posicionamiento 3D (solapamientos y cortes verticales).
-  - Se sustituyó por una matriz de botones tipo "Chip" en disposición flotante auto-ajustable (`ft.Row` con parámetro `wrap=True`), estilizados con un borde e iluminación interactiva cian (`ACCENT_CYAN`) al ser seleccionados. 
-  - Cuenta con un suscriptor dinámico a `refresh_charts` que actualiza y resalta en caliente la tasa de muestreo actual de forma reactiva si el motor DSP ajusta el Sample Rate por auto-calibración en archivos o cambios globales.
-- **Límite de Seguridad del Buffer (Anti-Congelamiento de RAM):**
-  - Se implementó un límite máximo de seguridad (`MAX_SAFE_SAMPLES = 10_000_000`) en `_resize_corr_buffer()`. Esto restringe el consumo máximo del buffer del correlograma a unos 80 MB de memoria RAM.
-  - Evita que al operar a tasas de muestreo extremas de $40.0\text{ MSps}$ con cascadas muy anchas ($30.0$ segundos) se intente reservar buffers absurdos de más de 1.2 mil millones de muestras complejas (~9.6 GB de RAM), lo cual generaba el congelamiento severo de Windows por paginación de memoria y cuellos de botella de disco.
-- **Checkbox de Control de Auto-Calibración Espectral Fina:**
-  - Se incorporó un Checkbox en la pestaña de Estado (`ui/tabs/estado.py`) que permite al usuario habilitar o deshabilitar dinámicamente la auto-calibración espectral ciega (`auto_spectral_lock`).
-  - Cuando está **desmarcado**, el motor DSP ignora cualquier pico detectado en archivos I/Q y respeta estrictamente la frecuencia central manual que el usuario introduzca en el cuadro de texto.
-  - Su estado se almacena y recupera de manera persistente en `core/config.json` bajo la clave `auto_spectral_lock`.
-- **Sincronización Dinámica de Gráficos Rodantes (Waterfall & Potencia vs Tiempo):**
-  - Se rediseñó el buffer `power_time_data` para que deje de tener un tamaño fijo e ineficiente (de 2000 muestras) y se redimensione dinámicamente según la ecuación $\frac{\text{Historial Cascada}}{\text{Ventana Análisis}}$ (ej: $30.0\text{ s} / 0.1\text{ s} = 300\text{ pasos}$).
-  - Esto garantiza que tanto el Espectrograma de Cascada como la gráfica de Potencia vs Tiempo se desplacen de forma coordinada a la velocidad de tu ventana de análisis (0.1s) y mantengan exactamente la misma ventana de memoria visual configurada (30 segundos), desplazando los datos antiguos hacia la izquierda/arriba en tiempo real y eliminando discrepancias de escala temporal.
-- **Reinicio Preciso de Temporizador DSP:**
-  - Se implementó el reseteo explícito de la variable global de tiempo `self.elapsed_samples = 0` en la función `reset_buffers()`. Esto garantiza que al detener (Stop) y reanudar la adquisición, el reloj siempre inicie limpiamente en 0.0s.
-- **Resolución Extrema y Caché en Transformada Wavelet Continua (CWT):**
-  - Se elevó el límite paramétrico de 512 a **4096 escalas** para ultra alta resolución espectral.
-  - Se desarrolló un mecanismo de **Caché en RAM** (`self._cwt_cached_matrix`) que calcula la matriz compleja de wavelets Morlet una sola vez y recicla la memoria en operaciones matriciales directas, permitiendo computar 4096 escalas en tiempo real a 30 FPS.
-  - Se ajustó el parámetro central $\omega_0$ de 6.0 a 24.0, afilando drásticamente el ancho de banda del wavelet y generando visualizaciones mucho más finas y delgadas en el eje frecuencial.
-- **Estabilización Absoluta de Línea Base Térmica (Baseline Lock) en CWT:**
-  - Se integró un algoritmo que extrae la mediana frecuencial en tiempo real de cada ráfaga.
-  - El piso de ruido se alinea a un ancla pre-grabada (`self._baseline_noise`), compensando la fluctuación térmica natural temporal (`pwr - current_median + self._baseline_noise`). Esto suprime definitivamente las rayas horizontales y el parpadeo de contraste.
-  - Incorpora un rechazo de transitorios de banda ancha (estática): Si la mediana salta repentinamente > 3.0 dB, el frame anómalo es descartado y reemplazado por la referencia limpia previa.
-- **Zoom Temporal de Alta Resolución en Gráficos de Amplitud:**
-  - Se eliminó el truncamiento heredado de 2000 muestras fijas que limitaba a `amplitude_data` y `amplitude_ma_data`. Ahora se almacena el bloque IQ original completo capturado del receptor (ej. 2,500,000 muestras para una ventana de 1.0s a 2.5 MSps).
-  - Al realizar zoom vertical/horizontal desde la interfaz, el motor de rendering (`ui/charts.py`) extrae exactamente la porción temporal visible (slicing) a partir de los datos completos y la renderiza dinámicamente con alta resolución. Esto permite observar las oscilaciones senoidales de la portadora sin la distorsión del submuestreo severo previo, igualando la capacidad de análisis visual de MATLAB.
-- **Corrección de Congelamiento (Anti-Flicker) en Espectro DSP:**
-  - Se ajustó el umbral del filtro anti-flicker de la mediana de ruido (en `core/dsp_engine.py`) de 3.0 dB a 10.0 dB. Además, se reescribió la lógica para que, incluso frente a un gran salto súbito en el ruido base (como el ocasionado por filtros MA o interferencias fuertes), el nivel base (`_baseline_noise`) pueda adaptarse lentamente en lugar de quedar permanentemente bloqueado. Esto previene que las gráficas de Frecuencia Filtrada dejen de actualizarse y parezcan "congeladas".
-- **Mejora en Títulos y Legibilidad de Gráficas:**
-  - Se agregó la etiqueta de tiempo real (`[inicio - fin]`) al título de la gráfica "Amplitud Filtrada (MA)", la cual había quedado omitida en la implementación anterior.
-  - Se forzó el uso del color claro `labelcolor='#ECEFF1'` en todas las leyendas generadas por Matplotlib en `ui/charts.py`, garantizando que textos descriptivos como "I Filtrado", "Q Filtrado" o "Piso de Ruido" sean completamente legibles bajo la paleta de modo oscuro sin mimetizarse con el fondo gris de los paneles.
-- **Navegación de Frames en Pausa (Review Mode):**
-  - Se implementó un sistema de retroceso y avance por frames durante la pausa para revisar señales que pasaron demasiado rápido.
-  - **`dsp_engine.py` — Historial de Snapshots:** Al finalizar cada iteración de `_process_dsp_core`, se guarda un snapshot compacto (dict numpy de arrays) en `_frame_snapshots`, un `deque` circular de hasta 300 frames. Esto equivale aproximadamente a 5 minutos de historial a 1s/frame sin consumo excesivo de RAM.
-  - **`dsp_engine.seek_frames(delta)`:** Mueve el puntero `_review_offset` en el historial. `delta > 0` retrocede, `delta < 0` avanza. Restaura los buffers de renderizado (`spectrum_data`, `amplitude_data`, etc.) directamente desde el snapshot seleccionado. En modo archivo ajusta `file_position` para que al reanudar el playback continúe exactamente desde ese punto.
-  - **`dsp_engine.exit_review_mode()`:** Llamado al reanudar. Resetea el offset y la bandera `_review_active` para que los nuevos frames vuelvan a grabarse normalmente en el historial.
-  - **`ui/components/layout.py` — Máquina de Estados:** El botón principal ahora maneja 3 estados explícitos: `stopped` (▶ Iniciar), `playing` (⏸ Pausar) y `paused` (▶ Reanudar). Al entrar en modo pausa aparece el panel de review con botones: `⏮ -10`, `⏭ -1`, etiqueta `Frame -N / Total`, `+1 ⏭`, `+10 ⏮` y `⏭| Último`. Al reanudar SDR, se descarta el historial y se vuelve al tiempo real del hardware.
-  - **Stop = Reinicio Completo:** `stop_stream()` ahora resetea `file_position = 0`, `current_file_time = 0.0`, limpia `_frame_snapshots`, resetea `_review_offset / _review_active` y llama a `reset_buffers()`. Equivale a abrir el programa de nuevo.
-- **Límite de Rebobinado en Modo Archivo (Time Machine):**
-  - Se implementó una barrera lógica en `seek_frames` que impide retroceder a un tiempo negativo (`file_time <= 0.0`) cuando se analizan archivos `.iq`, evitando crasheos o desbordamientos del buffer.
-- **Re-dibujo Reactivo de Ejes en Modo Pausa:**
-  - Se modificó la arquitectura de configuración para que, al estar el motor en pausa, cualquier cambio manual en las cajas de texto de los límites X/Y (ejes) dispare un evento `_seek_refresh`. Esto redibuja instantáneamente las gráficas (incluyendo Histograma, SNR y Potencia) sobre el frame congelado actual sin tener que presionar *Play*.
-- **Precisión Microscópica en Visualización (Zoom Absoluto 1e-9):**
-  - Se reemplazó el antiguo algoritmo de tolerancia relativa en `safe_set_xlim` y `safe_set_ylim` (que ignoraba cambios visuales menores al 0.01% del span) por una tolerancia absoluta estricta de `1e-9`. Esto soluciona el "falso congelamiento" de las etiquetas de los ejes y permite realizar acercamientos de ultra-precisión (ej: acercar la vista de `0.0` a `0.00002` segundos) actualizando de inmediato la graduación numérica de la gráfica.
-  - Se agregó una protección matemática (swap) que invierte los límites automáticamente si el usuario ingresa por accidente un `X Mín` mayor que el `X Máx`, impidiendo que Matplotlib invierta la gráfica de forma inesperada.
-- **Rediseño Compacto del Panel de Configuración (Monitoreo Dual):**
-  - Se reconstruyó por completo el panel lateral de configuración en `sdr_config.py` pasando de una extensa lista de una sola columna a un **layout de matriz de 3 columnas (Etiquetas | RAW | Filtrada)**.
-  - Este diseño agrupa de forma paralela los parámetros de los componentes paralelos (Amplitud y Espectro), reduciendo drásticamente la altura de la interfaz y eliminando la necesidad de hacer *scroll* vertical. Se reorganizó el orden visual colocando los bloques de *Amplitud* al tope, *Filtro Media Móvil* al centro y *Espectro* en la parte inferior.
+## 7. Siguientes Pasos
+- Limpiar el código de la API del BB60C si no se prevén usos de hardware avanzados como sincronización GPS o Sweeps en UART.
+- Optimizar la transferencia de memoria si se integran algoritmos 2D pesados.

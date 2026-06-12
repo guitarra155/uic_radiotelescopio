@@ -50,17 +50,7 @@ _ALGO_INFO = {
         "params": "# Señales: configurable en el panel derecho.",
         "color": "#FF4C4C",
     },
-    "esprit": {
-        "full_name": "ESPRIT (Estimation of Signal Parameters via Rotational Invariance)",
-        "desc": (
-            "Estima frecuencias directamente desde el sub-espacio "
-            "de señal sin barrer frecuencias, usando la estructura "
-            "rotacional del array.\n\n"
-            "Más eficiente que MUSIC para pocos componentes."
-        ),
-        "params": "# Señales: configurable en el panel derecho.",
-        "color": "#FF80AB",
-    },
+
     "welch": {
         "full_name": "Estimación Espectral de Welch (Método Directo)",
         "desc": (
@@ -84,18 +74,7 @@ _ALGO_INFO = {
         "params": "Lag máximo configurable (corr_max_lag).",
         "color": "#40E0D0",
     },
-    "aslt": {
-        "full_name": "ASLT — Advanced Sparse Local Transform (Pendiente)",
-        "desc": (
-            "Algoritmo de análisis tiempo-frecuencia disperso "
-            "avanzado.\n\n"
-            "⚠ PENDIENTE: Los archivos de implementación aún no "
-            "están integrados. Al agregarlos, reemplaza el cuerpo "
-            "de run_aslt() en core/advanced_dsp.py."
-        ),
-        "params": "Sin parámetros hasta integración de archivos externos.",
-        "color": "#808080",
-    },
+
 }
 
 

@@ -493,9 +493,14 @@ class DSPEngine:
         if hasattr(self, "stream_thread") and self.stream_thread and self.stream_thread.is_alive():
             self.is_playing = False
             try:
-                self.stream_thread.join(timeout=0.02) # Espera imperceptible para el hilo de UI
+                # Dar tiempo suficiente para que el hilo salga de cualquier time.sleep()
+                self.stream_thread.join(timeout=0.5)
             except:
                 pass
+                
+            if self.stream_thread.is_alive():
+                print("⚠️ No se pudo detener el hilo de streaming anterior a tiempo. Abortando.")
+                return
 
         if self.is_playing:
             return
@@ -969,10 +974,9 @@ class DSPEngine:
         self.db_noise_floor_raw = float(np.nanmedian(valid_spec_raw))
         
         fs_mhz = self.sample_rate / 1e6
-        # El BB60C tiene un ancho de banda analógico útil de ~75% del sample rate.
-        # Recortamos el span visual para que la señal plana ocupe todo el ancho y esconda los bordes.
-        span_mhz = fs_mhz * 0.75
-
+        # Se muestra el ancho de banda analógico completo (100% del Sample Rate) en modo automático.
+        # Anteriormente se limitaba al 75% para ocultar la caída de los filtros anti-aliasing.
+        span_mhz = fs_mhz
         # 2. Aplicar lógica a cada gráfica configurada
         for chart_id, cfg in self.charts_config.items():
             if not isinstance(cfg, dict): continue
@@ -1012,8 +1016,8 @@ class DSPEngine:
                         p_valid = self.power_time_data[:written]
                         p_min = float(np.nanmin(p_valid))
                         p_max = float(np.nanmax(p_valid))
-                        cfg["ymin"] = float(p_min - 5.0)
-                        cfg["ymax"] = float(p_max + 5.0)
+                        cfg["ymin"] = float(p_min - 0.1)
+                        cfg["ymax"] = float(p_max + 0.1)
                 elif chart_id == "snr_freq":
                     s_max = float(np.nanpercentile(self.snr_data, 99))
                     if cfg.get("auto_y", True):

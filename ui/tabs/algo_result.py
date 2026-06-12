@@ -60,13 +60,12 @@ _ALGO_META = {
 
 def build_algo_result(page: ft.Page) -> ft.Control:
     from core.dsp_engine import engine_instance
-    from ui.charts import chart_algo_placeholder
     from ui.components.shared import txt_field
     import asyncio
 
     # Imagen del resultado — inicia con placeholder válido
     img = ft.Image(
-        src=chart_algo_placeholder(),
+        src=None,
         fit=ft.BoxFit.FILL,
         gapless_playback=True,
         border_radius=10,
@@ -99,12 +98,11 @@ def build_algo_result(page: ft.Page) -> ft.Control:
                 ft.Radio(value="AR/Burg", label="AR/Burg", active_color=ACCENT_CYAN),
                 ft.Radio(value="CWT/Morlet", label="CWT/Morlet", active_color=ACCENT_CYAN),
                 ft.Radio(value="Pseudo-MUSIC", label="Pseudo-MUSIC", active_color=ACCENT_CYAN),
-                ft.Radio(value="ESPRIT", label="ESPRIT", active_color=ACCENT_CYAN),
+
                 ft.Divider(color=BORDER_COL, height=4),
                 ft.Radio(value="Welch", label="Welch PSD", active_color="#FFD700"),
                 ft.Radio(value="Correlograma", label="Correlograma", active_color="#40E0D0"),
                 ft.Divider(color=BORDER_COL, height=4),
-                ft.Radio(value="ASLT", label="ASLT ⚠ (pendiente)", active_color=TEXT_MUTED),
             ],
             spacing=2,
         ),
@@ -121,7 +119,7 @@ def build_algo_result(page: ft.Page) -> ft.Control:
     def _update_param_visibility():
         m = engine_instance.algo_params.get("method", "AR/Burg")
         ar_order_row.visible = m == "AR/Burg"
-        music_ns_row.visible = m in ("Pseudo-MUSIC", "ESPRIT")
+        music_ns_row.visible = m == "Pseudo-MUSIC"
         corr_lag_row.visible = m == "Correlograma"
         try:
             if ar_order_row.page: ar_order_row.update()
@@ -163,8 +161,7 @@ def build_algo_result(page: ft.Page) -> ft.Control:
             status_txt.color = ACCENT_AMBER
 
             # Mostrar placeholder
-            from ui.charts import chart_algo_placeholder as _ph
-            img.src = _ph()
+            img.src = None
 
             try:
                 if img.page: img.update()
@@ -224,8 +221,8 @@ def build_algo_result(page: ft.Page) -> ft.Control:
             corr_lag = engine_instance.algo_params.get("corr_max_lag", 512)
 
             from core.advanced_dsp import (
-                run_ar_burg, run_cwt, run_pseudo_music, run_esprit,
-                run_welch, run_correlogram, run_aslt,
+                run_ar_burg, run_cwt, run_pseudo_music,
+                run_welch, run_correlogram,
             )
             from ui.charts import (
                 chart_ar_spectrum, chart_cwt_map, chart_music_spectrum,
@@ -239,14 +236,13 @@ def build_algo_result(page: ft.Page) -> ft.Control:
                     return "cwt", chart_cwt_map(run_cwt(iq, sample_rate=sr))
                 elif method == "Pseudo-MUSIC":
                     return "music", chart_music_spectrum(run_pseudo_music(iq, n_signals=ns_val, sample_rate=sr, center_freq=fc))
-                elif method == "ESPRIT":
-                    return "esprit", chart_music_spectrum(run_esprit(iq, n_signals=ns_val, sample_rate=sr, center_freq=fc))
+
                 elif method == "Welch":
                     return "welch", chart_welch_spectrum(run_welch(iq, fft_size=wfft_val, overlap=wovl_val, sample_rate=sr, center_freq=fc))
                 elif method == "Correlograma":
                     return "correlogram", chart_correlogram_spectrum(run_correlogram(iq, max_lag=corr_lag, sample_rate=sr, center_freq=fc))
                 else:
-                    return "aslt", chart_ar_spectrum(run_aslt(iq, sample_rate=sr, center_freq=fc))
+                    return method, None
 
             algo_key, b64 = await asyncio.to_thread(_compute)
 

@@ -320,76 +320,6 @@ def run_pseudo_music(iq: np.ndarray, n_signals: int = 3,
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 4. ESPRIT — Estimation of Signal Parameters via Rotational Invariance
-# ─────────────────────────────────────────────────────────────────────────────
-
-def run_esprit(iq: np.ndarray, n_signals: int = 3,
-               subarray_len: int = 128, sample_rate: float = 2_400_000,
-               center_freq: float = 1420.40,
-               n_freqs: int = 2048) -> dict:
-    """
-    ESPRIT: estima frecuencias directamente desde el sub-espacio de señal,
-    sin barrer frecuencias. Más eficiente que MUSIC para señales estrechas.
-
-    Returns:
-        dict con 'freqs' (MHz) estimadas, 'esprit_spectrum' (pseudo-espectro
-        gaussiano centrado en cada pico), 'peaks'.
-    """
-    sig = _normalize(_to_complex(iq))
-    N = len(sig)
-    M = min(subarray_len, N // 4)
-    n_signals = min(n_signals, M // 2)
-
-    L = N - M + 1
-    X = np.array([sig[i:i + M] for i in range(L)])
-    R = (X.conj().T @ X) / L
-
-    eigenvalues, eigenvectors = np.linalg.eigh(R)
-    idx = np.argsort(eigenvalues)[::-1]
-    eigenvectors = eigenvectors[:, idx]
-
-    Es = eigenvectors[:, :n_signals]    # Sub-espacio de señal
-
-    # Sub-arrays desplazados (explotamos la estructura rotacional)
-    Es1 = Es[:-1, :]
-    Es2 = Es[1:, :]
-
-    # Phi = pseudo-inversa(Es1) @ Es2  →  valores propios = e^{j2πf}
-    Phi = np.linalg.pinv(Es1) @ Es2
-    freq_eigs = np.linalg.eigvals(Phi)
-
-    # Extraer frecuencias normalizadas del ángulo
-    freqs_norm = np.angle(freq_eigs) / (2 * np.pi)  # en [−0.5, 0.5]
-    freqs_norm = np.sort(freqs_norm)
-
-    fs_mhz = sample_rate / 1_000_000
-    freqs_est_mhz = center_freq + freqs_norm * fs_mhz
-
-    # Construir pseudo-espectro gaussiano centrado en cada frecuencia estimada
-    freqs_axis = np.linspace(center_freq - fs_mhz / 2,
-                              center_freq + fs_mhz / 2, n_freqs)
-    sigma_mhz = fs_mhz / n_freqs * 8   # anchura de la campana
-
-    esprit_spectrum = np.zeros(n_freqs)
-    for fe in freqs_est_mhz:
-        esprit_spectrum += np.exp(-0.5 * ((freqs_axis - fe) / sigma_mhz) ** 2)
-
-    esprit_db = 10 * np.log10(esprit_spectrum + 1e-30)
-    esprit_db -= np.max(esprit_db)
-
-    peaks = [(float(f), 0.0) for f in freqs_est_mhz]
-
-    return {
-        "freqs": freqs_axis,
-        "esprit_spectrum": esprit_db,
-        "freqs_estimated": freqs_est_mhz.tolist(),
-        "peaks": peaks,
-        "n_signals": n_signals,
-        "method": "ESPRIT"
-    }
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # 5. Welch — Estimación espectral directa (periodograma promediado)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -884,27 +814,3 @@ def run_correlogram_2d(iq: np.ndarray, max_lag: int = 37, n_freqs: int = 1024,
     }
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 10. ASLT — Stub async-ready (pendiente de archivos externos)
-# ─────────────────────────────────────────────────────────────────────────────
-
-def run_aslt(iq: np.ndarray, sample_rate: float = 2_400_000,
-            center_freq: float = 1420.40, **kwargs) -> dict:
-    """
-    ASLT: Advanced Sparse Local Transform (placeholder).
-    Diseñado para ejecutarse con asyncio.to_thread desde sdr_config.py.
-
-    IMPORTANTE: Esta función es un stub. Los archivos de implementación
-    aún no están disponibles. Al integrarlos, reemplaza el cuerpo de
-    esta función manteniendo la firma y el schema de retorno.
-
-    Returns:
-        dict vacío compatible con chart_ar_spectrum() marcado como 'ASLT'.
-
-    Raises:
-        NotImplementedError: siempre, hasta que se integren los archivos externos.
-    """
-    raise NotImplementedError(
-        "ASLT: archivos externos pendientes de integración. "
-        "Reemplaza el cuerpo de run_aslt() cuando estén disponibles."
-    )

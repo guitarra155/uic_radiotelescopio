@@ -667,17 +667,6 @@ def chart_freq_snr() -> str:
     return fig_to_b64(fig)
 
 
-def chart_algo_placeholder() -> str:
-    # Este no importa mucho que sea rápido
-    fig = Figure(figsize=(9.5, 4.5))
-    ax = fig.subplots()
-    fig.patch.set_facecolor(MPL_BG)
-    ax.set_facecolor(MPL_AXBG)
-    ax.text(0.5, 0.5, "Selecciona un método para calcular", color=MPL_TEXT, ha="center")
-    style_ax(ax)
-    return fig_to_b64(fig)
-
-
 # Funciones pesadas (AR/Burg, CWT, MUSIC, ESPRIT) ahora con CACHÉ para velocidad 100ms
 def chart_ar_spectrum(result: dict) -> str:
     dyn_size = get_dynamic_figsize(19.0, 5.6)

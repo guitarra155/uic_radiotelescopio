@@ -42,6 +42,13 @@ def build_estado(page: ft.Page) -> ft.Control:
             filepath_input.value = selected_path
             engine_instance.iq_filename = selected_path
             engine_instance.save_config()
+            
+            if getattr(engine_instance, "is_playing", False) and engine_instance.stream_mode == "file":
+                # Forzar recarga automática del nuevo archivo sin tener que pulsar Stop/Start
+                engine_instance.file_position = 0
+                engine_instance.stop_stream()
+                engine_instance.start_stream("file", {"filename": selected_path, "format": engine_instance.iq_format})
+                
             page.update()
 
     pick_btn = ft.ElevatedButton(
@@ -58,6 +65,10 @@ def build_estado(page: ft.Page) -> ft.Control:
     def on_filepath_change(e):
         engine_instance.iq_filename = e.control.value
         engine_instance.save_config()
+        if getattr(engine_instance, "is_playing", False) and engine_instance.stream_mode == "file":
+            engine_instance.file_position = 0
+            engine_instance.stop_stream()
+            engine_instance.start_stream("file", {"filename": e.control.value, "format": engine_instance.iq_format})
 
     filepath_input.on_change = on_filepath_change
 
@@ -143,6 +154,7 @@ def build_estado(page: ft.Page) -> ft.Control:
         buttons_row.controls.append(btn)
         
     rate_container.controls.append(buttons_row)
+
     span_visual_f = txt_field("Span Visual (Zoom MHz)", f"{engine_instance.visual_span_mhz:.8f}", "e.g. 1.0")
 
     ref_level_f = txt_field("Nivel Ref. (dBm)", f"{engine_instance.bb60c_ref_level:.8f}", "-100 a +20")
@@ -248,7 +260,7 @@ def build_estado(page: ft.Page) -> ft.Control:
             
     lock_chk = ft.Checkbox(
         label="Auto-Calibración Espectral Fina",
-        value=engine_instance.auto_spectral_lock,
+        value=bool(engine_instance.auto_spectral_lock),
         on_change=on_lock_toggle_change,
         active_color=ACCENT_CYAN,
         label_style=ft.TextStyle(color=TEXT_MUTED, size=11)
@@ -474,7 +486,7 @@ def build_estado(page: ft.Page) -> ft.Control:
             ref_level_f.value = f"{engine_instance.bb60c_ref_level:.8f}"
             rbw_f.value = f"{engine_instance.bb60c_iq_bw:.8f}"
             vbw_alpha_f.value = f"{engine_instance.vbw_alpha:.8f}"
-            lock_chk.value = engine_instance.auto_spectral_lock
+            lock_chk.value = bool(engine_instance.auto_spectral_lock)
             
             for f_input in [freq_f, span_visual_f, ref_level_f, rbw_f, vbw_alpha_f, lock_chk]:
                 try: f_input.update()
