@@ -96,7 +96,7 @@ def main(page: ft.Page):
 
     tab_labels = [
         "🏠  Inicio & Configuración",    # 0
-        "🌓  Monitoreo Dual (RAW/MA)",   # 1
+        "🌓  Señal Original vs Filtrada(RAW/MA)",   # 1
         "🌈  Espectrograma",             # 2
         "📊  Histograma & Estadística",# 3
         "⚡  Potencia vs. Tiempo",        # 4

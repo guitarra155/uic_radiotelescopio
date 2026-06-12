@@ -392,7 +392,10 @@ def chart_spectrogram() -> str:
     # El waterfall es pesado, aquí imshow es lo más rápido
     dyn_size = get_dynamic_figsize(19.0, 5.6)
     fig, ax, is_new = get_cached_fig("waterfall", figsize=dyn_size)
-    data = np.roll(engine_instance.waterfall_data, -engine_instance.waterfall_idx, axis=0)
+    data = np.roll(engine_instance.waterfall_data, -engine_instance.waterfall_idx, axis=0).astype(np.float32)
+    # Limitar columnas a 1024 máx para render
+    if data.shape[1] > 1024:
+        data = data[:, ::max(1, data.shape[1] // 1024)]
     fc = engine_instance.center_freq
     fs = engine_instance.sample_rate / 1_000_000
     # Safety check for empty buffer
@@ -713,7 +716,13 @@ def chart_cwt_map(result: dict = None) -> str:
     if wf_data is None or wf_data.size == 0:
         return fig_to_b64(fig)
 
-    data = np.roll(wf_data, -wf_idx, axis=0)   # fila 0 = más reciente
+    data = np.roll(wf_data, -wf_idx, axis=0).astype(np.float32)  # float32 evita RGBA float64 OOM
+
+    # Limitar columnas a 1024 máx para render (evita (rows,4096,4) float64 = 37.5 MiB en matplotlib)
+    MAX_COLS = 1024
+    if data.shape[1] > MAX_COLS:
+        step = max(1, data.shape[1] // MAX_COLS)
+        data = data[:, ::step]
 
     fc      = engine_instance.center_freq
     fs_mhz  = engine_instance.sample_rate / 1_000_000

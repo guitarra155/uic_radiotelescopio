@@ -528,12 +528,14 @@ class DSPEngine:
     def stop_stream(self):
         self.is_playing = False
         # ── Reset completo (equivalente a abrir el programa de nuevo) ──
-        self.file_position = 0
-        self.current_file_time = 0.0
-        self._review_offset = 0
-        self._review_active = False
-        self._frame_snapshots.clear()
-        self.reset_buffers()
+        # Si es una pausa voluntaria, preservar snapshots y posición para review
+        if not self.is_paused:
+            self.file_position = 0
+            self.current_file_time = 0.0
+            self._review_offset = 0
+            self._review_active = False
+            self._frame_snapshots.clear()
+            self.reset_buffers()
         with self._hw_lock:
             if self.sdr_handle != -1:
                 try:
@@ -726,30 +728,30 @@ class DSPEngine:
         # IIR simple sobre el tiempo (suavizado VBW)
         self.spectrum_data = (1 - alpha_eff) * self.spectrum_data + alpha_eff * pwr
 
-        # ── 5. Waterfall (Espectrograma) sobre señal filtrada ───────────────
+        # ── 5. Waterfall (Espectrograma) sobre señal RAW ────────────────────
         # Cada llamada a _process_dsp_core ahora representa una ráfaga (aprox 34ms)
         # por lo que añadimos una línea directamente para mantener el cronómetro real.
         self.waterfall_idx = (self.waterfall_idx - 1) % self.waterfall_steps
-        self.waterfall_data[self.waterfall_idx, :] = self.spectrum_data
+        self.waterfall_data[self.waterfall_idx, :] = self.spectrum_raw_data
 
         # ── 5b. Cascada Continua para métodos avanzados (CWT, AR/Burg, Correlograma) ──
         # Computa UNA línea 1D por frame con algoritmos ultrarrápidos y la inserta
         # en el buffer circular correspondiente. Lee los parámetros del usuario.
         _active_method = getattr(self, "active_spec_method", "waterfall")
         if _active_method != "waterfall" and self.active_tab == 2:
-            _iq_frame = iq_f.astype(np.complex64)
+            _iq_frame = iq.astype(np.complex64)  # RAW: sin filtrar MA
             _n_frame  = len(_iq_frame)
             _sr       = float(self.sample_rate)
-            _offset   = float(self.db_noise_floor) - 20.0
+            _offset   = float(self.db_noise_floor_raw) - 20.0
             _N_out    = self.fft_size   # columnas de salida
 
             try:
                 if _active_method == "cwt" and hasattr(self, "cwt_wf_data"):
                     # CWT rápida: banco Morlet con N_SC escalas (configurado por el usuario)
-                    # Cap: máximo 4096 escalas. Cacheado para máxima velocidad.
-                    _N_SC    = max(32, min(4096, int(self.algo_params.get("cwt_n_scales", 512))))
+                    # Cap: máximo 1024 escalas para evitar OOM con bloques grandes de IQ
+                    _N_SC    = max(32, min(1024, int(self.algo_params.get("cwt_n_scales", 512))))
                     _dt      = 1.0 / _sr
-                    _pwr_lin = 10.0 ** ((pwr - _offset) / 10.0)
+                    _pwr_lin = 10.0 ** ((pwr_raw - _offset) / 10.0)
                     
                     # Cachear la matriz de wavelets (sólo recalcular si cambian parámetros)
                     cache_key = (_sr, self.fft_size, _N_SC)
@@ -844,14 +846,14 @@ class DSPEngine:
             except Exception:
                 pass  # Nunca detener el stream por un error de DSP avanzado
 
-        # ── 6. Histograma (Distribución) ────────────────────────
+        # ── 6. Histograma (Distribución) sobre señal RAW ────────────────────
         if getattr(self, "histogram_mode", "Magnitud") == "Magnitud":
-            self.histogram_data = np.abs(self.amplitude_ma_data).copy()
+            self.histogram_data = np.abs(self.amplitude_data).copy()
         else:
-            self.histogram_data = np.angle(self.amplitude_ma_data).copy()
+            self.histogram_data = np.angle(self.amplitude_data).copy()
 
-        # ── 7. Potencia instantánea vs Tiempo ────────────────────────────
-        inst_pwr_db = float(np.mean(pwr))
+        # ── 7. Potencia instantánea vs Tiempo sobre señal RAW ───────────────
+        inst_pwr_db = float(np.mean(pwr_raw))
         # Usar índice circular simple en lugar de roll
         if self.power_samples_written < len(self.power_time_data):
             idx = self.power_samples_written
@@ -863,15 +865,15 @@ class DSPEngine:
             self.power_time_data[idx] = inst_pwr_db
             self.power_samples_written += 1
 
-        # ── 8. SNR logarítmico por bin ─────────────────────────────────
+        # ── 8. SNR logarítmico por bin sobre señal RAW ───────────────────
         # Fórmula: SNR[dB] = P_señal[dBFS] - P_ruido[dBFS]
         # El piso de ruido se estima con un filtro de mediana local (baseline dinámico)
         # para que las señales fuertes no levanten artificialmente el fondo.
         import scipy.signal
-        _k_size = max(3, int(len(self.spectrum_data) * 0.04))
+        _k_size = max(3, int(len(self.spectrum_raw_data) * 0.04))
         if _k_size % 2 == 0: _k_size += 1
-        noise_floor = scipy.signal.medfilt(self.spectrum_data, kernel_size=_k_size)
-        self.snr_data = self.spectrum_data - noise_floor
+        noise_floor = scipy.signal.medfilt(self.spectrum_raw_data, kernel_size=_k_size)
+        self.snr_data = self.spectrum_raw_data - noise_floor
 
         # ── 9. Detectar señales de interés: bins con SNR > umbral ──────────
         SNR_THRESH = 6.0  # dB sobre el piso de ruido
@@ -948,8 +950,14 @@ class DSPEngine:
         # 1. Sanitizar datos de entrada para evitar cálculos corruptos
         spec = np.nan_to_num(self.spectrum_data, nan=-100.0)
         spec_raw = np.nan_to_num(self.spectrum_raw_data, nan=-100.0)
-        amp = np.nan_to_num(np.abs(self.amplitude_data), nan=0.0)
-        amp_f = np.nan_to_num(np.abs(self.amplitude_ma_data), nan=0.0)
+        # IMPORTANTE: amplitude_data tiene shape (N_muestras,) que puede ser 2M+.
+        # np.nan_to_num internamente llama np.isnan() creando un bool array de 2M = OOM.
+        # Usamos solo un slice de 4096 muestras — suficiente para estadísticas de amplitud.
+        _AMP_SAMPLE = 4096
+        _a_raw = self.amplitude_data[:_AMP_SAMPLE]
+        _a_f   = self.amplitude_ma_data[:_AMP_SAMPLE]
+        amp   = np.abs(_a_raw[np.isfinite(_a_raw)])
+        amp_f = np.abs(_a_f[np.isfinite(_a_f)])
         
         # Ignorar los bordes caídos del filtro anti-aliasing SDR para calcular el ruido
         c_start = len(spec) // 4
@@ -1142,7 +1150,21 @@ class DSPEngine:
         except Exception as e:
             print(f"SDR Hardware Error: {e}", flush=True)
         finally:
-            self.stop_stream()
+            # Si es pausa voluntaria, no llamar stop_stream() para preservar
+            # los snapshots y el historial de frames capturados antes de pausar.
+            if not self.is_paused:
+                self.stop_stream()
+            else:
+                # Solo liberar el hardware SDR, sin borrar datos
+                with self._hw_lock:
+                    if self.sdr_handle != -1:
+                        try:
+                            bb_abort(self.sdr_handle)
+                            bb_close_device(self.sdr_handle)
+                            self.sdr_handle = -1
+                            print("SDR BB60C pausado (hardware liberado, historial preservado).")
+                        except:
+                            pass
 
     def _process_file_loop(self):
         """Streaming virtual leyendo un fichero .iq grabado previamente"""

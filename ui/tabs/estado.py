@@ -80,7 +80,7 @@ def build_estado(page: ft.Page) -> ft.Control:
         on_change=on_mode_change,
         content=ft.Column(
             [
-                ft.Radio(value="sdr", label="🛠️ SDR Físico (RTL/HackRF)", active_color=ACCENT_GREEN),
+                ft.Radio(value="sdr", label="📡 Hardware", active_color=ACCENT_GREEN),
                 ft.Radio(value="file", label="📼 Archivo Local (.iq)", active_color=ACCENT_AMBER),
             ],
             spacing=4,
@@ -254,10 +254,10 @@ def build_estado(page: ft.Page) -> ft.Control:
         label_style=ft.TextStyle(color=TEXT_MUTED, size=11)
     )
 
-    # Tarjeta 2: SDR & Frecuencia
+    # Tarjeta 2: Configuración
     freq_card = panel(
         content=ft.Column([
-            section_title("🌍", "SDR & Frecuencia", ACCENT_GREEN),
+            section_title("🌍", "Configuración", ACCENT_GREEN),
             freq_f,
             lock_chk,
             span_visual_f,
@@ -305,7 +305,7 @@ def build_estado(page: ft.Page) -> ft.Control:
 
     md_tabs = ft.Markdown(
         "**📚 Pestañas y Componentes**\n\n"
-        "- **Monitoreo Dual (RAW/MA):** Visualización comparativa de la señal bruta vs. filtrada. Permite monitorear RFI y el efecto del Moving Average en tiempo real.\n"
+        "- **Señal Original vs Filtrada(RAW/MA):** Visualización comparativa de la señal bruta vs. filtrada. Permite monitorear RFI y el efecto del Moving Average en tiempo real.\n"
         "- **Espectrograma (Cascada):** Representación 2D. El eje vertical es el tiempo, el horizontal la frecuencia, y el color es la potencia espectral. Ideal para rastrear meteoros y satélites.\n"
         "- **Estadística:** Muestra el histograma gaussiano de las muestras. Si hay desvíos fuertes de la campana, indica saturación o interferencia no lineal.\n"
         "- **SNR vs. Frecuencia:** *Signal-to-Noise Ratio* (Relación Señal a Ruido). Mide qué tan por encima del ruido de fondo térmico están los picos. SNR > 0 dB significa detección probable.\n"

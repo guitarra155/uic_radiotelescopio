@@ -11,7 +11,7 @@ from core.dsp_engine import engine_instance
 
 def build_header(page: ft.Page) -> ft.Control:
     sdr_dot = ft.Text("●", color=ACCENT_RED, size=16)
-    sdr_lbl = ft.Text("Estado SDR: Detenido", color=ACCENT_RED, size=12, weight=ft.FontWeight.W_600)
+    sdr_lbl = ft.Text("Estado Actual: Detenido", color=ACCENT_RED, size=12, weight=ft.FontWeight.W_600)
     timer_lbl = ft.Text("", color=ACCENT_AMBER, size=14, weight=ft.FontWeight.W_700)
 
     header_title = ft.Text(
@@ -173,7 +173,7 @@ def build_header(page: ft.Page) -> ft.Control:
         play_btn.content.value = "▶ Reanudar"
         play_btn.bgcolor = ACCENT_GREEN
         sdr_dot.color = ACCENT_AMBER
-        sdr_lbl.value = "⏸ Pausado"
+        sdr_lbl.value = "⏸"
         sdr_lbl.color = ACCENT_AMBER
         # Mostrar controles de review solo si hay historial
         has_frames = len(engine_instance._frame_snapshots) > 0
@@ -188,7 +188,7 @@ def build_header(page: ft.Page) -> ft.Control:
         play_btn.content.value = "▶ Iniciar Adquisición"
         play_btn.bgcolor = ACCENT_GREEN
         sdr_dot.color = ACCENT_RED
-        sdr_lbl.value = "Estado SDR: Detenido"
+        sdr_lbl.value = "Estado Actual: Detenido"
         sdr_lbl.color = ACCENT_RED
         timer_lbl.value = ""
         seek_panel.visible = False
@@ -244,7 +244,7 @@ def build_header(page: ft.Page) -> ft.Control:
         elif msg == "emergency_stop":
             on_emergency(None)
         elif msg == "refresh_charts":
-            header_title.value = f"Frecuencia Central SDR: {engine_instance.center_freq} MHz"
+            header_title.value = f"Frecuencia : {engine_instance.center_freq} MHz"
             header_title.update()
 
             if engine_instance.stream_mode == "file":
