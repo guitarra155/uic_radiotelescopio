@@ -22,6 +22,7 @@ def build_header(page: ft.Page) -> ft.Control:
     # ── Estado interno de reproducción ─────────────────────────────────────
     # "stopped" | "playing" | "paused"
     _state = ["stopped"]
+    _rec_state = [False]  # False = sin grabar, True = grabando
 
     # ── Etiqueta de frame actual durante el review ──────────────────────────
     frame_lbl = ft.Text(
@@ -157,6 +158,50 @@ def build_header(page: ft.Page) -> ft.Control:
         visible=False,
     )
 
+    # ── Botón de grabación IQ ───────────────────────────────────────────────
+    rec_lbl = ft.Text("", color=ACCENT_RED, size=11, weight=ft.FontWeight.W_700, visible=False)
+    rec_btn = ft.ElevatedButton(
+        content=ft.Row(
+            [ft.Text("⏺", size=13), ft.Text("REC", color="#FFFFFF", weight=ft.FontWeight.BOLD, size=12)],
+            spacing=4,
+            tight=True,
+        ),
+        bgcolor="#8B0000",
+        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
+        tooltip="Grabar IQ del hardware a disco (solo modo SDR)",
+        visible=False,  # Se muestra solo en SDR
+    )
+
+    def on_rec_click(e):
+        if engine_instance.stream_mode != "sdr":
+            return
+        if not _rec_state[0]:
+            path = engine_instance.start_iq_recording()
+            if path:
+                _rec_state[0] = True
+                rec_btn.bgcolor = ACCENT_RED
+                rec_btn.content.controls[0].value = "⏹"
+                rec_btn.content.controls[1].value = "STOP REC"
+                rec_lbl.value = "● REC"
+                rec_lbl.visible = True
+                sb = ft.SnackBar(ft.Text(f"🔴 Grabando en: {path}", color="#fff"), bgcolor="#8B0000")
+                e.control.page.overlay.append(sb)
+                sb.open = True
+        else:
+            path = engine_instance.stop_iq_recording()
+            _rec_state[0] = False
+            rec_btn.bgcolor = "#8B0000"
+            rec_btn.content.controls[0].value = "⏺"
+            rec_btn.content.controls[1].value = "REC"
+            rec_lbl.visible = False
+            if path:
+                sb = ft.SnackBar(ft.Text(f"✅ Archivo guardado: {path}", color="#fff"), bgcolor=ACCENT_GREEN)
+                e.control.page.overlay.append(sb)
+                sb.open = True
+        e.control.page.update()
+
+    rec_btn.on_click = on_rec_click
+
     # ── Helpers de estado de UI ─────────────────────────────────────────────
     def _set_playing_ui():
         _state[0] = "playing"
@@ -167,6 +212,8 @@ def build_header(page: ft.Page) -> ft.Control:
         sdr_lbl.color = ACCENT_AMBER
         seek_panel.visible = False
         frame_lbl.visible = False
+        # Mostrar botón REC solo en modo SDR
+        rec_btn.visible = (engine_instance.stream_mode == "sdr")
 
     def _set_paused_ui():
         _state[0] = "paused"
@@ -193,6 +240,15 @@ def build_header(page: ft.Page) -> ft.Control:
         timer_lbl.value = ""
         seek_panel.visible = False
         frame_lbl.visible = False
+        # Ocultar REC al detenerse
+        rec_btn.visible = False
+        rec_lbl.visible = False
+        # Si quedó grabando, resetear estado visual
+        if _rec_state[0]:
+            _rec_state[0] = False
+            rec_btn.bgcolor = "#8B0000"
+            rec_btn.content.controls[0].value = "⏺"
+            rec_btn.content.controls[1].value = "REC"
 
     # ── Lógica del botón principal ──────────────────────────────────────────
     def on_play_pause(e):
@@ -301,6 +357,8 @@ def build_header(page: ft.Page) -> ft.Control:
                 ft.Container(width=6),
                 seek_panel,
                 ft.Container(width=6),
+                rec_btn,
+                rec_lbl,
                 play_btn,
                 emg_btn,
             ],
@@ -321,7 +379,7 @@ def build_footer() -> ft.Control:
             [
                 ft.Text("UIC Radiotelescopio  •  v1.0.0",         color=TEXT_MUTED, size=10),
                 ft.Text("•",                                        color=BORDER_COL, size=10),
-                ft.Text("Backend: RTL-SDR / Signal Hound BB60C",   color=TEXT_MUTED, size=10),
+                ft.Text("Signal Hound BB60C",   color=TEXT_MUTED, size=10),
                 ft.Container(expand=True),
                 ft.Text(now_str,                                    color=TEXT_MUTED, size=10),
             ],

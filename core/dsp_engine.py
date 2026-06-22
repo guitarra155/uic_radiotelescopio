@@ -378,6 +378,58 @@ class DSPEngine:
         # Redimensionar el buffer del correlograma para que coincida con el nuevo historial
         self._resize_corr_buffer()
 
+    # ── Grabación IQ a disco ────────────────────────────────────────────────
+
+    def start_iq_recording(self) -> str:
+        """Inicia la grabación IQ. Devuelve la ruta del archivo creado."""
+        import datetime, os
+        if getattr(self, "_iq_recording", False):
+            return ""
+
+        folder = os.path.join(os.path.dirname(os.path.dirname(__file__)), "RecordingsIQ")
+        os.makedirs(folder, exist_ok=True)
+
+        ts   = datetime.datetime.now().strftime("%Y%m%d_%Hh%Mm%Ss")
+        freq = f"{self.center_freq:.3f}MHz".replace(".", "p")
+        sr   = f"{self.sample_rate/1e6:.2f}Msps".replace(".", "p")
+        name = f"IQREC_{ts}_{freq}_{sr}.iq"
+        path = os.path.join(folder, name)
+
+        self._iq_rec_path = path
+        self._iq_rec_file = open(path, "wb")
+        self._iq_recording = True
+        self._iq_rec_samples = 0
+        print(f"🔴 Grabación IQ iniciada → {path}", flush=True)
+        return path
+
+    def stop_iq_recording(self) -> str:
+        """Detiene la grabación IQ. Devuelve la ruta del archivo guardado."""
+        if not getattr(self, "_iq_recording", False):
+            return ""
+        self._iq_recording = False
+        path = getattr(self, "_iq_rec_path", "")
+        try:
+            self._iq_rec_file.close()
+        except Exception:
+            pass
+        self._iq_rec_file = None
+        print(f"✅ Grabación IQ detenida. Archivo: {path}  ({getattr(self,'_iq_rec_samples',0)} muestras)", flush=True)
+        return path
+
+    def _write_iq_chunk(self, iq: "np.ndarray"):
+        """Escribe un bloque IQ en el archivo de grabación (formato int16 interleaved)."""
+        if not getattr(self, "_iq_recording", False):
+            return
+        try:
+            raw = np.empty(len(iq) * 2, dtype=np.int16)
+            raw[0::2] = np.clip(iq.real * 32767, -32768, 32767).astype(np.int16)
+            raw[1::2] = np.clip(iq.imag * 32767, -32768, 32767).astype(np.int16)
+            self._iq_rec_file.write(raw.tobytes())
+            self._iq_rec_samples += len(iq)
+        except Exception as exc:
+            print(f"⚠ Error escribiendo IQ: {exc}", flush=True)
+            self.stop_iq_recording()
+
     def reset_buffers(self):
         """Limpia los historiales para que las gráficas se llenen de arriba hacia abajo al iniciar."""
         # Limpiar cascada principal
@@ -532,6 +584,9 @@ class DSPEngine:
 
     def stop_stream(self):
         self.is_playing = False
+        # ── Detener grabación IQ si estaba activa ──
+        if getattr(self, "_iq_recording", False):
+            self.stop_iq_recording()
         # ── Reset completo (equivalente a abrir el programa de nuevo) ──
         # Si es una pausa voluntaria, preservar snapshots y posición para review
         if not self.is_paused:
@@ -1147,6 +1202,9 @@ class DSPEngine:
                     break
                 
                 iq = res_iq["iq"]
+                
+                # Grabar IQ a disco si está activo el modo grabación
+                self._write_iq_chunk(iq)
                 
                 # Procesar en el núcleo DSP (lote completo)
                 self._process_dsp_core(iq, batches=None)

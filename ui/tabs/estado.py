@@ -259,7 +259,7 @@ def build_estado(page: ft.Page) -> ft.Control:
             engine_instance._needs_spectral_lock = False
             
     lock_chk = ft.Checkbox(
-        label="Auto-Calibración Espectral Fina",
+        label="Activar Span",
         value=bool(engine_instance.auto_spectral_lock),
         on_change=on_lock_toggle_change,
         active_color=ACCENT_CYAN,
@@ -398,8 +398,11 @@ def build_estado(page: ft.Page) -> ft.Control:
     mode_opts = [ft.dropdown.Option(o) for o in ["Normal", "Maximizada", "Pantalla Completa"]]
     mode_dd = ft.Dropdown(label="Modo Ventana", value=getattr(engine_instance, "window_mode", "Normal"), options=mode_opts, text_size=12, color=TEXT_MAIN, bgcolor=DARK_BG, border_color=BORDER_COL)
     
-    line_opts = [ft.dropdown.Option(str(round(x * 0.5, 1))) for x in range(1, 11)]
-    line_dd = ft.Dropdown(label="Grosor de Línea Gráficas", value=str(getattr(engine_instance, "chart_line_width", 1.0)), options=line_opts, text_size=12, color=TEXT_MAIN, bgcolor=DARK_BG, border_color=BORDER_COL)
+    line_opts = [ft.dropdown.Option(str(v)) for v in [0.1, 0.2, 0.3, 0.5, 0.75, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0]]
+    current_lw = str(getattr(engine_instance, "chart_line_width", 1.0))
+    if current_lw not in [o.key for o in line_opts]:
+        current_lw = "1.0"
+    line_dd = ft.Dropdown(label="Grosor de Línea Gráficas", value=current_lw, options=line_opts, text_size=12, color=TEXT_MAIN, bgcolor=DARK_BG, border_color=BORDER_COL)
     
     def apply_window_config(e):
         engine_instance.window_res = res_dd.value
@@ -431,6 +434,10 @@ def build_estado(page: ft.Page) -> ft.Control:
             page.window.width = w
             page.window.height = h
         page.update()
+        # Aplicar grosor de línea inmediatamente sin reiniciar
+        try:
+            page.pubsub.send_all("refresh_charts")
+        except: pass
 
         btn = e.control
         btn.text = "¡Guardado!"

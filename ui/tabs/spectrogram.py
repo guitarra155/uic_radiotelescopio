@@ -412,8 +412,6 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
             ft.Text("Senal moderada", color=TEXT_MAIN, size=10),
             sw("#3F51B5"),
             ft.Text("Ruido base", color=TEXT_MAIN, size=10),
-            sw(ACCENT_CYAN),
-            ft.Text("HI 1420.40 MHz", color=TEXT_MAIN, size=10),
         ],
         spacing=8,
         alignment=ft.MainAxisAlignment.CENTER,

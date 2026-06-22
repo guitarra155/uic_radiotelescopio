@@ -853,8 +853,8 @@ def chart_amplitude_ma() -> str:
             "Tiempo (s)",
             "Amplitud (V)",
         )
-        (line_i,) = ax.plot(t, sig.real, color=ACCENT_GREEN, linewidth=0.9, alpha=0.9, label="I Filtrado", rasterized=True)
-        (line_q,) = ax.plot(t, sig.imag, color=ACCENT_AMBER, linewidth=0.9, alpha=0.9, label="Q Filtrado", rasterized=True)
+        (line_i,) = ax.plot(t, sig.real, color=ACCENT_GREEN, linewidth=engine_instance.chart_line_width, alpha=0.9, label="I Filtrado", rasterized=True)
+        (line_q,) = ax.plot(t, sig.imag, color=ACCENT_AMBER, linewidth=engine_instance.chart_line_width, alpha=0.9, label="Q Filtrado", rasterized=True)
         ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL, labelcolor='#ECEFF1')
         cache.artists["amplitude_ma"]["line_i"] = line_i
         cache.artists["amplitude_ma"]["line_q"] = line_q
@@ -863,6 +863,8 @@ def chart_amplitude_ma() -> str:
         line_q = cache.artists["amplitude_ma"]["line_q"]
         line_i.set_data(t, sig.real)
         line_q.set_data(t, sig.imag)
+        line_i.set_linewidth(engine_instance.chart_line_width)
+        line_q.set_linewidth(engine_instance.chart_line_width)
         ax.set_title(
             f"Amplitud Filtrada — MA ({int(engine_instance.moving_avg_samples)} muestras) {time_str}",
             color=ACCENT_CYAN,
