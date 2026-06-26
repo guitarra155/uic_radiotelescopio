@@ -7,7 +7,13 @@ para que charts.py los renderice.
 
 import threading
 import time
+import json
+import os
+import collections
+import datetime
 import numpy as np
+import scipy.signal
+from scipy.ndimage import uniform_filter1d
 from core.constants import *
 
 try:
@@ -163,8 +169,6 @@ class DSPEngine:
         self.worker_thread = None
         self.playback_speed = 1.0
 
-        import os
-
         # Configuraciones globales para que el Header pueda iniciar el stream
         self.stream_mode = "file"
         self.active_tab = 0
@@ -233,7 +237,6 @@ class DSPEngine:
         }
 
         # ── Variables para Smart Trigger / Recorte Automático ──
-        import collections
         self.trigger_active = False
         self.trigger_high = 15.0
         self.trigger_low = 5.0
@@ -307,7 +310,7 @@ class DSPEngine:
         
         self.metadata_updated = True
         self.save_config()
-        print(f"🔄 Sample Rate ajustado a valor nativo BB60C: {self._sample_rate/1e6} MSps (Decimación {self.bb60c_decimation})")
+        print(f"[DSP] Sample Rate -> {self._sample_rate/1e6} MSps (Decimacion {self.bb60c_decimation})", flush=True)
 
     def _resize_corr_buffer(self):
         """Redimensiona el buffer IQ del correlograma al sample rate e historial actual.
@@ -382,13 +385,10 @@ class DSPEngine:
 
     def start_iq_recording(self) -> str:
         """Inicia la grabación IQ. Devuelve la ruta del archivo creado."""
-        import datetime, os
         if getattr(self, "_iq_recording", False):
             return ""
-
         folder = os.path.join(os.path.dirname(os.path.dirname(__file__)), "RecordingsIQ")
         os.makedirs(folder, exist_ok=True)
-
         ts   = datetime.datetime.now().strftime("%Y%m%d_%Hh%Mm%Ss")
         freq = f"{self.center_freq:.3f}MHz".replace(".", "p")
         sr   = f"{self.sample_rate/1e6:.2f}Msps".replace(".", "p")
@@ -399,7 +399,7 @@ class DSPEngine:
         self._iq_rec_file = open(path, "wb")
         self._iq_recording = True
         self._iq_rec_samples = 0
-        print(f"🔴 Grabación IQ iniciada → {path}", flush=True)
+        print(f"[REC] Grabacion IQ iniciada: {path}", flush=True)
         return path
 
     def stop_iq_recording(self) -> str:
@@ -689,7 +689,6 @@ class DSPEngine:
         win_len = max(1, int(self.moving_avg_samples))
         
         if self.ma_enabled and win_len > 1:
-            from scipy.ndimage import uniform_filter1d
             iq_f = uniform_filter1d(iq.real, size=win_len, mode='nearest') + 1j * uniform_filter1d(iq.imag, size=win_len, mode='nearest')
         else:
             iq_f = iq  # Sin filtrado
@@ -736,8 +735,7 @@ class DSPEngine:
 
         # ── 4. Espectro de Potencia (FFT) sobre señal FILTRADA ───────────────
         if self.use_welch:
-            from core.advanced_dsp import run_welch
-
+            from core.advanced_dsp import run_welch  # importación diferida: solo cuando use_welch está activo
             welch_res = run_welch(
                 iq_f,
                 fft_size=self.algo_params.get("welch_fft", 1024),
@@ -929,7 +927,6 @@ class DSPEngine:
         # Fórmula: SNR[dB] = P_señal[dBFS] - P_ruido[dBFS]
         # El piso de ruido se estima con un filtro de mediana local (baseline dinámico)
         # para que las señales fuertes no levanten artificialmente el fondo.
-        import scipy.signal
         _k_size = max(3, int(len(self.spectrum_raw_data) * 0.04))
         if _k_size % 2 == 0: _k_size += 1
         noise_floor = scipy.signal.medfilt(self.spectrum_raw_data, kernel_size=_k_size)
@@ -947,8 +944,7 @@ class DSPEngine:
             rfi_mask = self.snr_data > 15.0
             if np.any(rfi_mask) and self._rfi_cooldown == 0:
                 self.rfi_event_count += 1
-                from datetime import datetime
-                self.rfi_last_time = datetime.now().strftime("%H:%M:%S") + " UTC"
+                self.rfi_last_time = datetime.datetime.now().strftime("%H:%M:%S") + " UTC"
                 self._rfi_cooldown = 30 # Bloquear detección por ~1 segundo (30 frames)
             
             if self._rfi_cooldown > 0:
@@ -1233,12 +1229,10 @@ class DSPEngine:
         # 1. Intentar auto-detectar metadatos (etiquetas externas o nombre)
         self._try_load_metadata(self.filename)
         
+        if not os.path.exists(self.filename):
+            return
         try:
             with open(self.filename, "rb") as f:
-                import os
-
-                if not os.path.exists(self.filename):
-                    return
                 file_size = os.path.getsize(self.filename)
 
                 # NUEVO: Recuperar posición guardada
@@ -1587,21 +1581,20 @@ class DSPEngine:
             "auto_spectral_lock": getattr(self, "auto_spectral_lock", True),
         }
         try:
-            import json, os
             sanitized = self._sanitize(conf)
-
-            with open(
-                os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json"),
-                "w", encoding="utf-8"
-            ) as f:
+            config_dir = os.path.dirname(os.path.abspath(__file__))
+            target  = os.path.join(config_dir, "config.json")
+            tmp     = target + ".tmp"
+            # Escritura atómica: escribir a .tmp y renombrar
+            # Evita JSON corrupto si la app crashea durante la escritura
+            with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(sanitized, f, indent=4)
+            os.replace(tmp, target)  # Operación atómica en Windows y POSIX
         except Exception as e:
             print("Save Config Error:", e)
 
     def load_config(self):
         try:
-            import json, os
-
             p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
             if os.path.exists(p):
                 with open(p, "r", encoding="utf-8") as f:
