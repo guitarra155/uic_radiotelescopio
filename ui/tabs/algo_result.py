@@ -6,56 +6,12 @@ seleccionado en el panel derecho. Solo corre UN algoritmo a la vez.
 
 import flet as ft
 from core.constants import *
+from core.algo_registry import ALGO_REGISTRY
 from ui.components.shared import panel, border_all
 
-_ALGO_META = {
-    "AR/Burg": {
-        "color": "#B380FF",
-        "desc": (
-            "Modelo Autorregresivo por método de Burg.\n"
-            "Alta resolución espectral con pocas muestras.\n"
-            "Ideal para señales CW estrechas."
-        ),
-    },
-    "CWT/Morlet": {
-        "color": "#00C8FF",
-        "desc": (
-            "Transformada Wavelet Continua con Morlet.\n"
-            "Análisis tiempo-frecuencia simultáneo.\n"
-            "Útil para señales transitorias o moduladas."
-        ),
-    },
-    "Pseudo-MUSIC": {
-        "color": "#FF4C4C",
-        "desc": (
-            "MUltiple SIgnal Classification.\n"
-            "Resolución super-FFT mediante sub-espacio de ruido.\n"
-            "Detecta frecuencias con gran precisión."
-        ),
-    },
-    "ESPRIT": {
-        "color": "#FF80AB",
-        "desc": (
-            "Estimation of Signal Parameters via\nRotational Invariance Techniques.\n"
-            "Más eficiente que MUSIC para pocos componentes."
-        ),
-    },
-    "Welch": {
-        "color": "#FFD700",
-        "desc": (
-            "Densidad Espectral de Potencia (Welch).\n"
-            "Reduce el ruido promediando periodogramas solapados."
-        ),
-    },
-    "Correlograma": {
-        "color": "#40E0D0",
-        "desc": (
-            "Estimación espectral indirecta (Wiener-Khinchin).\n"
-            "FFT de la autocorrelación truncada (Blackman-Tukey).\n"
-            "Útil para señales inmersas en ruido."
-        ),
-    },
-}
+# _ALGO_META: alias de conveniencia sobre ALGO_REGISTRY (misma estructura de datos)
+_ALGO_META = ALGO_REGISTRY
+
 
 
 def build_algo_result(page: ft.Page) -> ft.Control:

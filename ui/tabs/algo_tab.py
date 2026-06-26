@@ -13,68 +13,26 @@ Uso en main.py:
 
 import flet as ft
 from core.constants import *
+from core.algo_registry import ALGO_REGISTRY
 from ui.components.shared import panel, border_all
 
-# Descripciones cortas de cada algoritmo para el panel lateral
+# _ALGO_INFO ahora es un alias de ALGO_REGISTRY para mantener compatibilidad
 _ALGO_INFO = {
-    "ar": {
-        "full_name": "Modelo Autorregresivo (AR / Burg)",
-        "desc": (
-            "Ajusta un modelo paramétrico AR de orden p "
-            "a la señal IQ usando el algoritmo de Burg.\n\n"
-            "Alta resolución espectral incluso con pocas muestras. "
-            "Ideal para señales CW estrechas."
-        ),
-        "params": "Orden: configurable en el panel derecho (Orden AR).",
-        "color": "#B380FF",
-    },
-    "cwt": {
-        "full_name": "Transformada Wavelet Continua (CWT / Morlet)",
-        "desc": (
-            "Analiza la señal en el dominio tiempo-frecuencia "
-            "mediante convolución con wavelet Morlet compleja.\n\n"
-            "Muestra cómo varía la energía espectral a lo largo "
-            "del tiempo — útil para señales transitorias."
-        ),
-        "params": "Escala automática: 64 bandas logarítmicas.",
-        "color": "#00C8FF",
-    },
-    "music": {
-        "full_name": "Pseudo-MUSIC (MUltiple SIgnal Classification)",
-        "desc": (
-            "Descompone la matriz de covarianza en sub-espacios "
-            "de señal y ruido. El pseudo-espectro muestra picos "
-            "ultra-estrechos en las frecuencias de las señales.\n\n"
-            "Resolución muy superior a la FFT."
-        ),
-        "params": "# Señales: configurable en el panel derecho.",
-        "color": "#FF4C4C",
-    },
-
-    "welch": {
-        "full_name": "Estimación Espectral de Welch (Método Directo)",
-        "desc": (
-            "Divide la señal en segmentos solapados, aplica ventana "
-            "Hanning a cada uno y promedia los periodogramas.\n\n"
-            "Reduce la varianza espectral vs la FFT simple. "
-            "Más suave pero ligeramente menor resolución."
-        ),
-        "params": "FFT size y overlap configurables en el engine.",
-        "color": "#FFD700",
-    },
-    "correlogram": {
-        "full_name": "Correlograma — Método Indirecto (Wiener-Khinchin)",
-        "desc": (
-            "Calcula la autocorrelación de la señal hasta un lag "
-            "máximo, aplica ventana de Bartlett y obtiene el PSD "
-            "por FFT del resultado.\n\n"
-            "Implementa el teorema de Wiener-Khinchin. "
-            "Útil para analizar la estructura de correlación."
-        ),
-        "params": "Lag máximo configurable (corr_max_lag).",
-        "color": "#40E0D0",
-    },
-
+    # Mapeo de claves cortas usadas internamente a las claves del ALGO_REGISTRY
+    key: {
+        "full_name": meta["full_name"],
+        "desc":      meta["desc"],
+        "params":    meta["params_hint"],
+        "color":     meta["color"],
+    }
+    for key, meta in {
+        "ar":          ALGO_REGISTRY["AR/Burg"],
+        "cwt":         ALGO_REGISTRY["CWT/Morlet"],
+        "music":       ALGO_REGISTRY["Pseudo-MUSIC"],
+        "esprit":      ALGO_REGISTRY["ESPRIT"],
+        "welch":       ALGO_REGISTRY["Welch"],
+        "correlogram": ALGO_REGISTRY["Correlograma"],
+    }.items()
 }
 
 
