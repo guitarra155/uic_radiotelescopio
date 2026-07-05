@@ -184,24 +184,23 @@ def build_freq_snr(page: ft.Page, key_state: dict) -> ft.Control:
 
     # ── Zoom con scroll ──────────────────────────────────────────────────────
     def on_zoom_scroll(e: ft.ScrollEvent):
-        ctrl = key_state.get("ctrl", False)
-        shift = key_state.get("shift", False)
-        if not ctrl and not shift:
-            return
-        d = 1 if e.scroll_delta_y > 0 else -1
-        factor = 0.2 * d
-        if ctrl:
-            # Zoom en Eje Y (SNR dB)
-            s_db = engine_instance.snr_db_max - engine_instance.snr_db_min
-            engine_instance.snr_db_min -= s_db * factor
-            engine_instance.snr_db_max += s_db * factor
-            engine_instance.save_config()
-        elif shift:
-            # Zoom en Eje X (Frecuencia MHz)
+        from core.dsp_engine import engine_instance
+        
+        if e.scroll_delta.y != 0:
+            d = 1 if e.scroll_delta.y > 0 else -1
+            s_snr = engine_instance.snr_max - engine_instance.snr_min
+            engine_instance.snr_min -= s_snr * 0.15 * d
+            engine_instance.snr_max += s_snr * 0.15 * d
+        elif e.scroll_delta.x != 0:
+            d = 1 if e.scroll_delta.x > 0 else -1
             s_f = engine_instance.f_max - engine_instance.f_min
-            engine_instance.f_min -= s_f * factor
-            engine_instance.f_max += s_f * factor
-            engine_instance.save_config()
+            engine_instance.f_min -= s_f * 0.15 * d
+            engine_instance.f_max += s_f * 0.15 * d
+        else:
+            return
+
+        engine_instance.save_config()
+        page.pubsub.send_all("refresh_charts")
 
     # ── Panel lateral ────────────────────────────────────────────────────────
     side = panel(

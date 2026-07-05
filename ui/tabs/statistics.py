@@ -148,28 +148,24 @@ def build_statistics(page: ft.Page, key_state: dict) -> ft.Control:
 
     def on_zoom_scroll(e: ft.ScrollEvent):
         from core.dsp_engine import engine_instance
-        ctrl = key_state.get("ctrl", False)
-        shift = key_state.get("shift", False)
-        if not ctrl and not shift:
-            return
-            
-        d = 1 if e.scroll_delta_y > 0 else -1
-        factor = 0.2 * d
-        
         cfg = engine_instance.charts_config.get("stat_hist", {})
-        
-        if ctrl:
-            s_y = cfg.get("ymax", 100) - cfg.get("ymin", 0)
-            cfg["ymin"] = max(0.0, cfg.get("ymin", 0) - s_y * factor)
-            cfg["ymax"] = cfg.get("ymax", 100) + s_y * factor
-            cfg["auto_y"] = False
-        elif shift:
+
+        if e.scroll_delta.y != 0:
+            d = 1 if e.scroll_delta.y > 0 else -1
+            s_y = cfg.get("ymax", 500) - cfg.get("ymin", 0)
+            cfg["ymin"] = max(0, cfg.get("ymin", 0) - s_y * 0.15 * d)
+            cfg["ymax"] = cfg.get("ymax", 500) + s_y * 0.15 * d
+        elif e.scroll_delta.x != 0:
+            d = 1 if e.scroll_delta.x > 0 else -1
             s_x = cfg.get("xmax", 1.5) - cfg.get("xmin", 0.0)
-            cfg["xmin"] = max(0.0, cfg.get("xmin", 0.0) - s_x * factor)
-            cfg["xmax"] = cfg.get("xmax", 1.5) + s_x * factor
-            cfg["auto_x"] = False
-            
+            cfg["xmin"] -= s_x * 0.15 * d
+            cfg["xmax"] += s_x * 0.15 * d
+        else:
+            return
+
+        engine_instance.charts_config["stat_hist"] = cfg
         engine_instance.save_config()
+        page.pubsub.send_all("refresh_charts")
 
     def on_hist_mode_change(e):
         from core.dsp_engine import engine_instance

@@ -1,0 +1,50 @@
+@startuml Figura12_Arquitectura
+
+' Configuración para formato A4 vertical con distribución horizontal optimizada
+skinparam linetype ortho
+skinparam BackgroundColor #FFFFFF
+skinparam ArrowColor #4A5568
+skinparam DefaultFontColor #2D3748
+skinparam DefaultFontSize 13
+skinparam TitleFontSize 16
+skinparam BoxPadding 15
+
+' Estilos de Cajas en Tonos Pastel
+skinparam component {
+    BackgroundColor #EDF2F7
+    BorderColor #CBD5E0
+    FontColor #2D3748
+}
+
+header Plataforma UIC Radiotelescopio
+title Arquitectura Modular del Sistema (Capas de Software)
+
+' --- CAPA PRESENTACIÓN (Rojo / Rosa Pastel) ---
+package "Capa de Presentación (GUI)" as UI #FDF2F2 {
+    component "main.py\n(Controlador Flet)" as Main #FDE8E8
+    component "sdr_config.py\n(Sincronización)" as SDRConfig #FDE8E8
+    component "Vistas (Tabs)\n(dual_monitoring.py,\nmonitoring.py, etc.)" as Tabs #FDE8E8
+}
+
+' --- CAPA CONTROL Y PROCESAMIENTO (Azul Pastel) ---
+package "Capa de Procesamiento (DSP Core)" as Core #EBF8FF {
+    component "dsp_engine.py\n(DSPEngine - Hilos DSP)" as Engine #DBEAFE
+    component "advanced_dsp.py\n(Algoritmos Físicos)" as AdvDSP #DBEAFE
+}
+
+' --- CAPA ADQUISICIÓN Y HARDWARE (Verde Pastel) ---
+package "Capa de Adquisición" as HW #F0FDF4 {
+    component "bb_api.py\n(Wrapper ctypes)" as BBApi #DCFCE7
+    component "Simulador Sintético\n(Señales Ficticias)" as Sim #DCFCE7
+}
+
+' Relaciones entre componentes
+Main -down-> Tabs : Instancia y Muestra
+SDRConfig -left-> Main : Actualiza UI
+Tabs -down-> Engine : Lee espectro / Envía zoom
+
+Engine -down-> BBApi : Controla SDR
+Engine -down-> Sim : Lee datos sintéticos
+Engine -right-> AdvDSP : Calcula PSD (Welch/Burg) / CFAR
+
+@enduml

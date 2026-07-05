@@ -394,25 +394,24 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
 
     # Zoom (funciona para waterfall; los otros metodos no dependen de db_min/db_max)
     def on_zoom_scroll(e: ft.ScrollEvent):
-        ctrl = key_state.get("ctrl", False)
-        shift = key_state.get("shift", False)
-
-        if not ctrl and not shift:
-            return
-
-        dir = 1 if e.scroll_delta_y > 0 else -1
-        factor = 0.15 * dir
-
-        if ctrl:
+        from core.dsp_engine import engine_instance
+        
+        if e.scroll_delta.y != 0:
+            d = 1 if e.scroll_delta.y > 0 else -1
             s_db = engine_instance.db_max - engine_instance.db_min
-            engine_instance.db_min -= s_db * factor
-            engine_instance.db_max += s_db * factor
-            engine_instance.save_config()
-        elif shift:
+            engine_instance.db_min -= s_db * 0.15 * d
+            engine_instance.db_max += s_db * 0.15 * d
+        elif e.scroll_delta.x != 0:
+            d = 1 if e.scroll_delta.x > 0 else -1
             s_f = engine_instance.f_max - engine_instance.f_min
-            engine_instance.f_min -= s_f * factor
-            engine_instance.f_max += s_f * factor
-            engine_instance.save_config()
+            engine_instance.f_min -= s_f * 0.15 * d
+            engine_instance.f_max += s_f * 0.15 * d
+        else:
+            return
+            
+        engine_instance.save_config()
+        page.pubsub.send_all("refresh_charts")
+
 
     def sw(color):
         return ft.Container(width=14, height=14, bgcolor=color, border_radius=4)

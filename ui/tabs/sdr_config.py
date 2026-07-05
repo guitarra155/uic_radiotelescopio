@@ -351,21 +351,21 @@ def build_config(page: ft.Page) -> ft.Control:
             cfg = engine_instance.charts_config.get(actual_key)
             if not cfg: continue
             pairs = [
-                ("xmin", cfg.get("auto_x", False), fmt_float(cfg.get('xmin', 0))),
-                ("xmax", cfg.get("auto_x", False), fmt_float(cfg.get('xmax', 0))),
-                ("ymin", cfg.get("auto_y", False), fmt_float(cfg.get('ymin', 0))),
-                ("ymax", cfg.get("auto_y", False), fmt_float(cfg.get('ymax', 0))),
+                ("xmin", fmt_float(cfg.get('xmin', 0))),
+                ("xmax", fmt_float(cfg.get('xmax', 0))),
+                ("ymin", fmt_float(cfg.get('ymin', 0))),
+                ("ymax", fmt_float(cfg.get('ymax', 0))),
             ]
-            for key, is_auto, new_val in pairs:
+            for key, new_val in pairs:
                 tf = fields.get(key)
-                if tf and is_auto and tf.page:
+                if tf and tf.page:
                     try:
                         if tf.value != new_val:
                             tf.value = new_val
                             updated.append(tf)
                     except: pass
             
-            # Sincronizar toggles visuales (checkboxes) si el backend forzó el Auto Scale
+            # Sincronizar toggles visuales (checkboxes)
             btn_x = fields.get("btn_auto_x")
             if btn_x and btn_x.page:
                 is_x = cfg.get("auto_x", False)
@@ -389,6 +389,7 @@ def build_config(page: ft.Page) -> ft.Control:
         for tf in updated:
             try: tf.update()
             except: pass
+
 
     # --- Suscripción a eventos ---
     async def _update_ui(msg):

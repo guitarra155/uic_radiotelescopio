@@ -26,11 +26,24 @@ def main(page: ft.Page):
     from core.dsp_engine import engine_instance
     engine_instance.load_config()
 
+    # key_state: diccionario compartido con todos los tabs para detectar Ctrl/Shift en scroll.
+    # page.on_keyboard_event entrega KeyboardEvent con .ctrl/.shift actualizados en cada keydown.
+    # Para detectar el RELEASE de Ctrl/Shift: e.ctrl/e.shift ya vienen en False cuando
+    # se pulsa cualquier otra tecla sin el modificador. Adicionalmente, detectamos las
+    # teclas "Control"/"Shift" directamente para forzar el reset inmediato.
     key_state = {'ctrl': False, 'shift': False}
 
     def on_keyboard(e: ft.KeyboardEvent):
-        key_state['ctrl'] = e.ctrl
-        key_state['shift'] = e.shift
+        if e.key in {"Control", "ControlLeft", "ControlRight"} or e.ctrl:
+            key_state['ctrl'] = True
+        else:
+            key_state['ctrl'] = False
+            
+        if e.key in {"Shift", "ShiftLeft", "ShiftRight"} or e.shift:
+            key_state['shift'] = True
+        else:
+            key_state['shift'] = False
+
         if e.key == "F5":
             page.pubsub.send_all("toggle_stream")
         elif e.key == "F8":
@@ -42,11 +55,9 @@ def main(page: ft.Page):
             if e.key == "Tab":
                 prev_idx = (engine_instance.active_tab - 1) % len(tab_labels)
                 switch_to_tab(prev_idx)
-            # Atajo general: CTRL + SHIFT + B para colapsar panel de configuración derecho
             elif e.key.upper() == "B":
                 page.pubsub.send_all("toggle_config_collapse")
             else:
-                # Detectar números para colapsar paneles laterales específicos
                 k = e.key
                 if k.startswith("Numpad "):
                     k = k.replace("Numpad ", "")
@@ -57,11 +68,9 @@ def main(page: ft.Page):
             if e.key == "Tab":
                 next_idx = (engine_instance.active_tab + 1) % len(tab_labels)
                 switch_to_tab(next_idx)
-            # Atajo general: CTRL + B para colapsar panel estadístico/datos de la pestaña activa
             elif e.key.upper() == "B":
                 page.pubsub.send_all(("toggle_tab_panel", engine_instance.active_tab))
             else:
-                # Detectar números normales o del teclado numérico para cambiar de pestaña
                 k = e.key
                 if k.startswith("Numpad "):
                     k = k.replace("Numpad ", "")
@@ -71,6 +80,8 @@ def main(page: ft.Page):
     page.on_keyboard_event = on_keyboard
 
     # Configuración de Ventana
+
+
     page.title      = "Plataforma DSP"
     page.theme_mode = ft.ThemeMode.DARK
     page.bgcolor    = DARK_BG
@@ -110,7 +121,7 @@ def main(page: ft.Page):
     page.spacing = 0
     page.theme   = ft.Theme(color_scheme_seed=ACCENT_CYAN, use_material3=True)
 
-    # Capturar y sincronizar las dimensiones de la ventana con el renderizador de gráficas
+    # Capturar y sincronizar las dimensions de la ventana con el renderizador de gráficas
     def on_page_resize(e):
         engine_instance.window_width = page.width
         engine_instance.window_height = page.height
@@ -120,20 +131,20 @@ def main(page: ft.Page):
     engine_instance.window_width = page.width or 1280
     engine_instance.window_height = page.height or 720
 
-    # Componentes de Layout Base
+    # Components de Layout Base
     header = build_header(page)
     footer = build_footer()
 
     tab_labels = [
         "🏠  Inicio & Configuración",    # 0
-        "🌓  Señal y Filtrada",   # 1
+        "🌓  Señal y Señal Filtrada",   # 1
         "🌈  Espectrograma",             # 2
-        "📊  Histograma & Estadística",# 3
+        "📊  Histograma",# 3
         "⚡  Potencia vs. Tiempo",        # 4
         "📶  SNR vs. Frecuencia",        # 5
     ]
 
-    # Renderizamos los componentes visuales de cada módulo
+    # Renderizamos los components visuals de cada módulo
     tab_contents = [
         build_estado(page),                          # 0
         build_dual_monitoring(page, key_state),      # 1
@@ -290,6 +301,8 @@ def main(page: ft.Page):
         main_view,
         footer,
     ], expand=True, spacing=0, horizontal_alignment=ft.CrossAxisAlignment.STRETCH))
+
+
 
 
 if __name__ == "__main__":

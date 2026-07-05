@@ -72,25 +72,24 @@ def build_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
     from core.dsp_engine import engine_instance
 
     def on_zoom_scroll(e: ft.ScrollEvent, chart_id: str):
-        ctrl  = key_state.get('ctrl', False)
-        shift = key_state.get('shift', False)
-        if not ctrl and not shift:
-            return
-        dir    = 1 if e.scroll_delta_y > 0 else -1
-        factor = 0.25 * dir
+        from core.dsp_engine import engine_instance
         cfg = engine_instance.charts_config[chart_id]
-        if ctrl:
+
+        if e.scroll_delta.y != 0:
+            d = 1 if e.scroll_delta.y > 0 else -1
             s_y = cfg["ymax"] - cfg["ymin"]
-            cfg["ymin"] -= s_y * factor
-            cfg["ymax"] += s_y * factor
-            cfg["auto_y"] = False
-            engine_instance.save_config()
-        elif shift:
+            cfg["ymin"] -= s_y * 0.15 * d
+            cfg["ymax"] += s_y * 0.15 * d
+        elif e.scroll_delta.x != 0:
+            d = 1 if e.scroll_delta.x > 0 else -1
             s_x = cfg["xmax"] - cfg["xmin"]
-            cfg["xmin"] -= s_x * factor
-            cfg["xmax"] += s_x * factor
-            cfg["auto_x"] = False
-            engine_instance.save_config()
+            cfg["xmin"] -= s_x * 0.15 * d
+            cfg["xmax"] += s_x * 0.15 * d
+        else:
+            return
+
+        engine_instance.save_config()
+        page.pubsub.send_all("refresh_charts")
 
     box_spec = ft.Container(content=None, expand=1)
     box_amp = ft.Container(content=None, expand=1)

@@ -9,9 +9,13 @@ venv/
 .venv/
 *.tmp
 debug.txt
+*.log
+vscode/
+*.rar
 # IA, Entorno y Caché (Prevención de errores ENAMETOOLONG)
 .agents/
 .claude/
 .ruff_cache/
 bun.exe
 data/
+
