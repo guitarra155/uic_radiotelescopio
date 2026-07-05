@@ -38,6 +38,36 @@ def main(page: ft.Page):
         elif e.key == "F11":
             page.window.full_screen = not page.window.full_screen
             page.update()
+        if e.ctrl and e.shift:
+            if e.key == "Tab":
+                prev_idx = (engine_instance.active_tab - 1) % len(tab_labels)
+                switch_to_tab(prev_idx)
+            # Atajo general: CTRL + SHIFT + B para colapsar panel de configuración derecho
+            elif e.key.upper() == "B":
+                page.pubsub.send_all("toggle_config_collapse")
+            else:
+                # Detectar números para colapsar paneles laterales específicos
+                k = e.key
+                if k.startswith("Numpad "):
+                    k = k.replace("Numpad ", "")
+                if k in ["1", "2", "3", "4", "5", "6"]:
+                    idx = int(k) - 1
+                    page.pubsub.send_all(("toggle_tab_panel", idx))
+        elif e.ctrl:
+            if e.key == "Tab":
+                next_idx = (engine_instance.active_tab + 1) % len(tab_labels)
+                switch_to_tab(next_idx)
+            # Atajo general: CTRL + B para colapsar panel estadístico/datos de la pestaña activa
+            elif e.key.upper() == "B":
+                page.pubsub.send_all(("toggle_tab_panel", engine_instance.active_tab))
+            else:
+                # Detectar números normales o del teclado numérico para cambiar de pestaña
+                k = e.key
+                if k.startswith("Numpad "):
+                    k = k.replace("Numpad ", "")
+                if k in ["1", "2", "3", "4", "5", "6"]:
+                    idx = int(k) - 1
+                    switch_to_tab(idx)
     page.on_keyboard_event = on_keyboard
 
     # Configuración de Ventana
@@ -96,7 +126,7 @@ def main(page: ft.Page):
 
     tab_labels = [
         "🏠  Inicio & Configuración",    # 0
-        "🌓  Señal Original vs Filtrada(RAW/MA)",   # 1
+        "🌓  Señal y Filtrada",   # 1
         "🌈  Espectrograma",             # 2
         "📊  Histograma & Estadística",# 3
         "⚡  Potencia vs. Tiempo",        # 4
@@ -115,6 +145,27 @@ def main(page: ft.Page):
 
     selected = [0]  # índice activo
 
+    def switch_to_tab(idx):
+        if idx < 0 or idx >= len(tab_labels):
+            return
+        # Evitar errores si aún no se inicializa tab_btns
+        if not tab_btns or len(tab_btns) <= selected[0]:
+            return
+        tab_btns[selected[0]].content.color = TEXT_MUTED
+        indicators[selected[0]].bgcolor = "transparent"
+        
+        selected[0] = idx
+        from core.dsp_engine import engine_instance
+        engine_instance.active_tab = idx
+        
+        tab_body.content = tab_contents[idx]
+        right_panel.visible = (idx != 0)
+        
+        tab_btns[idx].content.color = ACCENT_CYAN
+        indicators[idx].bgcolor = ACCENT_CYAN
+        page.pubsub.send_all("tab_changed")
+        page.update()
+
     # Indicadores de subrayado activo
     indicators = [
         ft.Container(height=2, bgcolor=ACCENT_CYAN if i == 0 else "transparent", border_radius=1)
@@ -132,22 +183,7 @@ def main(page: ft.Page):
             border_radius=4,
             bgcolor="transparent"
         )
-        def on_click(e, idx):
-            tab_btns[selected[0]].content.color = TEXT_MUTED
-            indicators[selected[0]].bgcolor = "transparent"
-            
-            selected[0] = idx
-            from core.dsp_engine import engine_instance
-            engine_instance.active_tab = idx
-            
-            tab_body.content = tab_contents[idx]
-            right_panel.visible = (idx != 0)
-            
-            tab_btns[idx].content.color = ACCENT_CYAN
-            indicators[idx].bgcolor = ACCENT_CYAN
-            page.pubsub.send_all("tab_changed")
-            page.update()
-        btn.on_click = lambda e: on_click(e, i)
+        btn.on_click = lambda e: switch_to_tab(i)
         return btn
 
     tab_btns = [make_tab_btn(i, lbl) for i, lbl in enumerate(tab_labels)]

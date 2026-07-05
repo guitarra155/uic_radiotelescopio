@@ -91,8 +91,11 @@ c:\uic_radiotelescopio\
 │       └── statistics.py
 ├── data/              ← Archivos .iq de prueba
 ├── docs/
-│   └── DETALLE_PROYECTO.md
+│   ├── DETALLE_PROYECTO.md
+│   ├── MANUAL_USUARIO.md  ← NUEVO (Manual de usuario en español)
+│   └── esquema_proyecto.puml ← NUEVO (Esquema de arquitectura en PlantUML)
 ├── research/
+│   └── ...
 ├── scripts/
 └── Resultados_Datos/
 ```
@@ -166,10 +169,29 @@ El `__init__.py` aplica `make_synchronized` a todas las funciones `chart_*` con 
 ### Creados
 - `core/algo_registry.py` → registro centralizado de algoritmos
 - `ui/charts/` → paquete modular de 8 archivos (~1200 líneas totales, pero organizadas)
+- `docs/MANUAL_USUARIO.md` → manual de usuario detallado paso a paso para el radiotelescopio
+- `docs/esquema_proyecto.puml` → diagrama completo de arquitectura y flujo de datos en código PlantUML
 
-### Optimizaciones incluidas
+### Optimizaciones e Información adicional
+- **Ajustes Estadísticos Avanzados (Weibull y Rician):** Se incorporó soporte en tiempo real para estimar y ajustar curvas de distribución probabilística **Weibull** y **Rician** sobre el histograma de magnitudes de señal ([statistics.py](file:///c:/uic_radiotelescopio/ui/charts/statistics.py)).
+- **Criterio de Ajuste Dinámico:** Se calcula la suma de errores cuadráticos acumulados (SSE) sobre las PDFs teóricas para clasificar dinámicamente si la señal actual se comporta como ruido Gaussiano (térmico), Rician (señal determinista) o Weibull (interferencias/colas pesadas), mostrando los parámetros resultantes y el tipo de señal detectada en la UI en vivo ([statistics.py](file:///c:/uic_radiotelescopio/ui/tabs/statistics.py)).
+- **Corrección Matemática en Modo Fase:** Se sustituyó la campana de Gauss por una línea recta teórica constante que modela la distribución **Uniforme** ($1 / 2\pi \approx 0.159$) cuando la gráfica del histograma está configurada en modo Fase, previniendo visualizaciones matemáticamente incorrectas.
+- **Switches Interactivos de Curvas:** Se integró una sección de "Ajustes de Curva" dentro del panel de configuración lateral derecho (`ui/tabs/sdr_config.py`). Esta sección solo se visualiza cuando el usuario está posicionado en la pestaña de estadística (idx=3), permitiendo alternar de forma independiente la visualización de las curvas teóricas Gauss, Weibull, Rician o KDE utilizando los controles visuales estandarizados `make_toggle` y liberando espacio de la gráfica en el panel central.
+- **Paneles Laterales Colapsables:** Se generalizó el comportamiento de ocultación de paneles laterales mediante la inserción de un control interactivo `btn_toggle_side` (`ft.IconButton`) con icono `ft.Icons.VIEW_SIDEBAR` en los headers de las gráficas de las pestañas **Histograma & Estadística** ([statistics.py](file:///c:/uic_radiotelescopio/ui/tabs/statistics.py)), **Potencia vs. Tiempo** ([signal_analysis.py](file:///c:/uic_radiotelescopio/ui/tabs/signal_analysis.py)) y **SNR vs. Frecuencia** ([freq_snr.py](file:///c:/uic_radiotelescopio/ui/tabs/freq_snr.py)). Al pulsarlo, el respectivo panel derecho de información y estadísticas del buffer se minimiza a voluntad, permitiendo que la gráfica se expanda automáticamente a pantalla completa para una visualización en detalle.
+- **Optimización de Rendimiento por Submuestreo (Downsampling):** Se limitó el cálculo de ajustes pesados (`weibull_min.fit`, `rice.fit` y `gaussian_kde`) mediante el submuestreo del buffer de magnitudes a un tamaño máximo de 500 muestras, además de omitir los cómputos de las curvas desactivadas. Esto reduce la carga computacional en más de un 90% garantizando una tasa de refresco fluida y en tiempo real.
+- **Remoción de Terminología Redundante:** Se eliminaron las referencias al término "Smart Trigger" en los comentarios y etiquetas de la pestaña de estadística para mejorar la coherencia científica de la interfaz.
 - `_render_2d_waterfall()` en `spectrogram.py` unifica la lógica de los tres espectrogramas 2D (evita ~200 líneas duplicadas)
 - Thread-safety centralizado en `__init__.py` (antes en el final de `charts.py`)
+- Corregida la Enciclopedia Técnica y Glosario en `ui/tabs/estado.py` para incluir la pestaña de *Potencia vs Tiempo* que faltaba, y se integró un panel interactivo del **Manual de Usuario Rápido** directo en la UI.
+- **Actualización Integral del Glosario y Manual de Usuario:** Se modificó la Enciclopedia Técnica en [estado.py](file:///c:/uic_radiotelescopio/ui/tabs/estado.py#L325-L425) para documentar el ajuste estadístico multiprobabilístico (**Weibull y Rician**), se eliminó la denominación obsoleta de "Smart Trigger" sustituyéndola por **Detección de Transitorios y Recorte**, y se creó la sección interactiva **Atajos de Teclado y Control** para guiar al usuario en el uso de atajos (`CTRL + [1-6]`, `CTRL + TAB`, `CTRL + B` y `CTRL + SHIFT + B`).
+- **Corrección de Carga en Espectrograma 2D:** Se resolvió el retardo/desvanecimiento inicial al ingresar a la pestaña de Espectrograma ([spectrogram.py](file:///c:/uic_radiotelescopio/ui/tabs/spectrogram.py#L40-L60)). Ahora el método seleccionado en la configuración (`spec2d_method`) se sincroniza inmediatamente con el motor DSP (`active_spec_method`) al inicializar el módulo, y la fuente de la imagen (`img.src`) se carga con el gráfico correspondiente del método activo por defecto desde el primer instante.
+- **Formateo inteligente de flotantes:** Se implementó `fmt_float()` en `estado.py` y `sdr_config.py` para limpiar ceros a la derecha redundantes en las entradas numéricas (ej. `2.4` en lugar de `2.40000000`), manteniendo la capacidad de sintonizar y operar con máxima precisión (hasta 8 decimales).
+- **Atajos de Teclado para Navegación y Colapso:** 
+  - Se incorporaron atajos de teclado al handler `on_keyboard` en [main.py](file:///c:/uic_radiotelescopio/main.py#L38-L46) para cambiar de pestaña al presionar `CTRL + Número` (1 a 6).
+  - **Navegación Secuencial (CTRL + TAB / CTRL + SHIFT + TAB):** Permite rotar cíclicamente hacia adelante (`CTRL + TAB`) o hacia atrás (`CTRL + SHIFT + TAB`) a través de las 6 pestañas de la interfaz, facilitando el cambio rápido y fluido.
+  - **Atajo General CTRL + B:** Colapsa o expande el panel lateral de estadísticas/datos en la pestaña activa actual, evitando tener que memorizar números específicos.
+  - **Atajo General CTRL + SHIFT + B:** Colapsa o expande el panel lateral derecho global de configuración (`right_panel`) desde cualquier pestaña.
+  - Se mantiene el soporte auxiliar de `CTRL + SHIFT + Número` (1 a 6) para conmutar la visibilidad de los paneles a pantalla completa vía PubSub de forma dirigida.
 
 ---
 

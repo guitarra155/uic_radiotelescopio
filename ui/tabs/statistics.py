@@ -1,6 +1,6 @@
 """
 tabs/statistics.py
-Lógica y UI para la pestaña "Estadística y Smart Trigger"
+Lógica y UI para la pestaña de Histograma y Análisis Estadístico
 """
 
 import flet as ft
@@ -24,7 +24,14 @@ def build_statistics(page: ft.Page, key_state: dict) -> ft.Control:
     val_rango_t = ft.Text("0.0s - 0.0s", color=ACCENT_CYAN, size=10, weight=ft.FontWeight.W_600, expand=1)
 
     is_rendering = [False]
+    
+    info_lbl = ft.Text("Distribución detectada:\nProcesando...", color=ACCENT_CYAN, size=11, italic=True)
+
     async def on_refresh(msg):
+        if isinstance(msg, tuple) and msg[0] == "toggle_tab_panel":
+            if msg[1] == 3:
+                on_toggle_side(None)
+            return
         if msg not in ("refresh_charts", "tab_changed"):
             return
         from core.dsp_engine import engine_instance
@@ -66,6 +73,11 @@ def build_statistics(page: ft.Page, key_state: dict) -> ft.Control:
             import asyncio
             img.src = await asyncio.to_thread(chart_histogram)
             if img.page: img.update()
+
+            # Actualizar info de distribución detectada
+            dist_str = getattr(engine_instance, "detected_distribution_str", "Procesando...")
+            info_lbl.value = f"Distribución detectada:\n{dist_str}"
+            if info_lbl.page: info_lbl.update()
         finally:
             is_rendering[0] = False
             
@@ -78,8 +90,6 @@ def build_statistics(page: ft.Page, key_state: dict) -> ft.Control:
         ft.Row([ft.Text("Sesgo", color=TEXT_MAIN, size=10, expand=1), val_sesgo]),
         ft.Row([ft.Text("Rango Temporal", color=TEXT_MAIN, size=10, expand=1), val_rango_t])
     ]
-    
-    info_lbl = ft.Text("Distribución detectada:\nCampana de Gauss (Aprox)", color=ACCENT_CYAN, size=11, italic=True)
 
     side = panel(
         width=240,
@@ -88,7 +98,7 @@ def build_statistics(page: ft.Page, key_state: dict) -> ft.Control:
                     weight=ft.FontWeight.BOLD),
             ft.Divider(color=BORDER_COL, height=12),
             info_lbl,
-            ft.Container(height=4),
+            ft.Divider(color=BORDER_COL, height=12),
             ft.Text("Estadísticas en vivo:", color=TEXT_MUTED, size=11),
             *stat_rows,
         ], spacing=8),
@@ -112,6 +122,25 @@ def build_statistics(page: ft.Page, key_state: dict) -> ft.Control:
         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4)),
         on_click=on_fullscreen_global,
         tooltip="Pantalla Completa (Global)",
+        padding=0,
+        width=26,
+        height=26
+    )
+
+    def on_toggle_side(e):
+        side.visible = not side.visible
+        btn_toggle_side.icon = ft.Icons.VIEW_SIDEBAR_OUTLINED if side.visible else ft.Icons.VIEW_SIDEBAR
+        btn_toggle_side.icon_color = ACCENT_CYAN if side.visible else ACCENT_AMBER
+        btn_toggle_side.tooltip = "Ocultar panel de estadísticas" if side.visible else "Mostrar panel de estadísticas"
+        e.control.page.update()
+
+    btn_toggle_side = ft.IconButton(
+        icon=ft.Icons.VIEW_SIDEBAR_OUTLINED,
+        icon_color=ACCENT_CYAN,
+        icon_size=18,
+        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4)),
+        on_click=on_toggle_side,
+        tooltip="Ocultar panel de estadísticas",
         padding=0,
         width=26,
         height=26
@@ -172,7 +201,7 @@ def build_statistics(page: ft.Page, key_state: dict) -> ft.Control:
         content=ft.Column([
             ft.Row([
                 ft.Text("HISTOGRAMA / DISTRIBUCIÓN", color=ACCENT_CYAN, size=10, weight=ft.FontWeight.BOLD),
-                ft.Row([hist_mode_dd, btn_fs], spacing=5, vertical_alignment=ft.CrossAxisAlignment.CENTER)
+                ft.Row([hist_mode_dd, btn_toggle_side, btn_fs], spacing=5, vertical_alignment=ft.CrossAxisAlignment.CENTER)
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             ft.Container(
                 content=ft.GestureDetector(

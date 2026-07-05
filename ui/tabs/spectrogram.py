@@ -39,6 +39,8 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
 
     # Estado local
     current_method = [engine_instance.algo_params.get("spec2d_method", "waterfall")]
+    engine_instance.active_spec_method = current_method[0]
+    
     is_rendering = [False]
     algo_counter = [0]
     algo_gen = [0]
@@ -46,8 +48,19 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
     _last_dsp_results = {}
     _last_dsp_params = {}
 
+    # Fuente de gráfico inicial correcta
+    init_m = current_method[0]
+    if init_m == "waterfall":
+        init_src = chart_spectrogram()
+    elif init_m == "cwt":
+        init_src = chart_cwt_map()
+    elif init_m == "ar_burg_2d":
+        init_src = chart_ar_spectrogram()
+    else:
+        init_src = chart_correlogram_spectrogram()
+
     img = ft.Image(
-        src=chart_spectrogram(),
+        src=init_src,
         fit=ft.BoxFit.FILL,
         border_radius=10,
         expand=True,

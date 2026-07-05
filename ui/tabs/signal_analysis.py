@@ -29,6 +29,10 @@ def build_signal_analysis(page: ft.Page, key_state: dict) -> ft.Control:
     is_rendering = [False]
 
     async def on_refresh(msg):
+        if isinstance(msg, tuple) and msg[0] == "toggle_tab_panel":
+            if msg[1] == 4:
+                on_toggle_side(None)
+            return
         if msg not in ("refresh_charts", "tab_changed"):
             return
         if engine_instance.active_tab != 4: return
@@ -151,11 +155,30 @@ def build_signal_analysis(page: ft.Page, key_state: dict) -> ft.Control:
         height=26
     )
 
+    def on_toggle_side(e):
+        side.visible = not side.visible
+        btn_toggle_side.icon = ft.Icons.VIEW_SIDEBAR_OUTLINED if side.visible else ft.Icons.VIEW_SIDEBAR
+        btn_toggle_side.icon_color = ACCENT_CYAN if side.visible else ACCENT_AMBER
+        btn_toggle_side.tooltip = "Ocultar panel de estadísticas" if side.visible else "Mostrar panel de estadísticas"
+        page.update()
+
+    btn_toggle_side = ft.IconButton(
+        icon=ft.Icons.VIEW_SIDEBAR_OUTLINED,
+        icon_color=ACCENT_CYAN,
+        icon_size=18,
+        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4)),
+        on_click=on_toggle_side,
+        tooltip="Ocultar panel de estadísticas",
+        padding=0,
+        width=26,
+        height=26
+    )
+
     chart_container = ft.Container(
         content=ft.Column([
             ft.Row([
                 ft.Text("POTENCIA VS. TIEMPO", color=ACCENT_CYAN, size=10, weight=ft.FontWeight.BOLD),
-                btn_fs
+                ft.Row([btn_toggle_side, btn_fs], spacing=5)
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             ft.GestureDetector(
                 mouse_cursor=ft.MouseCursor.ZOOM_IN,

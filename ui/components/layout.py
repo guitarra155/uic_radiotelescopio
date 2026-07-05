@@ -377,7 +377,7 @@ def build_footer() -> ft.Control:
         padding=ft.Padding(left=20, top=6, right=20, bottom=6),
         content=ft.Row(
             [
-                ft.Text("UIC Radiotelescopio  •  v1.0.0",         color=TEXT_MUTED, size=10),
+                ft.Text("UIC Radiotelescopio  •  v2.1.1",         color=TEXT_MUTED, size=10),
                 ft.Text("•",                                        color=BORDER_COL, size=10),
                 ft.Text("Signal Hound BB60C",   color=TEXT_MUTED, size=10),
                 ft.Container(expand=True),

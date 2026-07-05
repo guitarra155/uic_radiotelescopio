@@ -76,6 +76,13 @@ def build_config(page: ft.Page) -> ft.Control:
     # --- Funciones de construcción dinámica ---
     _live_fields = {}
 
+    def fmt_float(v, max_dec=8):
+        try:
+            s = f"{float(v):.{max_dec}f}"
+            return s.rstrip('0').rstrip('.') if '.' in s else s
+        except:
+            return str(v)
+
     def build_axis_group(title, chart_id):
         cfg = engine_instance.charts_config.get(chart_id, {})
         
@@ -93,10 +100,10 @@ def build_config(page: ft.Page) -> ft.Control:
                 on_ui_event(e)
             except: pass
 
-        tf_xmin = make_input(f"{cfg.get('xmin', 0):.8f}", lambda e: set_val(e, "x", "xmin"))
-        tf_xmax = make_input(f"{cfg.get('xmax', 0):.8f}", lambda e: set_val(e, "x", "xmax"))
-        tf_ymin = make_input(f"{cfg.get('ymin', 0):.8f}", lambda e: set_val(e, "y", "ymin"))
-        tf_ymax = make_input(f"{cfg.get('ymax', 0):.8f}", lambda e: set_val(e, "y", "ymax"))
+        tf_xmin = make_input(fmt_float(cfg.get('xmin', 0)), lambda e: set_val(e, "x", "xmin"))
+        tf_xmax = make_input(fmt_float(cfg.get('xmax', 0)), lambda e: set_val(e, "x", "xmax"))
+        tf_ymin = make_input(fmt_float(cfg.get('ymin', 0)), lambda e: set_val(e, "y", "ymin"))
+        tf_ymax = make_input(fmt_float(cfg.get('ymax', 0)), lambda e: set_val(e, "y", "ymax"))
         
         btn_auto_x = make_toggle(cfg.get("auto_x", True), lambda e: toggle_auto(e, "x"))
         btn_auto_y = make_toggle(cfg.get("auto_y", True), lambda e: toggle_auto(e, "y"))
@@ -156,17 +163,17 @@ def build_config(page: ft.Page) -> ft.Control:
             except: pass
 
         w = 80
-        tfx_min_r = make_input(f"{cfg_r.get('xmin', 0):.6f}", lambda e: set_r(e, "x", "xmin"), w)
-        tfx_max_r = make_input(f"{cfg_r.get('xmax', 0):.6f}", lambda e: set_r(e, "x", "xmax"), w)
-        tfy_min_r = make_input(f"{cfg_r.get('ymin', 0):.6f}", lambda e: set_r(e, "y", "ymin"), w)
-        tfy_max_r = make_input(f"{cfg_r.get('ymax', 0):.6f}", lambda e: set_r(e, "y", "ymax"), w)
+        tfx_min_r = make_input(fmt_float(cfg_r.get('xmin', 0)), lambda e: set_r(e, "x", "xmin"), w)
+        tfx_max_r = make_input(fmt_float(cfg_r.get('xmax', 0)), lambda e: set_r(e, "x", "xmax"), w)
+        tfy_min_r = make_input(fmt_float(cfg_r.get('ymin', 0)), lambda e: set_r(e, "y", "ymin"), w)
+        tfy_max_r = make_input(fmt_float(cfg_r.get('ymax', 0)), lambda e: set_r(e, "y", "ymax"), w)
         bx_r = make_toggle(cfg_r.get("auto_x", True), lambda e: toggle_r(e, "x"))
         by_r = make_toggle(cfg_r.get("auto_y", True), lambda e: toggle_r(e, "y"))
 
-        tfx_min_f = make_input(f"{cfg_f.get('xmin', 0):.6f}", lambda e: set_f(e, "x", "xmin"), w)
-        tfx_max_f = make_input(f"{cfg_f.get('xmax', 0):.6f}", lambda e: set_f(e, "x", "xmax"), w)
-        tfy_min_f = make_input(f"{cfg_f.get('ymin', 0):.6f}", lambda e: set_f(e, "y", "ymin"), w)
-        tfy_max_f = make_input(f"{cfg_f.get('ymax', 0):.6f}", lambda e: set_f(e, "y", "ymax"), w)
+        tfx_min_f = make_input(fmt_float(cfg_f.get('xmin', 0)), lambda e: set_f(e, "x", "xmin"), w)
+        tfx_max_f = make_input(fmt_float(cfg_f.get('xmax', 0)), lambda e: set_f(e, "x", "xmax"), w)
+        tfy_min_f = make_input(fmt_float(cfg_f.get('ymin', 0)), lambda e: set_f(e, "y", "ymin"), w)
+        tfy_max_f = make_input(fmt_float(cfg_f.get('ymax', 0)), lambda e: set_f(e, "y", "ymax"), w)
         bx_f = make_toggle(cfg_f.get("auto_x", True), lambda e: toggle_f(e, "x"))
         by_f = make_toggle(cfg_f.get("auto_y", True), lambda e: toggle_f(e, "y"))
 
@@ -272,7 +279,33 @@ def build_config(page: ft.Page) -> ft.Control:
         elif idx == 3: 
             mode = getattr(engine_instance, "histogram_mode", "Magnitud")
             cfg_id = "stat_hist_mag" if mode == "Magnitud" else "stat_hist_fase"
-            tab_content = build_axis_group(f"Histograma ({mode})", cfg_id)
+            axis_group = build_axis_group(f"Histograma ({mode})", cfg_id)
+            
+            # Inicializar variables de configuración si no existen
+            if not hasattr(engine_instance, "show_gauss_fit"): engine_instance.show_gauss_fit = True
+            if not hasattr(engine_instance, "show_weibull_fit"): engine_instance.show_weibull_fit = True
+            if not hasattr(engine_instance, "show_rician_fit"): engine_instance.show_rician_fit = True
+            if not hasattr(engine_instance, "show_kde_fit"): engine_instance.show_kde_fit = True
+
+            # Crear toggles para cada curva
+            sw_gauss = make_toggle(engine_instance.show_gauss_fit, 
+                lambda e: (setattr(engine_instance, "show_gauss_fit", not engine_instance.show_gauss_fit), engine_instance.save_config(), on_ui_event(e)))
+            sw_weibull = make_toggle(engine_instance.show_weibull_fit, 
+                lambda e: (setattr(engine_instance, "show_weibull_fit", not engine_instance.show_weibull_fit), engine_instance.save_config(), on_ui_event(e)))
+            sw_rician = make_toggle(engine_instance.show_rician_fit, 
+                lambda e: (setattr(engine_instance, "show_rician_fit", not engine_instance.show_rician_fit), engine_instance.save_config(), on_ui_event(e)))
+            sw_kde = make_toggle(engine_instance.show_kde_fit, 
+                lambda e: (setattr(engine_instance, "show_kde_fit", not engine_instance.show_kde_fit), engine_instance.save_config(), on_ui_event(e)))
+
+            tab_content = ft.Column([
+                ft.Text("📈 AJUSTES DE CURVA", color=ACCENT_CYAN, size=12, weight=ft.FontWeight.BOLD),
+                row("Curva Gauss (Térmico)", sw_gauss),
+                row("Curva Weibull (RFI)", sw_weibull),
+                row("Curva Rician (Señal)", sw_rician),
+                row("Curva KDE (Real)", sw_kde),
+                ft.Divider(height=10, color=BORDER_COL),
+                axis_group
+            ])
         elif idx == 4: tab_content = build_axis_group("Potencia", "pow_time")
         elif idx == 5: tab_content = build_axis_group("SNR", "snr_freq")
         elif idx == 6: tab_content = build_axis_group("Algoritmo", "mon_filt_spec")
@@ -318,10 +351,10 @@ def build_config(page: ft.Page) -> ft.Control:
             cfg = engine_instance.charts_config.get(actual_key)
             if not cfg: continue
             pairs = [
-                ("xmin", cfg.get("auto_x", False), f"{cfg.get('xmin', 0):.5f}"),
-                ("xmax", cfg.get("auto_x", False), f"{cfg.get('xmax', 0):.5f}"),
-                ("ymin", cfg.get("auto_y", False), f"{cfg.get('ymin', 0):.5f}"),
-                ("ymax", cfg.get("auto_y", False), f"{cfg.get('ymax', 0):.5f}"),
+                ("xmin", cfg.get("auto_x", False), fmt_float(cfg.get('xmin', 0))),
+                ("xmax", cfg.get("auto_x", False), fmt_float(cfg.get('xmax', 0))),
+                ("ymin", cfg.get("auto_y", False), fmt_float(cfg.get('ymin', 0))),
+                ("ymax", cfg.get("auto_y", False), fmt_float(cfg.get('ymax', 0))),
             ]
             for key, is_auto, new_val in pairs:
                 tf = fields.get(key)
@@ -377,6 +410,17 @@ def build_config(page: ft.Page) -> ft.Control:
                 update_stats()
             _sync_auto_fields()
             
+        elif msg == "toggle_config_collapse":
+            is_collapsed[0] = not is_collapsed[0]
+            wrapper.visible = not is_collapsed[0]
+            collapse_btn.icon = ft.Icons.KEYBOARD_ARROW_LEFT if is_collapsed[0] else ft.Icons.KEYBOARD_ARROW_RIGHT
+            engine_instance.is_config_collapsed = is_collapsed[0]
+            try: wrapper.update()
+            except: pass
+            try: collapse_btn.update()
+            except: pass
+            page.pubsub.send_all("refresh_charts")
+
         elif msg == "force_collapse":
             if not is_collapsed[0]:
                 is_collapsed[0] = True

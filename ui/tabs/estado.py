@@ -98,7 +98,14 @@ def build_estado(page: ft.Page) -> ft.Control:
         ),
     )
 
-    freq_f = txt_field("Frecuencia (MHz)", f"{engine_instance.center_freq:.8f}", "e.g. 1420.40")
+    def fmt_float(v, max_dec=8):
+        try:
+            s = f"{float(v):.{max_dec}f}"
+            return s.rstrip('0').rstrip('.') if '.' in s else s
+        except:
+            return str(v)
+
+    freq_f = txt_field("Frecuencia (MHz)", fmt_float(engine_instance.center_freq), "e.g. 1420.40")
     
     # --- Selector de Sample Rate tipo Chips (Flawless Wrap) ---
     rate_container = ft.Column([
@@ -155,11 +162,11 @@ def build_estado(page: ft.Page) -> ft.Control:
         
     rate_container.controls.append(buttons_row)
 
-    span_visual_f = txt_field("Span Visual (Zoom MHz)", f"{engine_instance.visual_span_mhz:.8f}", "e.g. 1.0")
+    span_visual_f = txt_field("Span Visual (Zoom MHz)", fmt_float(engine_instance.visual_span_mhz), "e.g. 1.0")
 
-    ref_level_f = txt_field("Nivel Ref. (dBm)", f"{engine_instance.bb60c_ref_level:.8f}", "-100 a +20")
-    rbw_f = txt_field("RBW / IQ BW (MHz)", f"{engine_instance.bb60c_iq_bw:.8f}", "0.1 a 20.0")
-    vbw_alpha_f = txt_field("VBW Smoothing", f"{engine_instance.vbw_alpha:.8f}", "0.1-1.0")
+    ref_level_f = txt_field("Nivel Ref. (dBm)", fmt_float(engine_instance.bb60c_ref_level), "-100 a +20")
+    rbw_f = txt_field("RBW / IQ BW (MHz)", fmt_float(engine_instance.bb60c_iq_bw), "0.1 a 20.0")
+    vbw_alpha_f = txt_field("VBW Smoothing", fmt_float(engine_instance.vbw_alpha), "0.1-1.0")
 
     def on_global_change(e, attr, factor=1.0):
         try:
@@ -230,8 +237,8 @@ def build_estado(page: ft.Page) -> ft.Control:
         ], spacing=10)
     )
 
-    analysis_f = txt_field("Ventana Analisis (s)", f"{engine_instance.analysis_window_sec:.8f}", "e.g. 1.0")
-    waterfall_f = txt_field("Historial Cascada (s)", f"{engine_instance.waterfall_history_sec:.8f}", "e.g. 10.0")
+    analysis_f = txt_field("Ventana Analisis (s)", fmt_float(engine_instance.analysis_window_sec), "e.g. 1.0")
+    waterfall_f = txt_field("Historial Cascada (s)", fmt_float(engine_instance.waterfall_history_sec), "e.g. 10.0")
 
     def on_analysis_change(e):
         try:
@@ -317,9 +324,10 @@ def build_estado(page: ft.Page) -> ft.Control:
 
     md_tabs = ft.Markdown(
         "**📚 Pestañas y Componentes**\n\n"
-        "- **Señal Original vs Filtrada(RAW/MA):** Visualización comparativa de la señal bruta vs. filtrada. Permite monitorear RFI y el efecto del Moving Average en tiempo real.\n"
-        "- **Espectrograma (Cascada):** Representación 2D. El eje vertical es el tiempo, el horizontal la frecuencia, y el color es la potencia espectral. Ideal para rastrear meteoros y satélites.\n"
-        "- **Estadística:** Muestra el histograma gaussiano de las muestras. Si hay desvíos fuertes de la campana, indica saturación o interferencia no lineal.\n"
+        "- **Señal y Filtrada:** Visualización comparativa de la señal bruta vs. filtrada. Permite monitorear RFI y el efecto del Moving Average en tiempo real.\n"
+        "- **Espectrograma (Cascada):** Representación 2D temporal-frecuencial. Ofrece Waterfall clásico, CWT/Morlet, AR/Burg y Correlograma. Ideal para rastrear transitorios y variaciones espectrales.\n"
+        "- **Histograma & Estadística:** Calcula histogramas de magnitud o fase. Realiza ajustes probabilísticos en tiempo real por MLE (**Gaussiano, Weibull y Rician**) para clasificar la señal de fondo frente a interferencias terrestres (RFI) o fuentes astronómicas coherentes, calculando la desviación SSE. En modo Fase, se dibuja la distribución Uniforme teórica ($1/2\\pi$).\n"
+        "- **Potencia vs. Tiempo:** Registra la evolución de la potencia integrada en el dominio del tiempo usando un buffer circular de alta velocidad. Esencial para el análisis de pulso y transitorios.\n"
         "- **SNR vs. Frecuencia:** *Signal-to-Noise Ratio* (Relación Señal a Ruido). Mide qué tan por encima del ruido de fondo térmico están los picos. SNR > 0 dB significa detección probable.\n"
         "- **Algoritmo DSP:** Aplicación de matemáticas complejas sobre señales bloqueadas o congeladas.",
         selectable=True,
@@ -348,11 +356,35 @@ def build_estado(page: ft.Page) -> ft.Control:
     )
 
     md_trigger = ft.Markdown(
-        "**⚡ Smart Trigger y Eventos Transitorios**\n\n"
+        "**⚡ Eventos Transitorios y Detección de Pulsos**\n\n"
         "- **Magnitud de Energía ($I^2 + Q^2$):** La potencia base instantánea de la señal analítica compleja. Se utiliza como métrica principal para disparar la captura de eventos.\n"
         "- **Umbrales e Histéresis:** Dos límites (Alto y Bajo). El algoritmo captura cuando se supera el *Umbral Alto* y finaliza cuando cae bajo el *Umbral Bajo*, previniendo \"falsos positivos\" repetitivos por el ruido estadístico.\n"
         "- **Recorte Automático (Trim $\\pm 1.5s$):** El algoritmo iterativo localiza el centro exacto del pulso detectado y recorta 3 segundos íntegros (1.5 segundos a cada lado). Preservar el silencio antes y después del evento es crucial para validar detecciones en radioastronomía.\n"
         "- **Zero-Crossing Rate (ZCR):** Tasa de cruces por cero. Una métrica rápida en el dominio del tiempo. El ruido puramente térmico tiene un ZCR altísimo y desordenado; pulsos coherentes reducen significativamente esta tasa.",
+        selectable=True,
+    )
+
+    md_user_manual = ft.Markdown(
+        "**Guía Rápida de Operación**\n\n"
+        "1. **Seleccionar Origen:** En el panel derecho superior, elige **SDR** para capturar con la antena BB60C o **Archivo** para cargar un archivo `.iq` grabado.\n"
+        "2. **Iniciar Flujo:** Haz clic en el botón de Reproducción (**▶️**) en el encabezado superior para comenzar el procesamiento.\n"
+        "3. **Sintonización en Vivo:** Escribe la *Frecuencia Central (MHz)* deseada en el panel derecho y presiona *Enter* para sintonizar el hardware al vuelo.\n"
+        "4. **Congelar y Analizar:** Presiona Pausa (**⏸️**) para bloquear un frame. Usa **Retroceder (◀️)** o **Avanzar (▶️)** para explorar el buffer histórico cuadro por cuadro.\n"
+        "5. **Algoritmos DSP:** Con el flujo pausado, ve a la pestaña **Algoritmo DSP**, selecciona un método (ej. Welch o MUSIC) y presiona *Ejecutar*.\n"
+        "6. **Grabar Señal:** En modo SDR, presiona Grabar (**⏺️**) para almacenar datos crudos en disco. Presiona nuevamente para guardar de forma segura.\n"
+        "7. **Captura de Transitorios:** Actívala desde la configuración para capturar pulsos de forma automática basados en doble umbral de energía.",
+        selectable=True,
+    )
+
+    md_shortcuts = ft.Markdown(
+        "**⌨️ Atajos de Teclado y Control de Pantalla**\n\n"
+        "- **CTRL + TAB / CTRL + SHIFT + TAB:** Navega secuencialmente hacia adelante o hacia atrás por las 6 pestañas.\n"
+        "- **CTRL + [1-6]:** Salta directamente a la pestaña correspondiente (1: Inicio, 2: Señal y Filtrada, etc.).\n"
+        "- **CTRL + B:** Oculta/Muestra el panel lateral de estadísticas y datos de la pestaña activa actual para agrandar la gráfica.\n"
+        "- **CTRL + SHIFT + B:** Oculta/Muestra el panel lateral derecho global de configuración del SDR.\n"
+        "- **CTRL + SHIFT + [1-6]:** Colapsa de forma remota el panel de estadísticas de una pestaña específica (ej. 4 para el Histograma).\n"
+        "- **F5 / F8 / F11:** Control global de reproducción (F5), parada de emergencia (F8) y pantalla completa (F11).\n"
+        "- **CTRL + Scroll / SHIFT + Scroll:** Ajusta el zoom vertical (Y) u horizontal (X) de los gráficos activos de forma interactiva.",
         selectable=True,
     )
 
@@ -361,6 +393,14 @@ def build_estado(page: ft.Page) -> ft.Control:
         elevation=0,
         divider_color=BORDER_COL,
         controls=[
+            ft.ExpansionPanel(
+                header=ft.ListTile(title=ft.Text("Manual de Usuario Rápido", color=ACCENT_CYAN, weight=ft.FontWeight.W_600)),
+                content=ft.Container(content=md_user_manual, padding=10, bgcolor=DARK_BG, border_radius=6),
+            ),
+            ft.ExpansionPanel(
+                header=ft.ListTile(title=ft.Text("Atajos de Teclado y Control", color="#FF9100", weight=ft.FontWeight.W_600)),
+                content=ft.Container(content=md_shortcuts, padding=10, bgcolor=DARK_BG, border_radius=6),
+            ),
             ft.ExpansionPanel(
                 header=ft.ListTile(title=ft.Text("Módulos y Pestañas UI", color=ACCENT_AMBER, weight=ft.FontWeight.W_600)),
                 content=ft.Container(content=md_tabs, padding=10, bgcolor=DARK_BG, border_radius=6),
@@ -374,7 +414,7 @@ def build_estado(page: ft.Page) -> ft.Control:
                 content=ft.Container(content=md_dsp, padding=10, bgcolor=DARK_BG, border_radius=6),
             ),
             ft.ExpansionPanel(
-                header=ft.ListTile(title=ft.Text("Smart Trigger & Recorte", color=ACCENT_RED, weight=ft.FontWeight.W_600)),
+                header=ft.ListTile(title=ft.Text("Eventos Transitorios y Recorte", color=ACCENT_RED, weight=ft.FontWeight.W_600)),
                 content=ft.Container(content=md_trigger, padding=10, bgcolor=DARK_BG, border_radius=6),
             ),
         ],
@@ -488,11 +528,11 @@ def build_estado(page: ft.Page) -> ft.Control:
             if '.' not in sr_str: sr_str += ".0"
             
             # Actualizar todos los inputs y los chips
-            freq_f.value = f"{engine_instance.center_freq:.8f}"
-            span_visual_f.value = f"{engine_instance.visual_span_mhz:.8f}"
-            ref_level_f.value = f"{engine_instance.bb60c_ref_level:.8f}"
-            rbw_f.value = f"{engine_instance.bb60c_iq_bw:.8f}"
-            vbw_alpha_f.value = f"{engine_instance.vbw_alpha:.8f}"
+            freq_f.value = fmt_float(engine_instance.center_freq)
+            span_visual_f.value = fmt_float(engine_instance.visual_span_mhz)
+            ref_level_f.value = fmt_float(engine_instance.bb60c_ref_level)
+            rbw_f.value = fmt_float(engine_instance.bb60c_iq_bw)
+            vbw_alpha_f.value = fmt_float(engine_instance.vbw_alpha)
             lock_chk.value = bool(engine_instance.auto_spectral_lock)
             
             for f_input in [freq_f, span_visual_f, ref_level_f, rbw_f, vbw_alpha_f, lock_chk]:

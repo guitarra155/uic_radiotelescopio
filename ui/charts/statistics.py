@@ -54,16 +54,89 @@ def chart_histogram() -> str:
 
         x = np.linspace(0.0, max_val, 100) if mode == "Magnitud" else np.linspace(-np.pi, np.pi, 100)
 
-        gauss = (1 / (std * math.sqrt(2 * math.pi))) * np.exp(-0.5 * ((x - mu) / std) ** 2)
-        ax.plot(x, gauss, color=ACCENT_GREEN, linewidth=1.5, label="Ideal Térmico (Gauss)")
+        best_fit = "Gauss"
+        sse_min = np.inf
 
-        try:
-            from scipy.stats import gaussian_kde
-            kde = gaussian_kde(samples)
-            kde_vals = kde(x)
-            ax.plot(x, kde_vals, color=ACCENT_AMBER, linewidth=1.5, linestyle="-", label="Real Observado (KDE)")
-        except Exception:
-            pass
+        # Solo aplicar ajustes si estamos analizando Magnitud (amplitud)
+        if mode == "Magnitud":
+            # 1. Ajuste Gaussiano
+            gauss = (1 / (std * math.sqrt(2 * math.pi))) * np.exp(-0.5 * ((x - mu) / std) ** 2)
+            if getattr(engine_instance, "show_gauss_fit", True):
+                ax.plot(x, gauss, color="#00E676", linewidth=1.5, linestyle="-", label="Térmico Teórico (Gauss)")
+
+            # Calcular SSE para Gauss
+            # Evaluamos la PDF teórica en los centros de los bins
+            bin_centers = 0.5 * (bins[:-1] + bins[1:])
+            gauss_centers = (1 / (std * math.sqrt(2 * math.pi))) * np.exp(-0.5 * ((bin_centers - mu) / std) ** 2)
+            sse_gauss = np.sum((counts - gauss_centers) ** 2)
+            sse_min = sse_gauss
+
+            desc_lbl = "Ruido Gaussiano (Térmico)"
+
+            # Optimización de rendimiento: submuestrear a máximo 500 puntos para los ajustes pesados
+            max_fit_samples = 500
+            if len(samples) > max_fit_samples:
+                step = max(1, len(samples) // max_fit_samples)
+                fit_samples = samples[::step][:max_fit_samples]
+            else:
+                fit_samples = samples
+
+            show_weibull = getattr(engine_instance, "show_weibull_fit", True)
+            show_rician = getattr(engine_instance, "show_rician_fit", True)
+
+            try:
+                from scipy.stats import weibull_min
+                
+                # Solo ajustar Weibull si está activo
+                if show_weibull:
+                    shape_w, loc_w, scale_w = weibull_min.fit(fit_samples, floc=0)
+                    weibull_pdf = weibull_min.pdf(x, shape_w, loc_w, scale_w)
+                    ax.plot(x, weibull_pdf, color="#FF9100", linewidth=1.8, linestyle="--", label=f"Weibull (c={shape_w:.2f})")
+                    
+                    weibull_centers = weibull_min.pdf(bin_centers, shape_w, loc_w, scale_w)
+                    sse_weibull = np.sum((counts - weibull_centers) ** 2)
+                    if sse_weibull < sse_min:
+                        sse_min = sse_weibull
+                        best_fit = "Weibull"
+                        desc_lbl = f"Weibull (Interferencia / Cola Pesada, c={shape_w:.2f})"
+            except Exception as e:
+                print(f"[STATISTICS] Error fitting Weibull: {e}")
+
+            try:
+                from scipy.stats import rice
+                
+                # Solo ajustar Rician si está activo
+                if show_rician:
+                    b_r, loc_r, scale_r = rice.fit(fit_samples, floc=0)
+                    rice_pdf = rice.pdf(x, b_r, loc_r, scale_r)
+                    ax.plot(x, rice_pdf, color="#D500F9", linewidth=1.8, linestyle="-.", label=f"Rician (ν={b_r:.2f})")
+                    
+                    rice_centers = rice.pdf(bin_centers, b_r, loc_r, scale_r)
+                    sse_rice = np.sum((counts - rice_centers) ** 2)
+                    if sse_rice < sse_min:
+                        sse_min = sse_rice
+                        best_fit = "Rician"
+                        desc_lbl = f"Rician (Señal Determinista + Ruido, ν={b_r:.2f})"
+            except Exception as e:
+                print(f"[STATISTICS] Error fitting Rician: {e}")
+        else:
+            # Si el modo es Fase, la teoría dicta una distribución uniforme plana a la altura de 1 / 2π
+            if getattr(engine_instance, "show_gauss_fit", True):
+                ax.plot(x, np.full_like(x, 1.0 / (2 * np.pi)), color="#00E676", linewidth=1.5, linestyle="-", label="Ideal Uniforme (1/2π)")
+            desc_lbl = "Distribución de Fase (Uniforme)"
+
+        # Guardar en el engine para uso de la UI
+        engine_instance.detected_distribution_str = desc_lbl
+
+        if getattr(engine_instance, "show_kde_fit", True):
+            try:
+                from scipy.stats import gaussian_kde
+                # Usar muestras submuestreadas para KDE para evitar lentitud
+                kde = gaussian_kde(fit_samples if mode == "Magnitud" else samples)
+                kde_vals = kde(x)
+                ax.plot(x, kde_vals, color="#FFFF00", linewidth=2.0, linestyle=":", label="Real Observado (KDE)")
+            except Exception:
+                pass
 
         leg = ax.legend(loc="upper right", fontsize=8, facecolor=MPL_AXBG, edgecolor=BORDER_COL, labelcolor='#ECEFF1')
         for text in leg.get_texts():
