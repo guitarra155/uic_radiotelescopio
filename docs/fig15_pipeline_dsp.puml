@@ -1,0 +1,84 @@
+@startuml fig15_pipeline_dsp
+
+' Configuración A4 Vertical
+skinparam BackgroundColor #FFFFFF
+skinparam DefaultFontSize 12
+skinparam DefaultFontColor #2D3748
+skinparam TitleFontSize 16
+skinparam linetype ortho
+
+skinparam rectangle {
+    RoundCorner 10
+    FontSize 11
+}
+
+skinparam ArrowColor #4A5568
+
+title Pipeline DSP (Disposición Vertical)
+
+' ── Entrada ──
+rectangle "Entrada Muestras I/Q\n(complex64)" as INPUT #FCF3CF
+
+' ── Bifurcación Principal ──
+rectangle "1. Buffer RAW\n(Sin filtrar)" as RAW #FADBD8
+rectangle "3. Filtro Media Móvil\n(MA)" as MA #D6EAF8
+
+INPUT -down-> RAW
+INPUT -down-> MA
+
+' ===================================
+' ── RUTA FILTRADA (Lado Derecho) ──
+' ===================================
+rectangle "4. Buffer Filtrado\namplitude_ma_data" as FILT_BUF #AED6F1
+rectangle "5. FFT Filtrada\n+ Suavizado VBW" as FFT_FILT #AED6F1
+
+MA -down-> FILT_BUF
+FILT_BUF -down-> FFT_FILT
+
+note right of MA
+    N configurable
+    Separación I y Q
+end note
+
+' ===================================
+' ── RUTA RAW (Lado Izquierdo) ──
+' ===================================
+rectangle "2. FFT RAW\n+ Ventana Hanning" as FFT_RAW #F5B7B1
+RAW -down-> FFT_RAW
+
+' Derivados Directos de RAW (Espectrogramas Avanzados e Histograma)
+rectangle "7. Histograma\n(Magnitud / Fase)" as HIST #ABEBC6
+rectangle "CWT/Morlet 2D" as CWT #FEF9E7
+rectangle "AR/Burg 2D" as AR #FEF9E7
+rectangle "Correlograma 2D" as CORR #FEF9E7
+
+RAW -down-> HIST
+RAW -down-> CWT
+RAW -down-> AR
+RAW -down-> CORR
+
+' Derivados de FFT RAW
+rectangle "6. Waterfall FFT\nwaterfall_data" as WF #D5F5E3
+rectangle "8. Potencia vs. T\npower_time_data" as PWR #ABEBC6
+rectangle "9. SNR por Bin\nsnr_data" as SNR #ABEBC6
+
+FFT_RAW -down-> WF
+FFT_RAW -down-> PWR
+FFT_RAW -down-> SNR
+
+' ===================================
+' ── ETAPA DE DETECCIÓN (Abajo) ──
+' ===================================
+rectangle "10. Detección CFAR\n(Umbral 6 dB)" as CFAR #E8DAEF
+rectangle "11. Señales de Interés\nsignals_of_interest" as SIG #D2B4DE
+
+SNR -down-> CFAR
+CFAR -down-> SIG
+
+note right of CFAR
+    Filtro de mediana
+    deslizante (4% bins)
+    + Clustering (10 kHz)
+end note
+
+@enduml

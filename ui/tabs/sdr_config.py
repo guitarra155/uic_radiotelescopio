@@ -350,25 +350,11 @@ def build_config(page: ft.Page) -> ft.Control:
             actual_key = fields.get("cfg_key", chart_id)
             cfg = engine_instance.charts_config.get(actual_key)
             if not cfg: continue
-            pairs = [
-                ("xmin", fmt_float(cfg.get('xmin', 0))),
-                ("xmax", fmt_float(cfg.get('xmax', 0))),
-                ("ymin", fmt_float(cfg.get('ymin', 0))),
-                ("ymax", fmt_float(cfg.get('ymax', 0))),
-            ]
-            for key, new_val in pairs:
-                tf = fields.get(key)
-                if tf and tf.page:
-                    try:
-                        if tf.value != new_val:
-                            tf.value = new_val
-                            updated.append(tf)
-                    except: pass
             
             # Sincronizar toggles visuales (checkboxes)
             btn_x = fields.get("btn_auto_x")
+            is_x = cfg.get("auto_x", False)
             if btn_x and btn_x.page:
-                is_x = cfg.get("auto_x", False)
                 new_icon_x = ft.Icons.CHECK_BOX if is_x else ft.Icons.CHECK_BOX_OUTLINE_BLANK
                 new_color_x = ACCENT_GREEN if is_x else TEXT_MUTED
                 if btn_x.icon != new_icon_x:
@@ -377,15 +363,34 @@ def build_config(page: ft.Page) -> ft.Control:
                     updated.append(btn_x)
 
             btn_y = fields.get("btn_auto_y")
+            is_y = cfg.get("auto_y", False)
             if btn_y and btn_y.page:
-                is_y = cfg.get("auto_y", False)
                 new_icon_y = ft.Icons.CHECK_BOX if is_y else ft.Icons.CHECK_BOX_OUTLINE_BLANK
                 new_color_y = ACCENT_GREEN if is_y else TEXT_MUTED
                 if btn_y.icon != new_icon_y:
                     btn_y.icon = new_icon_y
                     btn_y.icon_color = new_color_y
                     updated.append(btn_y)
-                    
+
+            # Sincronizar textfields SOLO SI auto está activado para ese eje
+            if is_x:
+                for key in ["xmin", "xmax"]:
+                    tf = fields.get(key)
+                    if tf and tf.page:
+                        new_val = fmt_float(cfg.get(key, 0))
+                        if tf.value != new_val:
+                            tf.value = new_val
+                            updated.append(tf)
+                            
+            if is_y:
+                for key in ["ymin", "ymax"]:
+                    tf = fields.get(key)
+                    if tf and tf.page:
+                        new_val = fmt_float(cfg.get(key, 0))
+                        if tf.value != new_val:
+                            tf.value = new_val
+                            updated.append(tf)
+                            
         for tf in updated:
             try: tf.update()
             except: pass

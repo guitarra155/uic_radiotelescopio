@@ -1,0 +1,83 @@
+@startuml fig14_secuencia_bb60c
+
+' Configuración A4
+skinparam BackgroundColor #FFFFFF
+skinparam DefaultFontSize 13
+skinparam DefaultFontColor #2D3748
+skinparam TitleFontSize 16
+skinparam SequenceLifeLineBorderColor #718096
+skinparam SequenceArrowColor #4A5568
+
+skinparam participant {
+    FontSize 12
+    Padding 8
+}
+
+title Secuencia de Inicialización del Analizador de Espectro BB60C
+
+participant "Motor DSP\n(dsp_engine.py)" as DSP #D6EAF8
+participant "Wrapper Python\n(bb_api.py)" as API #D5F5E3
+participant "SDK Nativo\n(bb_api.dll)" as DLL #ABEBC6
+participant "Hardware\nBB60C" as HW #FCF3CF
+
+== Fase 1: Conexión ==
+
+DSP -> API : bb_open_device()
+activate API
+API -> DLL : bbOpenDevice(&handle)
+activate DLL
+DLL -> HW : Establecer\nconexión USB 3.0
+activate HW
+HW --> DLL : handle válido
+DLL --> API : status=0, handle
+deactivate DLL
+API --> DSP : {"status": 0, "handle": h}
+deactivate API
+
+== Fase 2: Configuración ==
+
+DSP -> API : bb_configure_ref_level(h, -30.0)
+API -> DLL : bbConfigureRefLevel(h, -30.0)
+DLL -> HW : Ajustar ganancia\ninterna del ADC
+
+DSP -> API : bb_configure_gain_atten(h, AUTO, AUTO)
+API -> DLL : bbConfigureGainAtten(h, -1, -1)
+DLL -> HW : Configurar\natenuación automática
+
+DSP -> API : bb_configure_IQ_center(h, 1420.4e6)
+API -> DLL : bbConfigureIQCenter(h, freq_hz)
+DLL -> HW : Sintonizar\noscilador local\na 1420.4 MHz
+
+DSP -> API : bb_configure_IQ(h, decimation=16, bw=1.5e6)
+API -> DLL : bbConfigureIQ(h, 16, 1500000)
+DLL -> HW : Configurar filtro\nanti-aliasing y\ndecimación (2.5 MSps)
+
+== Fase 3: Inicio de Streaming ==
+
+DSP -> API : bb_initiate(h, BB_STREAMING, BB_STREAM_IQ)
+activate API
+API -> DLL : bbInitiate(h, 4, 0x91)
+DLL -> HW : Activar flujo\ncontinuo I/Q
+HW --> DLL : Streaming activo
+DLL --> API : status=0
+API --> DSP : {"status": 0}
+deactivate API
+
+== Fase 4: Lectura Continua ==
+
+loop Cada ventana de análisis (1s)
+    DSP -> API : bb_get_IQ_unpacked(h, N, purge=0)
+    activate API
+    API -> DLL : bbGetIQ(h, &iqData, N)
+    DLL -> HW : Leer buffer\nUSB 3.0
+    HW --> DLL : N muestras I/Q
+    DLL --> API : iq_array (complex64)
+    API --> DSP : {"status": 0, "iq": array}
+    deactivate API
+    
+    DSP -> DSP : _process_dsp_core(iq)
+end
+
+deactivate HW
+
+@enduml

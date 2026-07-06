@@ -1,0 +1,75 @@
+@startuml fig16_cfar
+
+' Configuración A4
+skinparam BackgroundColor #FFFFFF
+skinparam DefaultFontSize 12
+skinparam DefaultFontColor #2D3748
+skinparam TitleFontSize 16
+skinparam ActivityBackgroundColor #F0F4F8
+skinparam ActivityBorderColor #4A5568
+skinparam ArrowColor #4A5568
+
+title Algoritmo de Detección CFAR — Detección de Señales de Interés
+
+start
+
+:Recibir espectro RAW\n**spectrum_raw_data[k]**\n(N_FFT bins en dBFS);
+#D6EAF8
+
+:Calcular tamaño del kernel\nk_size = max(3, N_FFT × 0.04)\n(Asegurar impar);
+#D6EAF8
+
+:Aplicar **Filtro de Mediana**\ndeslizante al espectro\nnoise_floor[k] = medfilt(\nspectrum_raw_data, k_size);
+#AED6F1
+
+note right
+    El filtro de mediana estima
+    el piso de ruido localmente
+    sin verse afectado por
+    los picos espectrales
+end note
+
+:Calcular **SNR por bin**\nSNR[k] = P_señal[k] − P_ruido[k]\n(Resta en dBFS);
+#D5F5E3
+
+:Aplicar **Umbral de Detección**\nSNR_THRESH = 6 dB;
+#ABEBC6
+
+if (¿Existen bins con\nSNR[k] > 6 dB?) then (Sí)
+    :Obtener frecuencias\ny SNR de los bins\nque superan el umbral;
+    #FCF3CF
+    
+    :Ordenar por frecuencia\nascendente;
+    #FCF3CF
+    
+    :Aplicar **Clustering**\n(Agrupamiento)\nSeparación mínima: 10 kHz;
+    #E8DAEF
+    
+    note right
+        Dentro de cada cluster,
+        se selecciona el bin
+        con mayor SNR como
+        representante
+    end note
+    
+    :Generar lista de\n**Señales de Interés**\n[(freq_MHz, SNR_dB), ...]\nMáximo: 20 detecciones;
+    #D2B4DE
+    
+else (No)
+    :signals_of_interest = []\n(Sin detecciones);
+    #FADBD8
+endif
+
+:Verificar **RFI**\n¿SNR > 15 dB?;
+#F5B7B1
+
+if (¿rfi_mitigation_on\ny SNR > 15 dB?) then (Sí)
+    :Incrementar\nrfi_event_count\nRegistrar hora UTC;
+    #F5B7B1
+else (No)
+    :Sin acción RFI;
+endif
+
+stop
+
+@enduml

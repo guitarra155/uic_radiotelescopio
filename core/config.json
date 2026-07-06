@@ -13,7 +13,7 @@
     "snr_db_max": 30,
     "amp_min": 0.0,
     "amp_max": 0.3,
-    "waterfall": 5.0,
+    "waterfall": 30.0,
     "iq_filename": "C:/SignalHound/ArchivosIQ/IQREC_Milk2025-02-12_11h39m03s_1.iq",
     "iq_format": "int16",
     "stream_mode": "file",
@@ -24,7 +24,7 @@
         "welch_fft": 1024,
         "welch_overlap": 0.5,
         "corr_max_lag": 512,
-        "spec2d_method": "correlogram_2d"
+        "spec2d_method": "cwt"
     },
     "analysis_window_sec": 0.1,
     "moving_avg_samples": 4,
@@ -39,98 +39,90 @@
         "mon_raw_spec": {
             "xmin": 1419.205751786,
             "xmax": 1421.6057517860002,
-            "ymin": -44.960434233975036,
-            "ymax": -29.972743270679572,
+            "ymin": -100.0,
+            "ymax": -20.0,
             "auto_x": 0,
             "auto_y": 1
         },
         "mon_raw_amp": {
             "xmin": 0.0,
-            "xmax": 0.1,
-            "ymin": -0.03370453951736255,
-            "ymax": 0.03370453951736255,
+            "xmax": 1.0,
+            "ymin": 0.0,
+            "ymax": 1.0,
             "auto_x": 1,
             "auto_y": 1
         },
         "mon_filt_spec": {
             "xmin": 1419.205751786,
             "xmax": 1421.6057517860002,
-            "ymin": -90.14284,
-            "ymax": -29.85716,
+            "ymin": -100.0,
+            "ymax": -20.0,
             "auto_x": 0,
-            "auto_y": 0
+            "auto_y": 1
         },
         "mon_filt_amp": {
             "xmin": 0.0,
-            "xmax": 0.1,
-            "ymin": -0.019090786808731545,
-            "ymax": 0.019090786808731545,
+            "xmax": 1.0,
+            "ymin": 0.0,
+            "ymax": 1.0,
             "auto_x": 1,
             "auto_y": 1
         },
         "spec_wf": {
-            "xmin": 1419.155751786,
-            "xmax": 1421.655751786,
-            "ymin": -44.960434233975036,
-            "ymax": -29.972743270679572,
+            "xmin": 1419.0,
+            "xmax": 1421.0,
+            "ymin": -100.0,
+            "ymax": -20.0,
             "auto_x": 1,
             "auto_y": 1
         },
         "spec_cwt": {
-            "xmin": 1419.155751786,
-            "xmax": 1421.655751786,
+            "xmin": 1419.0,
+            "xmax": 1421.0,
             "ymin": -100.0,
             "ymax": -20.0,
             "auto_x": 1,
             "auto_y": 1
         },
         "spec_ar": {
-            "xmin": 1419.155751786,
-            "xmax": 1421.655751786,
+            "xmin": 1419.0,
+            "xmax": 1421.0,
             "ymin": -100.0,
             "ymax": -20.0,
             "auto_x": 1,
             "auto_y": 1
         },
         "spec_corr": {
-            "xmin": 1419.155751786,
-            "xmax": 1421.655751786,
+            "xmin": 1419.0,
+            "xmax": 1421.0,
             "ymin": -100.0,
-            "ymax": -80.0,
+            "ymax": -20.0,
             "auto_x": 1,
             "auto_y": 1
         },
         "stat_hist": {
-            "xmin": -0.999669901921802,
-            "xmax": 1.025933277176524,
-            "ymin": 44.354618405980105,
-            "ymax": 55.64538159401991,
+            "xmin": 0.0,
+            "xmax": 1.5,
+            "ymin": 0.0,
+            "ymax": 100.0,
             "auto_x": 1,
             "auto_y": 1
         },
         "pow_time": {
             "xmin": 0.0,
-            "xmax": 5.0,
-            "ymin": -49.76280466584375,
-            "ymax": -49.23555732564956,
+            "xmax": 20.0,
+            "ymin": -100.0,
+            "ymax": -20.0,
             "auto_x": 1,
             "auto_y": 1
         },
         "snr_freq": {
-            "xmin": 1419.155751786,
-            "xmax": 1421.655751786,
-            "ymin": -10.0,
-            "ymax": 10.0,
+            "xmin": 1419.0,
+            "xmax": 1421.0,
+            "ymin": -5.0,
+            "ymax": 40.0,
             "auto_x": 1,
             "auto_y": 1
-        },
-        "stat_hist_mag": {
-            "auto_x": 1,
-            "auto_y": 1,
-            "xmin": 0.0,
-            "xmax": 0.05,
-            "ymin": 0.0,
-            "ymax": 95.48321
         }
     },
     "window_res": "Auto-Detect (Pantalla Actual)",

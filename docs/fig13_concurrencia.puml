@@ -1,0 +1,74 @@
+@startuml fig13_concurrencia
+
+' Configuración de página A4
+skinparam BackgroundColor #FFFFFF
+skinparam DefaultFontSize 13
+skinparam DefaultFontColor #2D3748
+skinparam TitleFontSize 16
+skinparam SequenceLifeLineBorderColor #718096
+skinparam SequenceArrowColor #4A5568
+skinparam SequenceParticipantBorderColor #4A5568
+
+skinparam participant {
+    FontSize 13
+    Padding 10
+}
+
+skinparam sequence {
+    MessageAlignment center
+}
+
+title Modelo de Concurrencia: Hilo GUI vs. Hilo DSP
+
+participant "Usuario" as USR #FCF3CF
+participant "Hilo GUI\n(Flet Main)" as GUI #FADBD8
+participant "Bus PubSub\n(page.pubsub)" as BUS #E8DAEF
+participant "Hilo DSP\n(threading.Thread)" as DSP #D6EAF8
+participant "BB60C / Archivo\n(Hardware / Disco)" as HW #D5F5E3
+
+== Inicio del Sistema ==
+
+USR -> GUI : Presiona F5\n(Iniciar Stream)
+activate GUI
+GUI -> BUS : send_all("toggle_stream")
+BUS -> DSP : Evento recibido
+activate DSP
+
+== Ciclo de Adquisición y Procesamiento ==
+
+loop Mientras is_playing == True
+    DSP -> HW : bb_get_IQ_unpacked()\no read(chunk_bytes)
+    activate HW
+    HW --> DSP : Bloque I/Q\n(complex64)
+    deactivate HW
+    
+    DSP -> DSP : _process_dsp_core(iq)\n1. Filtrado MA\n2. FFT RAW + Filtrada\n3. Waterfall\n4. Histograma\n5. Potencia\n6. SNR\n7. Detección CFAR
+    
+    DSP -> DSP : data_ready = True
+    DSP -> BUS : send_all("refresh_charts")
+end
+
+== Refresco de Gráficas ==
+
+BUS -> GUI : Notificación\n"refresh_charts"
+GUI -> GUI : Renderiza gráficas\n(Matplotlib → Base64 PNG)
+GUI -> USR : Actualiza\npantalla
+
+== Pausa Voluntaria ==
+
+USR -> GUI : Presiona F5\n(Pausar)
+GUI -> BUS : send_all("toggle_stream")
+BUS -> DSP : Evento recibido
+DSP -> DSP : is_playing = False\nis_paused = True
+deactivate DSP
+
+note right of DSP
+    Los snapshots de frames
+    se preservan para
+    navegación temporal
+    (seek_frames)
+end note
+
+deactivate GUI
+
+@enduml
