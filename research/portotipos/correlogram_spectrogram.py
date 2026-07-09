@@ -170,7 +170,7 @@ im = ax2d.pcolormesh(
 plt.colorbar(im, ax=ax2d, label='Potencia (dBm)')
 ax2d.set_xlabel('Frecuencia (MHz)')
 ax2d.set_ylabel('Tiempo (s)')
-ax2d.set_title(f'Correlograma 2D ({PERCENT_TO_ANALYZE*100:.1f}%) — Línea HI 1420 MHz')
+ax2d.set_title(f'Correlograma ({PERCENT_TO_ANALYZE*100:.1f}%) — Línea HI 1420 MHz')
 ax2d.axvline(x=fc / 1e6, color='r', linestyle='--', linewidth=1.0)
 fig2d.savefig(os.path.join(BASE_DIR, "data", "correlogram_2D.png"), dpi=100)
 print("✔ Espectrograma 2D guardado.")

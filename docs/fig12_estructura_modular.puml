@@ -1,71 +1,37 @@
 @startuml fig12_estructura_modular
-
-' Configuración de página A4 vertical
-skinparam linetype ortho
-skinparam BackgroundColor #FFFFFF
-skinparam DefaultFontSize 13
-skinparam DefaultFontColor #2D3748
-skinparam TitleFontSize 16
-
-skinparam rectangle {
-    RoundCorner 8
-    FontSize 12
+salt
+{
+{T
++ uic_radiotelescopio/
+++ main.py (Controlador Flet - Punto de entrada)
+++ core/ (Capa Logica y Procesamiento DSP)
++++ dsp_engine.py (Motor DSP - Singleton)
++++ advanced_dsp.py (Algoritmos Espectrales)
++++ algo_registry.py (Registro Dinamico)
++++ constants.py (Estilos y Variables Fisicas)
++++ bbdevice/ (Abstraccion del SDR)
+++++ bb_api.py (Wrapper ctypes en Python)
+++++ bb_api.dll (Biblioteca DLL C++ de Signal Hound)
+++ ui/ (Capa de Presentacion e Interfaces)
++++ tabs/ (Pestanas del Sistema)
+++++ estado.py (Pestana 1: Configuracion de hardware)
+++++ dual_monitoring.py (Pestana 2: Monitoreo RAW/Filtrada)
+++++ spectrogram.py (Pestana 3: Cascada 2D)
+++++ statistics.py (Pestana 4: Histogramas y MLE)
+++++ signal_analysis.py (Pestana 5: Potencia vs Tiempo)
+++++ freq_snr.py (Pestana 6: SNR vs Frecuencia)
+++++ sdr_config.py (Panel lateral de control dinamico)
++++ charts/ (Modulos de Dibujo Matplotlib)
+++++ monitoring.py (Renderizador Monitoreo Dual)
+++++ spectrogram.py (Renderizador Cascada 2D)
+++++ statistics.py (Renderizador Histograma)
+++++ signal_analysis.py (Renderizador Potencia)
+++++ freq_snr.py (Renderizador SNR)
++++ components/ (Controles Compartidos)
+++++ layout.py (Header y Footer principales)
+++++ shared.py (Estilos comunes de widgets)
+++ data/ (Repositorio de Grabaciones)
++++ *.iq (Archivos binarios I/Q de pruebas)
 }
-
-title Estructura Modular del Proyecto UIC
-
-rectangle "uic_radiotelescopio/" as Root #F0F4F8 {
-
-    rectangle "main.py\n(Punto de entrada Flet)" as MAIN #E8D5B7
-
-    rectangle "core/" as CORE #D6EAF8 {
-        rectangle "dsp_engine.py\n(Motor DSP - Singleton)" as ENGINE #AED6F1
-        rectangle "advanced_dsp.py\n(Algoritmos Avanzados)" as ADV #AED6F1
-        rectangle "algo_registry.py\n(Registro Dinámico)" as REG #AED6F1
-        rectangle "constants.py\n(Constantes y Tema)" as CONST #AED6F1
-        rectangle "bbdevice/" as BB #D5F5E3 {
-            rectangle "bb_api.py\n(Wrapper ctypes)" as BBAPI #ABEBC6
-            rectangle "bb_api.dll\n(SDK C++ Nativo)" as BBDLL #ABEBC6
-        }
-    }
-
-    rectangle "ui/" as UI #FADBD8 {
-        rectangle "tabs/" as TABS #F5B7B1 {
-            rectangle "estado.py" as T0 #FDEDEC
-            rectangle "dual_monitoring.py" as T1 #FDEDEC
-            rectangle "spectrogram.py" as T2 #FDEDEC
-            rectangle "statistics.py" as T3 #FDEDEC
-            rectangle "signal_analysis.py" as T4 #FDEDEC
-            rectangle "freq_snr.py" as T5 #FDEDEC
-            rectangle "sdr_config.py" as CFG #FDEDEC
-        }
-        rectangle "charts/" as CHARTS #F5B7B1 {
-            rectangle "monitoring.py" as CM #FDEDEC
-            rectangle "spectrogram.py" as CS #FDEDEC
-            rectangle "statistics.py" as CST #FDEDEC
-            rectangle "signal_analysis.py" as CSA #FDEDEC
-            rectangle "freq_snr.py" as CSN #FDEDEC
-        }
-        rectangle "components/" as COMP #F5B7B1 {
-            rectangle "layout.py\n(Header, Footer)" as LAY #FDEDEC
-            rectangle "shared.py\n(Utilidades)" as SH #FDEDEC
-        }
-    }
-
-    rectangle "data/" as DATA #FEF9E7 {
-        rectangle "*.iq\n(Archivos I/Q)" as IQ #FCF3CF
-    }
 }
-
-' Relaciones principales
-MAIN -down-> ENGINE : Inicia
-MAIN -down-> TABS : Construye
-TABS -right-> CHARTS : Renderiza
-TABS -down-> ENGINE : Consulta
-ENGINE -down-> ADV : Ejecuta
-ENGINE -down-> BBAPI : Adquiere
-ADV -right-> REG : Registra
-BBAPI -down-> BBDLL : ctypes
-ENGINE -right-> DATA : Lee/Escribe
-
 @enduml

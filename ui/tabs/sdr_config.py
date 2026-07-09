@@ -128,8 +128,6 @@ def build_config(page: ft.Page) -> ft.Control:
     # --- Controles persistentes que se actualizan frecuentemente ---
     rfi_last_val = ft.Text(engine_instance.rfi_last_time, color=TEXT_MAIN, size=10)
     rfi_count_val = ft.Text(f"{engine_instance.rfi_event_count}", color=ACCENT_AMBER, size=10, weight=ft.FontWeight.BOLD)
-
-    # Columna principal persistente para mantener el scroll y el foco de los inputs
     main_col = ft.Column(scroll=ft.ScrollMode.AUTO, spacing=10, expand=True)
 
     def build_dual_axis_group(title, raw_id, filt_id):
@@ -264,7 +262,7 @@ def build_config(page: ft.Page) -> ft.Control:
                 "btn_auto_x": btn_auto_x, "btn_auto_y": btn_auto_y, "cfg_key": cfg_key
             }
 
-            method_name = {"waterfall": "Waterfall FFT", "cwt": "CWT / Morlet", "ar_burg_2d": "AR / Burg 2D", "correlogram_2d": "Correlograma 2D"}.get(active_method, "Espectrograma 2D")
+            method_name = {"waterfall": "Waterfall FFT", "cwt": "CWT / Morlet", "ar_burg_2d": "AR / Burg", "correlogram_2d": "Correlograma"}.get(active_method, "Espectrograma 2D")
 
             tab_content = ft.Column([
                 ft.Text(f"📊 {method_name}", color=ACCENT_CYAN, size=12, weight=ft.FontWeight.BOLD),

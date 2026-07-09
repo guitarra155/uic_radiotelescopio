@@ -49,8 +49,8 @@ RAW -down-> FFT_RAW
 ' Derivados Directos de RAW (Espectrogramas Avanzados e Histograma)
 rectangle "7. Histograma\n(Magnitud / Fase)" as HIST #ABEBC6
 rectangle "CWT/Morlet 2D" as CWT #FEF9E7
-rectangle "AR/Burg 2D" as AR #FEF9E7
-rectangle "Correlograma 2D" as CORR #FEF9E7
+rectangle "AR/Burg" as AR #FEF9E7
+rectangle "Correlograma" as CORR #FEF9E7
 
 RAW -down-> HIST
 RAW -down-> CWT

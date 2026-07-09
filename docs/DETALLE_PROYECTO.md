@@ -192,6 +192,18 @@ El `__init__.py` aplica `make_synchronized` a todas las funciones `chart_*` con 
   - **Atajo General CTRL + B:** Colapsa o expande el panel lateral de estadísticas/datos en la pestaña activa actual, evitando tener que memorizar números específicos.
   - **Atajo General CTRL + SHIFT + B:** Colapsa o expande el panel lateral derecho global de configuración (`right_panel`) desde cualquier pestaña.
   - Se mantiene el soporte auxiliar de `CTRL + SHIFT + Número` (1 a 6) para conmutar la visibilidad de los paneles a pantalla completa vía PubSub de forma dirigida.
+- **Depuración Completa de Algoritmos Inactivos (MUSIC/ESPRIT):**
+  - Se eliminó la función `run_pseudo_music` en `core/advanced_dsp.py`.
+  - Se removieron los registros obsoletos `"Pseudo-MUSIC"` y `"ESPRIT"` de la constante `ALGO_REGISTRY` en `core/algo_registry.py`.
+  - Se limpiaron los controles visuales, imports y lógica dependiente en `ui/tabs/algo_tab.py`, `ui/tabs/algo_result.py` y `ui/tabs/estado.py`.
+  - Se actualizaron las tablas y textos teóricos en el Capítulo III (`cap3_arquitectura_sistema.md`) para mantener consistencia académica absoluta con el software.
+- **Reubicación de Smart Trigger a Pestaña 1:**
+  - Se creó un módulo de control e indicadores `"Eventos Transitorios & Trigger"` (`trigger_card`) en la columna izquierda de la pestaña **Inicio & Configuración** (`ui/tabs/estado.py`), liberando espacio en el panel de configuración global.
+  - El panel permite armar el Smart Trigger e ingresar interactivamente los umbrales de disparo alto y bajo en escala de energía, además de ver el número total de capturas realizadas (`rfi_event_count`).
+  - La UI sincroniza el desarmado automático (auto-desarme) del disparador una vez capturado el transitorio.
+- **Exportación Manual de Detecciones en Pestaña 6:**
+  - Se implementó un botón `"Guardar Detección"` (`btn_save`) en el panel lateral de **SNR vs. Frecuencia** (`ui/tabs/freq_snr.py`).
+  - Al presionarse, guarda la curva completa de SNR observada en formato CSV (`Resultados_Datos/cfar_detection_YYYYMMDD_HHMMSS.csv`) —ideal para importar en Excel o MATLAB— y la lista de frecuencias detectadas por el CFAR con sus metadatos (frecuencia central, tasa de muestreo, timestamp, piso de ruido) en un archivo JSON descriptivo (`Resultados_Datos/cfar_detection_YYYYMMDD_HHMMSS.json`), mostrando confirmación en pantalla.
 
 ---
 

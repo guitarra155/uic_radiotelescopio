@@ -47,13 +47,12 @@ def build_algo_result(page: ft.Page) -> ft.Control:
     algo_gen = [0]  # epoch: se incrementa al cambiar método
     ALGO_EVERY_N = 30
 
-    method_rg = ft.RadioGroup(
+     method_rg = ft.RadioGroup(
         value=engine_instance.algo_params.get("method", "AR/Burg"),
         content=ft.Column(
             [
                 ft.Radio(value="AR/Burg", label="AR/Burg", active_color=ACCENT_CYAN),
                 ft.Radio(value="CWT/Morlet", label="CWT/Morlet", active_color=ACCENT_CYAN),
-                ft.Radio(value="Pseudo-MUSIC", label="Pseudo-MUSIC", active_color=ACCENT_CYAN),
 
                 ft.Divider(color=BORDER_COL, height=4),
                 ft.Radio(value="Welch", label="Welch PSD", active_color="#FFD700"),
@@ -65,21 +64,17 @@ def build_algo_result(page: ft.Page) -> ft.Control:
     )
 
     ar_order_f = txt_field("Orden AR / Burg", "64", "16–256")
-    music_ns_f = txt_field("# Señales MUSIC/ESPRIT", "3", "1–10")
     corr_lag_f = txt_field("Max Lag Correlograma", "512", "128–1024")
 
     ar_order_row = ft.Container(content=ar_order_f, visible=True)
-    music_ns_row = ft.Container(content=music_ns_f, visible=False)
     corr_lag_row = ft.Container(content=corr_lag_f, visible=False)
 
     def _update_param_visibility():
         m = engine_instance.algo_params.get("method", "AR/Burg")
         ar_order_row.visible = m == "AR/Burg"
-        music_ns_row.visible = m == "Pseudo-MUSIC"
         corr_lag_row.visible = m == "Correlograma"
         try:
             if ar_order_row.page: ar_order_row.update()
-            if music_ns_row.page: music_ns_row.update()
             if corr_lag_row.page: corr_lag_row.update()
         except Exception:
             pass
@@ -177,11 +172,11 @@ def build_algo_result(page: ft.Page) -> ft.Control:
             corr_lag = engine_instance.algo_params.get("corr_max_lag", 512)
 
             from core.advanced_dsp import (
-                run_ar_burg, run_cwt, run_pseudo_music,
+                run_ar_burg, run_cwt,
                 run_welch, run_correlogram,
             )
             from ui.charts import (
-                chart_ar_spectrum, chart_cwt_map, chart_music_spectrum,
+                chart_ar_spectrum, chart_cwt_map,
                 chart_welch_spectrum, chart_correlogram_spectrum,
             )
 
@@ -190,9 +185,6 @@ def build_algo_result(page: ft.Page) -> ft.Control:
                     return "ar", chart_ar_spectrum(run_ar_burg(iq, order=order_val, sample_rate=sr, center_freq=fc))
                 elif method == "CWT/Morlet":
                     return "cwt", chart_cwt_map(run_cwt(iq, sample_rate=sr))
-                elif method == "Pseudo-MUSIC":
-                    return "music", chart_music_spectrum(run_pseudo_music(iq, n_signals=ns_val, sample_rate=sr, center_freq=fc))
-
                 elif method == "Welch":
                     return "welch", chart_welch_spectrum(run_welch(iq, fft_size=wfft_val, overlap=wovl_val, sample_rate=sr, center_freq=fc))
                 elif method == "Correlograma":

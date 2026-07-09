@@ -13,7 +13,6 @@ import flet as ft
 
 from core.constants import *
 from ui.components.layout import build_header, build_footer
-from ui.tabs.monitoring import build_monitoring
 from ui.tabs.dual_monitoring import build_dual_monitoring
 from ui.tabs.spectrogram import build_spectrogram
 from ui.tabs.statistics import build_statistics
@@ -57,6 +56,8 @@ def main(page: ft.Page):
                 switch_to_tab(prev_idx)
             elif e.key.upper() == "B":
                 page.pubsub.send_all("toggle_config_collapse")
+            elif e.key.upper() == "S":
+                _toggle_sidebar()
             else:
                 k = e.key
                 if k.startswith("Numpad "):
@@ -136,12 +137,12 @@ def main(page: ft.Page):
     footer = build_footer()
 
     tab_labels = [
-        "🏠  Inicio & Configuración",    # 0
-        "🌓  Señal y Señal Filtrada",   # 1
-        "🌈  Espectrograma",             # 2
-        "📊  Histograma",# 3
-        "⚡  Potencia vs. Tiempo",        # 4
-        "📶  SNR vs. Frecuencia",        # 5
+        ("🏠", "Inicio & Configuración"),     # 0
+        ("🌓", "Señal y Señal Filtrada"),      # 1
+        ("🌈", "Espectrograma"),               # 2
+        ("📊", "Histograma"),                  # 3
+        ("⚡", "Potencia vs. Tiempo"),          # 4
+        ("📶", "SNR vs. Frecuencia"),           # 5
     ]
 
     # Renderizamos los components visuals de cada módulo
@@ -149,67 +150,213 @@ def main(page: ft.Page):
         build_estado(page),                          # 0
         build_dual_monitoring(page, key_state),      # 1
         build_spectrogram(page, key_state),          # 2
-        build_statistics(page, key_state),            # 3
+        build_statistics(page, key_state),           # 3
         build_signal_analysis(page, key_state),      # 4
         build_freq_snr(page, key_state),             # 5
     ]
 
-    selected = [0]  # índice activo
+    selected = [0]   # índice activo
+    sidebar_expanded = [False]  # Empieza colapsada
+    sidebar_pinned = [False]    # True = usuario la fijó manualmente abierta
+    SIDEBAR_W_EXPANDED = 190
+    SIDEBAR_W_COLLAPSED = 52
 
     def switch_to_tab(idx):
         if idx < 0 or idx >= len(tab_labels):
             return
-        # Evitar errores si aún no se inicializa tab_btns
-        if not tab_btns or len(tab_btns) <= selected[0]:
+        if not sidebar_items or len(sidebar_items) <= selected[0]:
             return
-        tab_btns[selected[0]].content.color = TEXT_MUTED
-        indicators[selected[0]].bgcolor = "transparent"
-        
+        # Deseleccionar anterior
+        _set_item_state(selected[0], active=False)
         selected[0] = idx
         from core.dsp_engine import engine_instance
         engine_instance.active_tab = idx
-        
         tab_body.content = tab_contents[idx]
         right_panel.visible = (idx != 0)
-        
-        tab_btns[idx].content.color = ACCENT_CYAN
-        indicators[idx].bgcolor = ACCENT_CYAN
+        _set_item_state(idx, active=True)
+        # Sincronizar topbar si está visible
+        _tb_set_active(idx)
         page.pubsub.send_all("tab_changed")
         page.update()
 
-    # Indicadores de subrayado activo
-    indicators = [
-        ft.Container(height=2, bgcolor=ACCENT_CYAN if i == 0 else "transparent", border_radius=1)
-        for i in range(len(tab_labels))
-    ]
+    def _set_item_state(idx, active):
+        """Actualiza colores e indicador visual del ítem de sidebar."""
+        item = sidebar_items[idx]
+        icon_ctrl = item.content.controls[0]   # Text emoji
+        label_ctrl = item.content.controls[1]  # Text label
+        if active:
+            icon_ctrl.color = ACCENT_CYAN
+            label_ctrl.color = TEXT_MAIN
+            item.bgcolor = "#0D2137"          # Fondo azul profundo
+            item.border = ft.Border(
+                left=ft.BorderSide(4, ACCENT_CYAN)
+            )
+        else:
+            icon_ctrl.color = TEXT_MUTED
+            label_ctrl.color = TEXT_MUTED
+            item.bgcolor = "transparent"
+            item.border = ft.Border(
+                left=ft.BorderSide(3, "transparent")
+            )
 
-    tab_btns = []
+    sidebar_items = []
 
-    def make_tab_btn(i, label):
-        lbl_text = ft.Text(label, color=ACCENT_CYAN if i == 0 else TEXT_MUTED)
-        btn = ft.Container(
-            content=lbl_text,
-            padding=ft.Padding(left=16, right=16, top=5, bottom=5),
-            ink=True,
-            border_radius=4,
-            bgcolor="transparent"
+    def make_sidebar_item(i, icon, label):
+        is_active = (i == 0)
+        icon_ctrl = ft.Text(
+            icon, size=20,
+            color=ACCENT_CYAN if is_active else TEXT_MUTED,
         )
-        btn.on_click = lambda e: switch_to_tab(i)
-        return btn
+        label_ctrl = ft.Text(
+            label, size=12,
+            color=ACCENT_CYAN if is_active else TEXT_MUTED,
+            weight=ft.FontWeight.W_500,
+            no_wrap=True,
+            overflow=ft.TextOverflow.ELLIPSIS,
+        )
+        row = ft.Row(
+            [icon_ctrl, label_ctrl],
+            spacing=10,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        )
+        item = ft.Container(
+            content=row,
+            padding=ft.Padding(left=12, right=8, top=10, bottom=10),
+            border_radius=8,
+            ink=True,
+            bgcolor="#1C2333" if is_active else "transparent",
+            tooltip=label,
+            border=ft.Border(
+                left=ft.BorderSide(3, ACCENT_CYAN if is_active else "transparent")
+            ),
+        )
+        item.on_click = lambda e, idx=i: switch_to_tab(idx)
+        return item, icon_ctrl, label_ctrl
 
-    tab_btns = [make_tab_btn(i, lbl) for i, lbl in enumerate(tab_labels)]
+    sidebar_items = []
+    _icon_ctrls = []
+    _label_ctrls = []
+    for i, (icon, label) in enumerate(tab_labels):
+        item, ic, lc = make_sidebar_item(i, icon, label)
+        sidebar_items.append(item)
+        _icon_ctrls.append(ic)
+        _label_ctrls.append(lc)
 
-    tab_row = ft.Row(
-        [ft.Column([btn, ind], spacing=0) for btn, ind in zip(tab_btns, indicators)],
-        spacing=20,
-        scroll=ft.ScrollMode.AUTO,
+    # Inicializar con sidebar colapsada: ocultar labels
+    for lc in _label_ctrls:
+        lc.visible = False
+
+    # Botón de toggle (colapsar / expandir)
+    toggle_icon = ft.Text("◀", size=14, color=TEXT_MUTED)
+    toggle_btn = ft.Container(
+        content=ft.Row(
+            [toggle_icon],
+            alignment=ft.MainAxisAlignment.CENTER,
+        ),
+        on_click=lambda e: _toggle_sidebar(),
+        ink=True,
+        border_radius=6,
+        padding=ft.Padding(left=4, right=4, top=6, bottom=6),
+        tooltip="Colapsar barra lateral",
     )
 
-    custom_tab_bar = ft.Container(
+    def _expand_sidebar():
+        sidebar_expanded[0] = True
+        sidebar_col.width = SIDEBAR_W_EXPANDED
+        toggle_icon.value = "◀"
+        toggle_btn.tooltip = "Fijar / Colapsar"
+        for lc in _label_ctrls:
+            lc.visible = True
+        if sidebar_col.page:
+            sidebar_col.update()
+
+    def _collapse_sidebar():
+        sidebar_expanded[0] = False
+        sidebar_col.width = SIDEBAR_W_COLLAPSED
+        toggle_icon.value = "▶"
+        toggle_btn.tooltip = "Expandir barra lateral"
+        for lc in _label_ctrls:
+            lc.visible = False
+        if sidebar_col.page:
+            sidebar_col.update()
+
+    def _toggle_sidebar():
+        """Toggle manual (teclado o botón pin)."""
+        sidebar_pinned[0] = not sidebar_pinned[0]
+        if sidebar_pinned[0]:
+            _expand_sidebar()
+        else:
+            _collapse_sidebar()
+
+    def _on_sidebar_hover(e):
+        """Auto-expand al entrar, auto-colapsa al salir (si no está fijada)."""
+        if sidebar_pinned[0]:
+            return
+        if e.data == "true":   # mouse entró
+            _expand_sidebar()
+        else:                  # mouse salió
+            _collapse_sidebar()
+
+    # Botón para alternar modo de navegación (parte inferior del sidebar)
+    nav_mode_icon = ft.Icon(ft.Icons.GRID_VIEW, color=TEXT_MUTED, size=18)
+    nav_mode_label = ft.Text("Modo Superior", size=11, color=TEXT_MUTED, visible=False)
+    nav_mode_btn = ft.Container(
+        content=ft.Row(
+            [nav_mode_icon, nav_mode_label],
+            spacing=8,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        ),
+        padding=ft.Padding(left=12, right=8, top=8, bottom=8),
+        ink=True, border_radius=8,
+        tooltip="Cambiar a barra superior horizontal",
+        on_click=lambda e: _toggle_nav_mode(),
+    )
+
+    def _toggle_nav_mode():
+        if nav_mode[0] == "sidebar":
+            nav_mode[0] = "topbar"
+            sidebar_col.visible = False
+            topbar_row.visible = True
+            nav_mode_icon.name = ft.Icons.VIEW_SIDEBAR
+            nav_mode_label.value = "Modo Lateral"
+            nav_mode_btn.tooltip = "Cambiar a barra lateral vertical"
+        else:
+            nav_mode[0] = "sidebar"
+            sidebar_col.visible = True
+            topbar_row.visible = False
+            nav_mode_icon.name = ft.Icons.GRID_VIEW
+            nav_mode_label.value = "Modo Superior"
+            nav_mode_btn.tooltip = "Cambiar a barra superior horizontal"
+        page.update()
+
+    sidebar_col = ft.Container(
+        width=SIDEBAR_W_COLLAPSED,
         bgcolor=PANEL_BG,
-        border=ft.Border(bottom=ft.BorderSide(1, BORDER_COL)),
-        content=tab_row,
-        height=40,
+        border=ft.Border(right=ft.BorderSide(1, BORDER_COL)),
+        on_hover=_on_sidebar_hover,
+        animate=ft.Animation(180, ft.AnimationCurve.EASE_IN_OUT),
+        content=ft.Column(
+            [
+                ft.Container(
+                    content=ft.Row(
+                        [toggle_btn],
+                        alignment=ft.MainAxisAlignment.CENTER,
+                    ),
+                    padding=ft.Padding(left=4, right=8, top=6, bottom=2),
+                ),
+                ft.Divider(height=1, color=BORDER_COL),
+                ft.Column(
+                    sidebar_items,
+                    spacing=2,
+                    expand=True,
+                    scroll=ft.ScrollMode.AUTO,
+                ),
+                ft.Divider(height=1, color=BORDER_COL),
+                nav_mode_btn,
+            ],
+            spacing=0,
+            expand=True,
+        ),
     )
 
     tab_body = ft.AnimatedSwitcher(
@@ -221,6 +368,70 @@ def main(page: ft.Page):
     )
 
     import asyncio
+
+    # ── Modo de navegación: "sidebar" | "topbar" ───────────────────────────
+    nav_mode = ["sidebar"]
+
+    # ── Barra horizontal clásica (Top-bar) ─────────────────────────────────
+    tb_indicators = [
+        ft.Container(height=2, bgcolor=ACCENT_CYAN if i == 0 else "transparent", border_radius=1)
+        for i in range(len(tab_labels))
+    ]
+    tb_btns = []
+
+    def _make_tb_btn(i, icon, label):
+        lbl = ft.Text(
+            f"{icon}  {label}",
+            color=ACCENT_CYAN if i == 0 else TEXT_MUTED,
+            size=13,
+        )
+        btn = ft.Container(
+            content=lbl,
+            padding=ft.Padding(left=14, right=14, top=5, bottom=5),
+            ink=True, border_radius=4, bgcolor="transparent",
+        )
+        btn.on_click = lambda e, idx=i: switch_to_tab(idx)
+        return btn, lbl
+
+    tb_btns = []
+    _tb_lbls = []
+    for i, (icon, label) in enumerate(tab_labels):
+        b, l = _make_tb_btn(i, icon, label)
+        tb_btns.append(b)
+        _tb_lbls.append(l)
+
+    def _tb_set_active(idx):
+        for j, (b, ind) in enumerate(zip(tb_btns, tb_indicators)):
+            active = (j == idx)
+            _tb_lbls[j].color = ACCENT_CYAN if active else TEXT_MUTED
+            ind.bgcolor = ACCENT_CYAN if active else "transparent"
+
+    topbar_row = ft.Container(
+        bgcolor=PANEL_BG,
+        border=ft.Border(bottom=ft.BorderSide(1, BORDER_COL)),
+        height=40,
+        visible=False,
+        padding=ft.Padding(left=10, right=10, top=0, bottom=0),
+        content=ft.Row(
+            [
+                ft.Row(
+                    [ft.Column([btn, ind], spacing=0) for btn, ind in zip(tb_btns, tb_indicators)],
+                    spacing=4,
+                    scroll=ft.ScrollMode.AUTO,
+                    expand=True,
+                ),
+                ft.IconButton(
+                    icon=ft.Icons.VIEW_SIDEBAR,
+                    icon_color=TEXT_MUTED,
+                    icon_size=18,
+                    tooltip="Cambiar a barra lateral vertical",
+                    on_click=lambda e: _toggle_nav_mode(),
+                )
+            ],
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        ),
+    )
 
     # Panel Izquierdo (Contenido de la pestaña, toma el espacio sobrante)
     left_panel_content = ft.Container(
@@ -238,9 +449,17 @@ def main(page: ft.Page):
         visible=False
     )
 
-    lower_split = ft.Row([left_panel_content, right_panel], expand=True, spacing=0, vertical_alignment=ft.CrossAxisAlignment.STRETCH)
+    lower_split = ft.Row(
+        [sidebar_col, left_panel_content, right_panel],
+        expand=True, spacing=0,
+        vertical_alignment=ft.CrossAxisAlignment.STRETCH
+    )
 
-    main_view = ft.Column([custom_tab_bar, lower_split], expand=True, spacing=0, horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
+    main_view = ft.Column(
+        [topbar_row, lower_split],
+        expand=True, spacing=0,
+        horizontal_alignment=ft.CrossAxisAlignment.STRETCH
+    )
 
     # ── Manejo de Reset de Configuración y Fullscreen ───────────────────────
     def on_main_pubsub(msg):
@@ -251,7 +470,10 @@ def main(page: ft.Page):
             is_fs = getattr(engine_instance, "chart_fullscreen_active", False)
             header.visible = not is_fs
             footer.visible = not is_fs
-            custom_tab_bar.visible = not is_fs
+            if nav_mode[0] == "sidebar":
+                sidebar_col.visible = not is_fs
+            else:
+                topbar_row.visible = not is_fs
             
             if is_fs:
                 page.pubsub.send_all("force_collapse")

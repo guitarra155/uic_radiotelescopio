@@ -53,34 +53,7 @@ ALGO_REGISTRY: dict[str, dict] = {
         "chart_fn":  "chart_cwt_map",
         "result_key": "cwt",
     },
-    "Pseudo-MUSIC": {
-        "color":     "#FF4C4C",
-        "full_name": "Pseudo-MUSIC (MUltiple SIgnal Classification)",
-        "desc": (
-            "MUltiple SIgnal Classification.\n"
-            "Resolución super-FFT mediante sub-espacio de ruido.\n"
-            "Detecta frecuencias con gran precisión."
-        ),
-        "params_hint": "# Señales: configurable en el panel derecho.",
-        "param_keys": ["n_signals"],
-        "runner":    "run_pseudo_music",
-        "chart_fn":  "chart_music_spectrum",
-        "result_key": "music",
-    },
-    "ESPRIT": {
-        "color":     "#FF80AB",
-        "full_name": "ESPRIT (Rotational Invariance Techniques)",
-        "desc": (
-            "Estimation of Signal Parameters via\n"
-            "Rotational Invariance Techniques.\n"
-            "Más eficiente que MUSIC para pocos componentes."
-        ),
-        "params_hint": "# Señales configurable (comparte parámetro con MUSIC).",
-        "param_keys": ["n_signals"],
-        "runner":    "run_esprit",
-        "chart_fn":  "chart_music_spectrum",
-        "result_key": "esprit",
-    },
+
     "Welch": {
         "color":     "#FFD700",
         "full_name": "Estimación Espectral de Welch (Método Directo)",

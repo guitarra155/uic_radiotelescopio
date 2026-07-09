@@ -13,14 +13,11 @@ title Algoritmo de Detección CFAR — Detección de Señales de Interés
 
 start
 
-:Recibir espectro RAW\n**spectrum_raw_data[k]**\n(N_FFT bins en dBFS);
-#D6EAF8
+#D6EAF8:Recibir espectro RAW\n**spectrum_raw_data[k]**\n(N_FFT bins en dBFS);
 
-:Calcular tamaño del kernel\nk_size = max(3, N_FFT × 0.04)\n(Asegurar impar);
-#D6EAF8
+#D6EAF8:Calcular tamaño del kernel\nk_size = max(3, N_FFT × 0.04)\n(Asegurar impar);
 
-:Aplicar **Filtro de Mediana**\ndeslizante al espectro\nnoise_floor[k] = medfilt(\nspectrum_raw_data, k_size);
-#AED6F1
+#AED6F1:Aplicar **Filtro de Mediana**\ndeslizante al espectro\nnoise_floor[k] = medfilt(\nspectrum_raw_data, k_size);
 
 note right
     El filtro de mediana estima
@@ -29,21 +26,16 @@ note right
     los picos espectrales
 end note
 
-:Calcular **SNR por bin**\nSNR[k] = P_señal[k] − P_ruido[k]\n(Resta en dBFS);
-#D5F5E3
+#D5F5E3:Calcular **SNR por bin**\nSNR[k] = P_señal[k] − P_ruido[k]\n(Resta en dBFS);
 
-:Aplicar **Umbral de Detección**\nSNR_THRESH = 6 dB;
-#ABEBC6
+#ABEBC6:Aplicar **Umbral de Detección**\nSNR_THRESH = 6 dB;
 
 if (¿Existen bins con\nSNR[k] > 6 dB?) then (Sí)
-    :Obtener frecuencias\ny SNR de los bins\nque superan el umbral;
-    #FCF3CF
+    #FCF3CF:Obtener frecuencias\ny SNR de los bins\nque superan el umbral;
     
-    :Ordenar por frecuencia\nascendente;
-    #FCF3CF
+    #FCF3CF:Ordenar por frecuencia\nascendente;
     
-    :Aplicar **Clustering**\n(Agrupamiento)\nSeparación mínima: 10 kHz;
-    #E8DAEF
+    #E8DAEF:Aplicar **Clustering**\n(Agrupamiento)\nSeparación mínima: 10 kHz;
     
     note right
         Dentro de cada cluster,
@@ -52,20 +44,16 @@ if (¿Existen bins con\nSNR[k] > 6 dB?) then (Sí)
         representante
     end note
     
-    :Generar lista de\n**Señales de Interés**\n[(freq_MHz, SNR_dB), ...]\nMáximo: 20 detecciones;
-    #D2B4DE
+    #D2B4DE:Generar lista de\n**Señales de Interés**\n[(freq_MHz, SNR_dB), ...]\nMáximo: 20 detecciones;
     
 else (No)
-    :signals_of_interest = []\n(Sin detecciones);
-    #FADBD8
+    #FADBD8:signals_of_interest = []\n(Sin detecciones);
 endif
 
-:Verificar **RFI**\n¿SNR > 15 dB?;
-#F5B7B1
+#F5B7B1:Verificar **RFI**\n¿SNR > 15 dB?;
 
 if (¿rfi_mitigation_on\ny SNR > 15 dB?) then (Sí)
-    :Incrementar\nrfi_event_count\nRegistrar hora UTC;
-    #F5B7B1
+    #F5B7B1:Incrementar\nrfi_event_count\nRegistrar hora UTC;
 else (No)
     :Sin acción RFI;
 endif

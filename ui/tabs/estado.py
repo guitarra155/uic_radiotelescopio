@@ -225,6 +225,60 @@ def build_estado(page: ft.Page) -> ft.Control:
 
     # Layout de la pestaña en tarjetas (Panels)
     
+    # --- Controles del Smart Trigger ---
+    def on_trigger_chk_change(e):
+        engine_instance.trigger_active = e.control.value
+        engine_instance.save_config()
+        
+    trigger_chk = ft.Checkbox(
+        label="Smart Trigger (Captura de Transitorios)",
+        value=bool(engine_instance.trigger_active),
+        on_change=on_trigger_chk_change,
+        active_color=ACCENT_CYAN,
+        label_style=ft.TextStyle(color=TEXT_MAIN, size=11, weight=ft.FontWeight.BOLD)
+    )
+    
+    def on_trig_high_change(e):
+        try:
+            engine_instance.trigger_high = float(e.control.value)
+            engine_instance.save_config()
+        except ValueError: pass
+
+    def on_trig_low_change(e):
+        try:
+            engine_instance.trigger_low = float(e.control.value)
+            engine_instance.save_config()
+        except ValueError: pass
+
+    trig_high_f = txt_field("Umbral Alto (Energía)", fmt_float(engine_instance.trigger_high), "e.g. 15.0")
+    trig_low_f = txt_field("Umbral Bajo (Energía)", fmt_float(engine_instance.trigger_low), "e.g. 5.0")
+    
+    trig_high_f.on_submit = on_trig_high_change
+    trig_high_f.on_blur = on_trig_high_change
+    trig_low_f.on_submit = on_trig_low_change
+    trig_low_f.on_blur = on_trig_low_change
+    
+    rfi_count_lbl = ft.Text(f"{engine_instance.rfi_event_count}", color=ACCENT_AMBER, size=14, weight=ft.FontWeight.BOLD)
+    
+    trigger_card = panel(
+        content=ft.Column([
+            section_title("⚡", "Eventos Transitorios & Trigger", ACCENT_CYAN),
+            trigger_chk,
+            lbl("Activa el autodisparo por picos de energía.", size=10),
+            ft.Container(height=5),
+            trig_high_f,
+            lbl("Umbral de subida para disparar.", size=10),
+            ft.Container(height=5),
+            trig_low_f,
+            lbl("Umbral de caída para terminar captura.", size=10),
+            ft.Container(height=5),
+            ft.Row([
+                ft.Text("Capturas RFI / Transitorios:", color=TEXT_MUTED, size=12, expand=2),
+                rfi_count_lbl
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+        ], spacing=10)
+    )
+
     # Tarjeta 1: Origen de Datos
     data_source_card = panel(
         content=ft.Column([
@@ -350,7 +404,6 @@ def build_estado(page: ft.Page) -> ft.Control:
         "- **Welch PSD:** Calcula la Densidad Espectral de Potencia mediante la división del bloque en ventanas que se solapan (overlap) y se promedian. Resulta en gráficas libres de picos de ruido esporádicos.\n"
         "- **Correlograma:** Estimación espectral indirecta basada en el *Teorema de Wiener-Khinchin*. Calcula la autocorrelación de la señal, le aplica una ventana temporal y luego su FFT. Excelente para revelar señales periódicas ocultas en ruido térmico.\n"
         "- **CWT (Continuous Wavelet Transform):** Utiliza la ondícula de *Morlet* (una sinusoide envuelta en una gaussiana). Escanea la señal para entregar un mapa ultra-preciso de correlación de Tiempo y Frecuencia.\n"
-        "- **MUSIC & ESPRIT:** Algoritmos de subespacios ortogonales. Descomponen la matriz de covarianza de la señal separando matemáticamente el \"Subespacio de Señal\" del \"Subespacio de Ruido\". Permiten calcular frecuencias de sinusoides puras con resolución infinita teórica.\n"
         "- **Filtro MA (Moving Average):** Filtro FIR (*Finite Impulse Response*) pasa-bajos simple temporal que limpia ruido térmico de alta frecuencia instantáneo.",
         selectable=True,
     )
@@ -370,7 +423,7 @@ def build_estado(page: ft.Page) -> ft.Control:
         "2. **Iniciar Flujo:** Haz clic en el botón de Reproducción (**▶️**) en el encabezado superior para comenzar el procesamiento.\n"
         "3. **Sintonización en Vivo:** Escribe la *Frecuencia Central (MHz)* deseada en el panel derecho y presiona *Enter* para sintonizar el hardware al vuelo.\n"
         "4. **Congelar y Analizar:** Presiona Pausa (**⏸️**) para bloquear un frame. Usa **Retroceder (◀️)** o **Avanzar (▶️)** para explorar el buffer histórico cuadro por cuadro.\n"
-        "5. **Algoritmos DSP:** Con el flujo pausado, ve a la pestaña **Algoritmo DSP**, selecciona un método (ej. Welch o MUSIC) y presiona *Ejecutar*.\n"
+        "5. **Algoritmos DSP:** Con el flujo pausado, ve a la pestaña **Algoritmo DSP**, selecciona un método (ej. Welch) y presiona *Ejecutar*.\n"
         "6. **Grabar Señal:** En modo SDR, presiona Grabar (**⏺️**) para almacenar datos crudos en disco. Presiona nuevamente para guardar de forma segura.\n"
         "7. **Captura de Transitorios:** Actívala desde la configuración para capturar pulsos de forma automática basados en doble umbral de energía.",
         selectable=True,
@@ -509,6 +562,7 @@ def build_estado(page: ft.Page) -> ft.Control:
 
     left_col = ft.Column([
         data_source_card,
+        trigger_card,
     ], spacing=20, expand=4, scroll=ft.ScrollMode.AUTO)
 
     mid_col = ft.Column([
@@ -535,7 +589,13 @@ def build_estado(page: ft.Page) -> ft.Control:
             vbw_alpha_f.value = fmt_float(engine_instance.vbw_alpha)
             lock_chk.value = bool(engine_instance.auto_spectral_lock)
             
-            for f_input in [freq_f, span_visual_f, ref_level_f, rbw_f, vbw_alpha_f, lock_chk]:
+            # Sincronizar Smart Trigger
+            trigger_chk.value = bool(engine_instance.trigger_active)
+            trig_high_f.value = fmt_float(engine_instance.trigger_high)
+            trig_low_f.value = fmt_float(engine_instance.trigger_low)
+            rfi_count_lbl.value = f"{engine_instance.rfi_event_count}"
+            
+            for f_input in [freq_f, span_visual_f, ref_level_f, rbw_f, vbw_alpha_f, lock_chk, trigger_chk, trig_high_f, trig_low_f, rfi_count_lbl]:
                 try: f_input.update()
                 except: pass
 

@@ -3,8 +3,8 @@ ui/charts/spectrogram.py
 Gráficas del Tab 2 — Espectrograma:
   - chart_spectrogram           : Waterfall (cascada espectral clásica)
   - chart_cwt_map               : Escalograma CWT/Morlet 2D
-  - chart_ar_spectrogram        : Espectrograma AR/Burg 2D
-  - chart_correlogram_spectrogram: Correlograma 2D (Blackman-Tukey)
+  - chart_ar_spectrogram        : Espectrograma AR/Burg
+  - chart_correlogram_spectrogram: Correlograma (Blackman-Tukey)
 """
 
 import numpy as np
@@ -189,7 +189,7 @@ def chart_cwt_map(result: dict = None) -> str:
 
 def chart_ar_spectrogram(result: dict = None) -> str:
     """
-    Espectrograma AR/Burg 2D — cascada continua.
+    Espectrograma AR/Burg — cascada continua.
     Lee la matriz circular ar_wf_data del motor.
     El parámetro 'result' se ignora; se mantiene por compatibilidad.
     """
@@ -200,13 +200,13 @@ def chart_ar_spectrogram(result: dict = None) -> str:
         wf_data=wf_data,
         wf_idx=wf_idx,
         cfg_key="spec_ar",
-        title="Espectrograma AR/Burg 2D (Paramétrico)",
+        title="Espectrograma AR/Burg (Paramétrico)",
     )
 
 
 def chart_correlogram_spectrogram(result: dict = None) -> str:
     """
-    Correlograma 2D — cascada continua.
+    Correlograma — cascada continua.
     Lee la matriz circular corr_wf_data del motor.
     El parámetro 'result' se ignora; se mantiene por compatibilidad.
     """
@@ -217,5 +217,5 @@ def chart_correlogram_spectrogram(result: dict = None) -> str:
         wf_data=wf_data,
         wf_idx=wf_idx,
         cfg_key="spec_corr",
-        title="Correlograma 2D — Blackman-Tukey (Wiener-Khinchin)",
+        title="Correlograma — Blackman-Tukey (Wiener-Khinchin)",
     )

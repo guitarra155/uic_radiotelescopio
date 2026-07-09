@@ -110,7 +110,7 @@ class DSPEngine:
         # Amplitude buffer — señal filtrada por Moving Average
         self.amplitude_ma_data = np.zeros(2000, dtype=np.complex64)
 
-        # Buffer IQ de alta resolución para el Correlograma 2D
+        # Buffer IQ de alta resolución para el Correlograma
         # Se vincula al 'Historial Cascada' (waterfall_history_sec)
         self._corr_buf_size  = max(50_000, int(self._sample_rate * self._waterfall_sec))
         self.corr_iq_buffer  = np.zeros(self._corr_buf_size, dtype=np.complex64)

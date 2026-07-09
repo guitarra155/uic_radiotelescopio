@@ -28,8 +28,6 @@ _ALGO_INFO = {
     for key, meta in {
         "ar":          ALGO_REGISTRY["AR/Burg"],
         "cwt":         ALGO_REGISTRY["CWT/Morlet"],
-        "music":       ALGO_REGISTRY["Pseudo-MUSIC"],
-        "esprit":      ALGO_REGISTRY["ESPRIT"],
         "welch":       ALGO_REGISTRY["Welch"],
         "correlogram": ALGO_REGISTRY["Correlograma"],
     }.items()

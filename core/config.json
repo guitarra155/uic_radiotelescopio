@@ -3,8 +3,8 @@
     "sample_rate": 2500000,
     "trigger_high": 15.0,
     "trigger_low": 5.0,
-    "db_min": -90,
-    "db_max": -50,
+    "db_min": -78.918,
+    "db_max": -61.082,
     "f_min": 1400.0,
     "f_max": 1440.0,
     "power_db_min": -90,
@@ -24,7 +24,7 @@
         "welch_fft": 1024,
         "welch_overlap": 0.5,
         "corr_max_lag": 512,
-        "spec2d_method": "cwt"
+        "spec2d_method": "ar_burg_2d"
     },
     "analysis_window_sec": 0.1,
     "moving_avg_samples": 4,

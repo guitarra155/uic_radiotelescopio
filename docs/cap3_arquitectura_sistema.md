@@ -1,8 +1,10 @@
 # Capítulo III: Arquitectura y Diseño del Sistema
 
-Para garantizar la fiabilidad del procesamiento de señales débiles, el desarrollo de la plataforma UIC prioriza la verificación formal y la separación estricta de responsabilidades entre los componentes del software, con el propósito de reducir la presencia de errores en el motor de procesamiento digital de señales (DSP).
+Para garantizar la fiabilidad en la detección y el procesamiento de señales electromagnéticas de muy baja amplitud —como la línea de hidrógeno neutro a 1420.4 MHz—, el desarrollo de la plataforma UIC prioriza la verificación formal de sus algoritmos y una división estricta de responsabilidades entre los componentes de software. La captura de datos astronómicos requiere un entorno libre de cuellos de botella y fluctuaciones temporales artificiales. Por ello, la arquitectura del sistema se ha diseñado para aislar las tareas críticas de procesamiento matemático de la interfaz de usuario, minimizando la probabilidad de pérdida de muestras I/Q y reduciendo la tasa de errores lógicos en el motor digital de procesamiento de señales (DSP).
 
-A continuación, la Tabla 1 presenta la nomenclatura matemática utilizada a lo largo de este capítulo para la descripción del pipeline de procesamiento.
+Esta modularidad se materializa mediante el desacoplamiento de la plataforma en tres capas independientes: Adquisición, Procesamiento y Presentación. Cada capa opera de manera autónoma, comunicándose mediante interfaces bien definidas y flujos asíncronos. La capa de adquisición extrae los datos crudos en tiempo real, el motor DSP ejecuta los filtros de promedio móvil y estimaciones espectrales en hilos secundarios dedicados, y la interfaz gráfica gestiona la visualización interactiva sin interferir en la ingesta de datos. Este enfoque arquitectónico garantiza que la plataforma mantenga una respuesta fluida y precisa, incluso bajo tasas de muestreo elevadas de hasta 40 MSps.
+
+Para comprender en detalle las transformaciones numéricas y los procesos de estimación espectral que se describen en este capítulo, es indispensable establecer un marco teórico común. A continuación, la Tabla 1 expone la nomenclatura matemática empleada en el diseño e implementación del pipeline DSP, sirviendo como guía conceptual para las secciones posteriores.
 
 > **Tabla 1.** *Nomenclatura Matemática del Sistema DSP.*
 
@@ -25,8 +27,12 @@ La plataforma UIC se concibe como un sistema de software integrado cuyo propósi
 En la capa inferior, el analizador de espectro BB60C de Signal Hound —o en su defecto, un archivo de muestras I/Q pregrabadas— suministra un flujo continuo de datos complejos en banda base. Estas muestras ingresan al motor DSP (`DSPEngine`), el cual ejecuta de forma secuencial las etapas de filtrado digital, decimación, estimación espectral, detección estadística de señales y cálculo de métricas derivadas tales como la relación señal-ruido (SNR) por bin de frecuencia y la potencia media instantánea. Finalmente, los resultados procesados se transfieren a la capa de presentación, donde se renderizan de forma simultánea en múltiples dominios de análisis (tiempo, frecuencia, tiempo-frecuencia y distribución probabilística) a través de una interfaz gráfica construida con el framework Flet.
 
 > **Figura 11.** *Arquitectura del Sistema.*
-> **[INSERTE LA IMAGEN DE LA FIGURA 11 AQUÍ]**
-> Diagrama de bloques que detalla la arquitectura de software estructurada en el patrón de diseño por capas, estableciendo una separación estricta de responsabilidades. Presenta la Capa de Adquisición interactuando con el hardware, la Capa de Procesamiento (DSP Core) gestionando los subprocesos de estimación espectral de forma asíncrona, y la Capa de Presentación (GUI) encapsulando la visualización. Este diseño garantiza una alta cohesión interna, baja acoplatura y promueve un flujo unidireccional de muestras I/Q hacia las vistas analíticas.
+> **[INSERTE LA IMAGEN DE LA FIGURA 11 AQUÍ - `fig11_arquitectura_sistema.puml`]**
+> Diagrama de bloques que detalla la arquitectura de software estructurada en el patrón de diseño por capas, estableciendo una separación estricta de responsabilidades. Como se ilustra en el esquema, la **Capa de Presentación (GUI)** gestiona la interacción directa con el usuario; en ella, el panel `sdr_config.py` captura las variaciones de parámetros en vivo y sincroniza la interfaz enviando las directivas al controlador Flet (`main.py`), el cual a su vez instancia y actualiza dinámicamente las diferentes pestañas de análisis gráfico (`Vistas`).
+> 
+> En el nivel intermedio, la **Capa de Procesamiento (DSP Core)** implementa el motor de cómputo en segundo plano mediante `dsp_engine.py`. Esta entidad interactúa bidireccionalmente con el módulo `advanced_dsp.py`, al cual delega los bloques de muestras temporales I/Q y del cual recibe de regreso los espectros calculados y los parámetros estimados. Esta separación asegura que los cálculos matemáticos intensivos no bloqueen el hilo de renderizado gráfico de la aplicación.
+> 
+> En la base, la **Capa de Adquisición** provee el flujo continuo de muestras en banda base. Para ello, implementa una interfaz dual: el módulo `bb_api.py` para interactuar directamente con el hardware a través de llamadas ctypes de bajo nivel, y el `Simulador Sintético` que reproduce de forma controlada señales previamente registradas. El flujo resultante de muestras I/Q se transfiere de forma ascendente al motor DSP, cerrando el ciclo de procesamiento y visualización.
 
 ---
 
@@ -45,7 +51,7 @@ La Tabla 3 resume la responsabilidad de cada módulo principal del software.
 | Módulo | Archivo(s) | Responsabilidad |
 |:---|:---|:---|
 | Motor DSP (Singleton) | `core/dsp_engine.py` | Gestión del ciclo de vida del procesamiento: lectura de muestras, filtrado, FFT, estimación espectral, detección, auto-escalado y persistencia de configuración. |
-| Algoritmos DSP Avanzados | `core/advanced_dsp.py` | Implementación de los algoritmos de estimación espectral de alta resolución: AR/Burg, CWT/Morlet, Welch, Correlograma, Pseudo-MUSIC y ESPRIT. |
+| Algoritmos DSP Avanzados | `core/advanced_dsp.py` | Implementación de los algoritmos de estimación espectral de alta resolución: AR/Burg, CWT/Morlet, Welch y Correlograma. |
 | Registro de Algoritmos | `core/algo_registry.py` | Diccionario centralizado que mapea los nombres de los métodos a sus funciones ejecutoras, permitiendo la selección dinámica de algoritmos desde la interfaz gráfica. |
 | Wrapper del BB60C | `core/bbdevice/bb_api.py` | Interfaz Python (ctypes) que abstrae las funciones del SDK nativo de Signal Hound (`bb_api.dll`), encapsulando las llamadas al hardware. |
 | Punto de Entrada | `main.py` | Inicialización del framework Flet, construcción de pestañas, gestión global de atajos de teclado y orquestación del ciclo principal de la interfaz gráfica. |
@@ -55,13 +61,42 @@ La Tabla 3 resume la responsabilidad de cada módulo principal del software.
 
 ### 3.2.1. Estructura orientada a componentes independientes
 
-El proyecto se estructura en tres paquetes principales:
+La organización física del código fuente refleja la separación de responsabilidades definida por la arquitectura de capas. A continuación, se presenta la estructura jerárquica del proyecto con la descripción funcional de sus componentes principales:
 
-- **`core/`** — Contiene la lógica de negocio: el motor DSP (`dsp_engine.py`), los algoritmos de estimación espectral (`advanced_dsp.py`), el registro dinámico de métodos (`algo_registry.py`) y la interfaz de abstracción del hardware BB60C (`bbdevice/bb_api.py`).
-- **`ui/tabs/`** — Contiene los módulos de construcción de cada pestaña de la interfaz gráfica. Cada archivo (`dual_monitoring.py`, `spectrogram.py`, `statistics.py`, `signal_analysis.py`, `freq_snr.py`) encapsula la lógica de presentación de un dominio de análisis particular.
-- **`ui/charts/`** — Contiene los renderizadores gráficos basados en Matplotlib. Cada renderizador recibe los arreglos numéricos del motor DSP y genera una imagen en memoria (buffer PNG codificado en Base64) que la interfaz Flet consume para su presentación.
+```text
+uic_radiotelescopio/
+├── main.py                          # Punto de entrada y controlador principal de la GUI (Flet).
+├── core/                            # Capa de control, procesamiento digital y drivers
+│   ├── dsp_engine.py                # Motor de procesamiento (Singleton) y gestión de hilos.
+│   ├── advanced_dsp.py              # Algoritmos de estimación espectral clásicos y paramétricos.
+│   ├── algo_registry.py             # Registro y mapeo dinámico de funciones matemáticas.
+│   ├── constants.py                 # Constantes físicas, del sistema y estilos visuales globales.
+│   └── bbdevice/                    # Abstracción de bajo nivel del hardware SDR
+│       ├── bb_api.py                # Wrapper ctypes para llamadas C++ en Python.
+│       └── bb_api.dll               # Biblioteca dinámica provista por el fabricante (Signal Hound).
+├── ui/                              # Capa de presentación (Entorno gráfico de usuario)
+│   ├── tabs/                        # Módulos que orquestan las vistas e inputs de cada pestaña
+│   │   ├── estado.py                # Pestaña 1: Configuración de hardware y manuales.
+│   │   ├── dual_monitoring.py       # Pestaña 2: Monitoreo en tiempo/frecuencia (RAW vs. Filtrada).
+│   │   ├── spectrogram.py           # Pestaña 3: Espectrogramas bidimensionales.
+│   │   ├── statistics.py            # Pestaña 4: Histogramas y estimación MLE.
+│   │   ├── signal_analysis.py       # Pestaña 5: Series temporales de potencia media.
+│   │   ├── freq_snr.py              # Pestaña 6: Gráficas de relación señal-ruido.
+│   │   └── sdr_config.py            # Panel lateral de control dinámico y auto-escala.
+│   ├── charts/                      # Renderizadores gráficos autónomos basados en Matplotlib
+│   │   ├── monitoring.py            # Gráficas de monitoreo temporal/frecuencial (2x2).
+│   │   ├── spectrogram.py           # Renderizado de cascadas de potencia espectral en 2D.
+│   │   ├── statistics.py            # Renderizado de histogramas con curvas teóricas MLE.
+│   │   ├── signal_analysis.py       # Renderizado de series temporales de potencia.
+│   │   └── freq_snr.py              # Renderizado de picos de relación señal-ruido.
+│   └── components/                  # Elementos comunes e instrumentación del layout
+│       ├── layout.py                # Barra de cabecera superior y pie de página de la aplicación.
+│       └── shared.py                # Widgets genéricos, campos de texto y estilos comunes.
+├── data/                            # Directorio local para almacenamiento de archivos binarios (.iq).
+└── docs/                            # Documentación de diseño del sistema y esquemas UML (.puml).
+```
 
-Esta separación permite que modificaciones en un algoritmo de procesamiento no afecten la lógica de la interfaz gráfica, y viceversa.
+Esta separación física garantiza que modificaciones en los algoritmos matemáticos dentro de `core/advanced_dsp.py` no tengan impacto sobre el flujo gráfico de las pestañas en `ui/tabs/`, asegurando un mantenimiento sumamente ordenado.
 
 ### 3.2.2. Modelo de ejecución asíncrono y gestión de concurrencia
 
@@ -226,7 +261,7 @@ La interfaz gráfica de usuario fue desarrollada utilizando el framework Flet (v
 |:---:|:---|:---|
 | 1 | Inicio & Configuración | Estado del sistema, control de hardware, ejecución de algoritmos avanzados |
 | 2 | Señal y Señal Filtrada | Dominio del Tiempo (amplitud) + Dominio de la Frecuencia (espectro). Comparación RAW vs. Filtrada |
-| 3 | Espectrograma | Dominio Tiempo-Frecuencia (Waterfall FFT, CWT, AR/Burg 2D, Correlograma 2D) |
+| 3 | Espectrograma | Dominio Tiempo-Frecuencia (Waterfall FFT, CWT, AR/Burg, Correlograma) |
 | 4 | Histograma | Distribución probabilística (PDF empírica + ajuste Gaussiana, Weibull, Rician) |
 | 5 | Potencia vs. Tiempo | Serie temporal de potencia media instantánea (dBFS) |
 | 6 | SNR vs. Frecuencia | Relación señal-ruido por bin de frecuencia |
@@ -264,13 +299,13 @@ La Pestaña 3 (*Espectrograma*) constituye el subsistema más completo de análi
 
 2. **CWT/Morlet 2D:** Espectrograma basado en la Transformada Wavelet Continua con wavelet de Morlet bilateral. Este método proporciona una resolución adaptativa: mayor resolución temporal para componentes de alta frecuencia y mayor resolución frecuencial para componentes de baja frecuencia.
 
-3. **AR/Burg 2D (Cascada):** Espectrograma paramétrico donde cada línea se calcula mediante un modelo autorregresivo de Burg. Ofrece una resolución espectral superior a la FFT para señales con componentes estrechamente espaciadas.
+3. **AR/Burg (Cascada):** Espectrograma paramétrico donde cada línea se calcula mediante un modelo autorregresivo de Burg. Ofrece una resolución espectral superior a la FFT para señales con componentes estrechamente espaciadas.
 
-4. **Correlograma 2D (Cascada):** Espectrograma indirecto calculado como la FFT de la función de autocorrelación estimada con ventana de Bartlett. El lag máximo de la autocorrelación controla la resolución espectral.
+4. **Correlograma (Cascada):** Espectrograma indirecto calculado como la FFT de la función de autocorrelación estimada con ventana de Bartlett. El lag máximo de la autocorrelación controla la resolución espectral.
 
 > **IMAGEN DEL PROGRAMA:** Capturar la **Pestaña 3 (Espectrograma)** mostrando el Waterfall FFT con la banda de 1420.4 MHz visible.
 
-> **IMAGEN DEL PROGRAMA (alternativa):** Capturar la misma pestaña con el método **AR/Burg 2D** seleccionado para comparación visual.
+> **IMAGEN DEL PROGRAMA (alternativa):** Capturar la misma pestaña con el método **AR/Burg** seleccionado para comparación visual.
 
 ### 3.5.4. Subsistema de análisis y ajuste interactivo de funciones de densidad de probabilidad (PDF)
 

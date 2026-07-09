@@ -67,7 +67,7 @@ Muestra la amplitud de la señal en el dominio del tiempo y su espectro de frecu
 #### Pestaña 2: Espectrograma (Cascada)
 Representación tridimensional de la señal (Tiempo vs Frecuencia vs Potencia).
 - **Visualización 2D (Waterfall):** El color representa la intensidad de potencia espectral (dBm). Es sumamente útil para detectar tránsitos de meteoros, satélites, RFI pulsante o derivas de frecuencia a lo largo del tiempo.
-- **Modos de Espectrograma:** Puede alternar entre el espectrograma clásico (FFT), la Transformada Wavelet Continua (CWT - Morlet), el Espectrograma Autorregresivo (AR) o el Correlograma 2D para identificar patrones ocultos.
+- **Modos de Espectrograma:** Puede alternar entre el espectrograma clásico (FFT), la Transformada Wavelet Continua (CWT - Morlet), el Espectrograma Autorregresivo (AR) o el Correlograma para identificar patrones ocultos.
 
 #### Pestaña 3: Estadística e Histograma
 Muestra la densidad de probabilidad de las amplitudes de las muestras I/Q.

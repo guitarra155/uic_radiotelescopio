@@ -202,6 +202,77 @@ def build_freq_snr(page: ft.Page, key_state: dict) -> ft.Control:
         engine_instance.save_config()
         page.pubsub.send_all("refresh_charts")
 
+    def save_current_detections(e):
+        import time
+        import os
+        import json
+        import numpy as np
+        import threading
+
+        folder = "Resultados_Datos"
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+
+        timestamp = int(time.time())
+        timestr = time.strftime("%Y%m%d_%H%M%S")
+
+        # 1. Guardar metadatos JSON
+        metadata = {
+            "timestamp": timestamp,
+            "datetime_utc": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(timestamp)),
+            "center_frequency_mhz": engine_instance.center_freq,
+            "sample_rate_hz": engine_instance.sample_rate,
+            "noise_floor_dbfs": float(np.median(engine_instance.spectrum_data)) if len(engine_instance.spectrum_data) > 0 else 0.0,
+            "signals_detected": [
+                {"frequency_mhz": float(freq), "snr_db": float(snr)}
+                for freq, snr in sorted(engine_instance.signals_of_interest, key=lambda x: x[1], reverse=True)
+            ]
+        }
+
+        json_path = os.path.join(folder, f"cfar_detection_{timestr}.json")
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(metadata, f, indent=4)
+
+        # 2. Guardar curva SNR en CSV (Frecuencia vs SNR)
+        fc = engine_instance.center_freq
+        fs = engine_instance.sample_rate / 1_000_000
+        n_bins = len(engine_instance.snr_data)
+        freqs = np.linspace(fc - fs / 2, fc + fs / 2, n_bins)
+
+        csv_path = os.path.join(folder, f"cfar_detection_{timestr}.csv")
+        with open(csv_path, "w", encoding="utf-8") as f_csv:
+            f_csv.write("Frecuencia_MHz,SNR_dB\n")
+            for f_val, snr_val in zip(freqs, engine_instance.snr_data):
+                f_csv.write(f"{f_val:.8f},{snr_val:.4f}\n")
+
+        # Efecto visual de guardado exitoso
+        btn_save.text = "¡Guardado!"
+        btn_save.bgcolor = ACCENT_GREEN
+        btn_save.color = ft.Colors.WHITE
+        try: btn_save.update()
+        except: pass
+
+        async def revert():
+            await asyncio.sleep(1.5)
+            btn_save.text = "💾 Guardar Detección"
+            btn_save.bgcolor = ACCENT_CYAN
+            btn_save.color = DARK_BG
+            try: btn_save.update()
+            except: pass
+
+        threading.Thread(target=lambda: asyncio.run(revert())).start()
+
+    btn_save = ft.ElevatedButton(
+        "💾 Guardar Detección",
+        on_click=save_current_detections,
+        style=ft.ButtonStyle(
+            bgcolor=ACCENT_CYAN,
+            color=DARK_BG,
+            shape=ft.RoundedRectangleBorder(radius=4)
+        ),
+        width=250,
+    )
+
     # ── Panel lateral ────────────────────────────────────────────────────────
     side = panel(
         width=280,
@@ -264,6 +335,8 @@ def build_freq_snr(page: ft.Page, key_state: dict) -> ft.Control:
                     size=9,
                     italic=True,
                 ),
+                ft.Container(height=5),
+                btn_save,
             ],
             spacing=8,
             expand=True,

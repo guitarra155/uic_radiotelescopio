@@ -1,7 +1,7 @@
 """
 tabs/spectrogram.py
 Pestaña "Espectrograma" con selector de método 2D (Tiempo × Frecuencia).
-Métodos: Waterfall FFT, CWT/Morlet, AR/Burg 2D, Correlograma 2D.
+Métodos: Waterfall FFT, CWT/Morlet, AR/Burg, Correlograma.
 """
 
 import numpy as np
@@ -13,8 +13,8 @@ from ui.components.shared import panel, border_all
 _METHODS = [
     ("waterfall", "Waterfall FFT"),
     ("cwt", "CWT / Morlet"),
-    ("ar_burg_2d", "AR / Burg 2D"),
-    ("correlogram_2d", "Correlograma 2D"),
+    ("ar_burg_2d", "AR / Burg"),
+    ("correlogram_2d", "Correlograma"),
 ]
 
 _METHOD_COLORS = {
@@ -293,7 +293,7 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
                 t_total = _time.perf_counter() - t0
                 n_segs = result["matrix"].shape[0]
                 print(
-                    f"[AR/Burg 2D] IQ={len(iq)} muestras | "
+                    f"[AR/Burg] IQ={len(iq)} muestras | "
                     f"Segs={n_segs} | "
                     f"Total={t_total*1000:.1f}ms"
                 )

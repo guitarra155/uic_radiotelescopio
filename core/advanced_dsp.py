@@ -245,78 +245,7 @@ def run_cwt_2d(iq: np.ndarray, sample_rate: float = 2_400_000,
 
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 3. Pseudo-MUSIC (MUltiple SIgnal Classification)
-# ─────────────────────────────────────────────────────────────────────────────
 
-def run_pseudo_music(iq: np.ndarray, n_signals: int = 3,
-                     n_freqs: int = 2048, subarray_len: int = 128,
-                     sample_rate: float = 2_400_000,
-                     center_freq: float = 1420.40) -> dict:
-    """
-    Pseudo-espectro MUSIC para estimación de frecuencias de alta resolución.
-
-    Args:
-        iq           : Muestras IQ.
-        n_signals    : Número estimado de señales presentes.
-        n_freqs      : Puntos del pseudo-espectro.
-        subarray_len : Longitud del sub-array (M).
-        sample_rate  : Tasa de muestreo en Hz.
-        center_freq  : Frecuencia central en MHz.
-
-    Returns:
-        dict con 'freqs' (MHz), 'music_spectrum' (dB), 'peaks'.
-    """
-    sig = _normalize(_to_complex(iq))
-    N = len(sig)
-    M = min(subarray_len, N // 4)
-
-    # Construir matriz de correlación de Toeplitz con método de correlación directa
-    L = N - M + 1
-    X = np.array([sig[i:i + M] for i in range(L)])   # L × M
-    R = (X.conj().T @ X) / L                          # M × M covarianza
-
-    # Descomposición en valores propios
-    eigenvalues, eigenvectors = np.linalg.eigh(R)
-    # eigh retorna en orden ascendente; invertir para orden descendente
-    idx = np.argsort(eigenvalues)[::-1]
-    eigenvalues = eigenvalues[idx]
-    eigenvectors = eigenvectors[:, idx]
-
-    n_signals = min(n_signals, M - 1)
-    En = eigenvectors[:, n_signals:]                  # Sub-espacio de ruido
-
-    # Barrido de frecuencias
-    freqs_norm = np.linspace(-0.5, 0.5, n_freqs)
-    music_spectrum = np.zeros(n_freqs)
-
-    for k, fn in enumerate(freqs_norm):
-        a = np.exp(-2j * np.pi * fn * np.arange(M))  # Vector de dirección
-        proj = a.conj() @ En @ En.conj().T @ a
-        music_spectrum[k] = 1.0 / (abs(proj) + 1e-30)
-
-    music_db = 10 * np.log10(music_spectrum + 1e-30)
-    # Normalizar respecto al máximo
-    music_db -= np.max(music_db)
-
-    fs_mhz = sample_rate / 1_000_000
-    freqs_mhz = np.linspace(center_freq - fs_mhz / 2,
-                             center_freq + fs_mhz / 2, n_freqs)
-
-    # Detección de picos
-    from scipy.signal import find_peaks
-    thresh_db = np.max(music_db) - 20.0
-    peak_idx, _ = find_peaks(music_db, height=thresh_db, distance=n_freqs // 80)
-    peaks = [(float(freqs_mhz[i]), float(music_db[i])) for i in peak_idx[:10]]
-
-    return {
-        "freqs": freqs_mhz,
-        "music_spectrum": music_db,
-        "peaks": peaks,
-        "eigenvalues": eigenvalues.real.tolist(),
-        "n_signals": n_signals,
-        "method": "Pseudo-MUSIC"
-    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -522,7 +451,7 @@ def _correlogram_psd_1d(sig: np.ndarray, max_lag: int, fft_size: int) -> np.ndar
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 8. AR/Burg 2D — Espectrograma paramétrico (ventana deslizante)
+# 8. AR/Burg — Espectrograma paramétrico (ventana deslizante)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def run_ar_burg_2d(iq: np.ndarray, order: int = 20, n_freqs: int = 1024,
@@ -534,7 +463,7 @@ def run_ar_burg_2d(iq: np.ndarray, order: int = 20, n_freqs: int = 1024,
                    f_min_visual: float = None,
                    f_max_visual: float = None) -> dict:
     """
-    Espectrograma paramétrico AR/Burg 2D por bloques: replica el main_ar.m de MATLAB.
+    Espectrograma paramétrico AR/Burg por bloques: replica el main_ar.m de MATLAB.
     Procesa el buffer IQ completo en bloques de block_size, aplica pyulear equivalente
     (Burg) sobre ventanas deslizantes dentro de cada bloque, acumulando filas en la
     matriz 2D tiempo-frecuencia.
@@ -592,7 +521,7 @@ def run_ar_burg_2d(iq: np.ndarray, order: int = 20, n_freqs: int = 1024,
             "freqs_mhz": freqs_mhz,
             "v_min": offset_calibracion - 5, "v_max": offset_calibracion + 30,
             "noise_floor": float(offset_calibracion),
-            "method": "AR/Burg 2D",
+            "method": "AR/Burg",
         }
 
     t_signal = np.arange(N, dtype=np.float32) / sample_rate
@@ -676,13 +605,13 @@ def run_ar_burg_2d(iq: np.ndarray, order: int = 20, n_freqs: int = 1024,
         "v_min":       v_min,
         "v_max":       v_max,
         "noise_floor": noise_floor,
-        "method":      "AR/Burg 2D",
+        "method":      "AR/Burg",
     }
 
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 9. Correlograma 2D — Método Blackman-Tukey (xcorr biased + Bartlett)
+# 9. Correlograma — Método Blackman-Tukey (xcorr biased + Bartlett)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def run_correlogram_2d(iq: np.ndarray, max_lag: int = 37, n_freqs: int = 1024,
@@ -717,7 +646,7 @@ def run_correlogram_2d(iq: np.ndarray, max_lag: int = 37, n_freqs: int = 1024,
             "freqs_mhz": freqs_mhz,
             "v_min": offset_calibracion - 5, "v_max": offset_calibracion + 30,
             "noise_floor": float(offset_calibracion),
-            "method": "Correlograma 2D (Blackman-Tukey)",
+            "method": "Correlograma (Blackman-Tukey)",
         }
 
     t_signal  = np.arange(N) / sample_rate
@@ -740,7 +669,7 @@ def run_correlogram_2d(iq: np.ndarray, max_lag: int = 37, n_freqs: int = 1024,
             "freqs_mhz": freqs_mhz,
             "v_min": offset_calibracion - 5, "v_max": offset_calibracion + 30,
             "noise_floor": float(offset_calibracion),
-            "method": "Correlograma 2D (Blackman-Tukey)",
+            "method": "Correlograma (Blackman-Tukey)",
         }
 
     t_seg_abs = t_signal[seg_starts] + (window_len_eff / 2) / sample_rate
@@ -810,7 +739,7 @@ def run_correlogram_2d(iq: np.ndarray, max_lag: int = 37, n_freqs: int = 1024,
         "v_min": v_min,
         "v_max": v_max,
         "noise_floor": noise_floor,
-        "method": "Correlograma 2D (Blackman-Tukey)",
+        "method": "Correlograma (Blackman-Tukey)",
     }
 
 
