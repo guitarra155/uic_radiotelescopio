@@ -24,7 +24,7 @@
         "welch_fft": 1024,
         "welch_overlap": 0.5,
         "corr_max_lag": 512,
-        "spec2d_method": "ar_burg_2d"
+        "spec2d_method": "waterfall"
     },
     "analysis_window_sec": 0.1,
     "moving_avg_samples": 4,

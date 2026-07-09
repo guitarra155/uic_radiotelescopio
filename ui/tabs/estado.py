@@ -378,66 +378,66 @@ def build_estado(page: ft.Page) -> ft.Control:
 
     md_tabs = ft.Markdown(
         "**📚 Pestañas y Componentes**\n\n"
-        "- **Señal y Filtrada:** Visualización comparativa de la señal bruta vs. filtrada. Permite monitorear RFI y el efecto del Moving Average en tiempo real.\n"
-        "- **Espectrograma (Cascada):** Representación 2D temporal-frecuencial. Ofrece Waterfall clásico, CWT/Morlet, AR/Burg y Correlograma. Ideal para rastrear transitorios y variaciones espectrales.\n"
-        "- **Histograma & Estadística:** Calcula histogramas de magnitud o fase. Realiza ajustes probabilísticos en tiempo real por MLE (**Gaussiano, Weibull y Rician**) para clasificar la señal de fondo frente a interferencias terrestres (RFI) o fuentes astronómicas coherentes, calculando la desviación SSE. En modo Fase, se dibuja la distribución Uniforme teórica ($1/2\\pi$).\n"
-        "- **Potencia vs. Tiempo:** Registra la evolución de la potencia integrada en el dominio del tiempo usando un buffer circular de alta velocidad. Esencial para el análisis de pulso y transitorios.\n"
-        "- **SNR vs. Frecuencia:** *Signal-to-Noise Ratio* (Relación Señal a Ruido). Mide qué tan por encima del ruido de fondo térmico están los picos. SNR > 0 dB significa detección probable.\n"
-        "- **Algoritmo DSP:** Aplicación de matemáticas complejas sobre señales bloqueadas o congeladas.",
+        "- **Señal y Filtrada:** Visualización comparativa de la señal bruta vs. filtrada. Permite monitorear RFI y el efecto del filtro FIR de media móvil en tiempo real.\n"
+        "- **Espectrograma (Cascada):** Representación bidimensional temporal-frecuencial. Ofrece Waterfall clásico, transformada continua de Wavelet (Morlet), autoregresión lineal (Burg) y Correlograma. Ideal para rastrear transitorios y variaciones espectrales.\n"
+        "- **Histograma & Estadística:** Calcula la distribución empírica de magnitud o fase. Realiza ajustes probabilísticos mediante estimación de máxima verosimilitud (MLE) a modelos **Gaussiano, Weibull y Rician** para clasificar la señal térmica frente a interferencias terrestres (RFI) o fuentes coherentes, computando la desviación SSE. En fase, evalúa la aproximación a una distribución Uniforme teórica ($1/2\\pi$).\n"
+        "- **Potencia vs. Tiempo:** Registra la evolución de la potencia integrada en el tiempo usando un buffer circular de alta velocidad. Esencial para análisis temporal de pulsos.\n"
+        "- **SNR vs. Frecuencia:** Visualización de la relación señal/ruido bin por bin mediante el algoritmo adaptativo CFAR, aislando picos por encima del ruido de fondo térmico dinámico.\n"
+        "- **Algoritmo DSP:** Permite procesar de manera estática y avanzada el bloque de datos congelado en el review temporal.",
         selectable=True,
     )
 
     md_hw = ft.Markdown(
         "**📻 Conceptos de SDR, Hardware y Live Tuning**\n\n"
-        "- **Frecuencia Central (MHz):** Determina el punto medio del espectro físico monitoreado.\n  *Rango:* 0.009 MHz a 6000 MHz (depende del BB60C).\n  *Efecto:* Su cambio aplica **Sintonización en Vivo (Live Tuning)**, moviendo los osciladores físicos de la antena sin detener el software.\n"
-        "- **Sample Rate / Tasa de Muestreo (MSps):** Velocidad de captura del ADC. Dicta tu \"ancho de banda visual\" total.\n  *Rango:* 1.0 a 40.0 MSps.\n  *Efecto:* Valores altos permiten ver bandas gigantes (como WiFi completo) pero exigen mucha CPU. Se aplica en tiempo real ajustando la decimación del hardware.\n"
-        "- **Nivel de Referencia (dBm):** Controla el pre-amplificador (LNA). Actúa como techo de potencia para evitar la saturación (`ADC Overflow`).\n  *Rango:* -100 dBm (Máxima ganancia) a +20 dBm (Mínima ganancia).\n  *Efecto:* Si buscas señales astronómicas, usa -80. Si monitoreas radares o TV, usa 0 o +10 para evitar saturación cruzada.\n"
-        "- **RBW / IQ BW (MHz):** Filtro Pasa-Banda de hardware para la captura I/Q.\n  *Rango:* 0.1 MHz a 40.0 MHz.\n  *Efecto:* Cerrar este valor aisla la señal deseada y mata el ruido térmico adyacente. Se re-sintetiza al presionar Enter.\n"
-        "- **VBW Smoothing (Video Bandwidth):** Promedio matemático temporal (EMA) sobre el espectro dibujado.\n  *Rango:* 0.1 (Muy suavizado, revela pulsos débiles y estables) a 1.0 (Sin suavizado, 100% caótico y físico).\n  *Efecto:* Aplicado solo en software, es instantáneo y no interrumpe al hardware.\n"
-        "- **Live Tuning (Reconfiguración al Vuelo):** Todos estos controles se aplican *al presionar Enter o quitar el cursor (Blur)*. El motor inyecta comandos C++ (`bb_abort` y `bb_initiate`) reiniciando el dispositivo en un lapso de milisegundos sin congelar la ventana gráfica.",
+        "- **Frecuencia Central (MHz):** Punto medio del espectro físico monitoreado. Modificarla aplica un sintonizado dinámico en caliente (Live Tuning) sobre el oscilador local del hardware BB60C sin pausar el flujo de la aplicación.\n"
+        "- **Sample Rate / Tasa de Muestreo (MSps):** Velocidad de digitalización del ADC del hardware. Físicamente, el BB60C digitaliza a 80 MSps de forma interna y reduce mediante decimación y filtrado anti-aliasing digital a un flujo digital final I/Q de hasta 40 MSps a través de USB 3.0 para cubrir un ancho de banda instantáneo calibrado de 27 MHz respetando el criterio de Nyquist.\n"
+        "- **Nivel de Referencia (dBm):** Ajusta el rango dinámico del preamplificador (LNA). Actúa como límite superior de entrada analógica para evitar saturación y sobreflujo del ADC (ADC Overflow).\n"
+        "- **RBW / IQ BW (MHz):** Ancho de banda de canal físico y filtro de hardware para la captura I/Q. Restringe el ruido térmico adyacente previo a la digitalización.\n"
+        "- **VBW Smoothing:** Filtro de software tipo media móvil exponencial aplicado sobre las trazas de amplitud espectral de forma instantánea.\n"
+        "- **Live Tuning (Reconfiguración en Caliente):** Al cambiar parámetros de hardware y confirmar (Enter o desenfoque del campo), el motor DSP aborta y reinicia de forma segura el stream de C++ del hardware mediante la API nativa sin congelar el renderizado visual de la GUI.",
         selectable=True,
     )
 
     md_dsp = ft.Markdown(
-        "**🔬 Matemáticas y Algoritmos (DSP)**\n\n"
-        "- **FFT (Fast Fourier Transform):** Algoritmo clásico para obtener frecuencias. Es extremadamente rápido pero sufre de *fugas espectrales* (spectral leakage) y enmascaramiento por resolución limitada.\n"
-        "- **Welch PSD:** Calcula la Densidad Espectral de Potencia mediante la división del bloque en ventanas que se solapan (overlap) y se promedian. Resulta en gráficas libres de picos de ruido esporádicos.\n"
-        "- **Correlograma:** Estimación espectral indirecta basada en el *Teorema de Wiener-Khinchin*. Calcula la autocorrelación de la señal, le aplica una ventana temporal y luego su FFT. Excelente para revelar señales periódicas ocultas en ruido térmico.\n"
-        "- **CWT (Continuous Wavelet Transform):** Utiliza la ondícula de *Morlet* (una sinusoide envuelta en una gaussiana). Escanea la señal para entregar un mapa ultra-preciso de correlación de Tiempo y Frecuencia.\n"
-        "- **Filtro MA (Moving Average):** Filtro FIR (*Finite Impulse Response*) pasa-bajos simple temporal que limpia ruido térmico de alta frecuencia instantáneo.",
+        "**🔬 Concurrencia y Procesamiento Digital (DSP)**\n\n"
+        "- **Arquitectura Multihilo y Paralelismo:** La adquisición y el procesamiento se ejecutan en un hilo de trabajo secundario mediante la clase `threading.Thread` de forma asíncrona a la interfaz visual. Al invocar llamadas matemáticas pesadas (NumPy / transformadas de Fourier) y la API nativa de C++ (DLL) del BB60C, se libera el bloqueo global de intérprete (GIL) de Python, permitiendo al sistema operativo paralelizar las tareas entre los múltiples núcleos físicos del procesador.\n"
+        "- **FFT (Fast Fourier Transform):** Algoritmo clásico para obtener frecuencias. Es extremadamente rápido pero sufre de fugas espectrales y enmascaramiento por resolución limitada.\n"
+        "- **Welch PSD:** Estima la densidad espectral de potencia dividiendo la señal en bloques solapados que se ventanean y promedian, reduciendo significativamente la varianza del ruido.\n"
+        "- **Correlograma:** Estimación espectral indirecta basada en el Teorema de Wiener-Khinchin que aplica la FFT a la función de autocorrelación, excelente para revelar periodicidades ocultas en ruido térmico.\n"
+        "- **CWT (Continuous Wavelet Transform):** Correlación tiempo-frecuencia usando ondículas de Morlet para localizar transitorios de corta duración.",
         selectable=True,
     )
 
     md_trigger = ft.Markdown(
         "**⚡ Eventos Transitorios y Detección de Pulsos**\n\n"
-        "- **Magnitud de Energía ($I^2 + Q^2$):** La potencia base instantánea de la señal analítica compleja. Se utiliza como métrica principal para disparar la captura de eventos.\n"
-        "- **Umbrales e Histéresis:** Dos límites (Alto y Bajo). El algoritmo captura cuando se supera el *Umbral Alto* y finaliza cuando cae bajo el *Umbral Bajo*, previniendo \"falsos positivos\" repetitivos por el ruido estadístico.\n"
-        "- **Recorte Automático (Trim $\\pm 1.5s$):** El algoritmo iterativo localiza el centro exacto del pulso detectado y recorta 3 segundos íntegros (1.5 segundos a cada lado). Preservar el silencio antes y después del evento es crucial para validar detecciones en radioastronomía.\n"
-        "- **Zero-Crossing Rate (ZCR):** Tasa de cruces por cero. Una métrica rápida en el dominio del tiempo. El ruido puramente térmico tiene un ZCR altísimo y desordenado; pulsos coherentes reducen significativamente esta tasa.",
+        "- **Smart Trigger (Doble Umbral):** Detección temporal basada en la potencia base instantánea ($I^2 + Q^2$). Utiliza una histéresis regulable (típicamente 15 dB sobre el nivel base para disparar la captura y 5 dB para detenerla), previniendo activaciones espurias consecutivas debido a fluctuaciones del ruido térmico.\n"
+        "- **CFAR (Constant False Alarm Rate):** Algoritmo espectral adaptativo en el dominio de la frecuencia. Estima bin por bin el piso de ruido dinámico restando la potencia media. Aquellos bins que superen un umbral establecido (típicamente 6 dB) son catalogados como señales candidatas y agrupados con una separación espectral mínima de 10 kHz.\n"
+        "- **Recorte de Eventos (Trim $\\pm 1.5s$):** Localiza de forma retrospectiva el centro de gravedad del transitorio de energía detectado y realiza un recorte exacto de 3.0 segundos en disco para su análisis científico.\n"
+        "- **Zero-Crossing Rate (ZCR):** Tasa de cruces por cero. Una métrica en el dominio del tiempo; señales de ruido térmico aleatorias presentan una tasa muy alta, mientras que pulsos coherentes la reducen considerablemente.",
         selectable=True,
     )
 
     md_user_manual = ft.Markdown(
         "**Guía Rápida de Operación**\n\n"
-        "1. **Seleccionar Origen:** En el panel derecho superior, elige **SDR** para capturar con la antena BB60C o **Archivo** para cargar un archivo `.iq` grabado.\n"
-        "2. **Iniciar Flujo:** Haz clic en el botón de Reproducción (**▶️**) en el encabezado superior para comenzar el procesamiento.\n"
-        "3. **Sintonización en Vivo:** Escribe la *Frecuencia Central (MHz)* deseada en el panel derecho y presiona *Enter* para sintonizar el hardware al vuelo.\n"
-        "4. **Congelar y Analizar:** Presiona Pausa (**⏸️**) para bloquear un frame. Usa **Retroceder (◀️)** o **Avanzar (▶️)** para explorar el buffer histórico cuadro por cuadro.\n"
-        "5. **Algoritmos DSP:** Con el flujo pausado, ve a la pestaña **Algoritmo DSP**, selecciona un método (ej. Welch) y presiona *Ejecutar*.\n"
-        "6. **Grabar Señal:** En modo SDR, presiona Grabar (**⏺️**) para almacenar datos crudos en disco. Presiona nuevamente para guardar de forma segura.\n"
-        "7. **Captura de Transitorios:** Actívala desde la configuración para capturar pulsos de forma automática basados en doble umbral de energía.",
+        "1. **Seleccionar Origen:** Elige capturar en vivo mediante **Hardware** o reproducir un archivo local **IQ** con su formato de datos correspondiente.\n"
+        "2. **Iniciar Flujo:** Haz clic en **▶ Iniciar Adquisición** en el encabezado para iniciar el streaming en el hilo secundario.\n"
+        "3. **Sintonización:** Ajusta la frecuencia central o el sample rate en el panel y presiona *Enter* para aplicar el sintonizado al vuelo.\n"
+        "4. **Revisión Temporal:** Presiona **⏸ Pausar** para congelar el espectro. Usa las teclas **Coma (,)** para retroceder o **Punto (.)** para avanzar cuadro por cuadro en el historial de snapshots.\n"
+        "5. **Procesamiento de Señal:** Con el flujo en pausa, utiliza la pestaña de *Algoritmos DSP* para procesar estáticamente el cuadro seleccionado.\n"
+        "6. **Fijar Navegación:** Haz clic en el botón de la barra lateral (esquina inferior) para alternar entre el menú vertical colapsable o la barra superior horizontal clásica.",
         selectable=True,
     )
 
     md_shortcuts = ft.Markdown(
         "**⌨️ Atajos de Teclado y Control de Pantalla**\n\n"
-        "- **CTRL + TAB / CTRL + SHIFT + TAB:** Navega secuencialmente hacia adelante o hacia atrás por las 6 pestañas.\n"
-        "- **CTRL + [1-6]:** Salta directamente a la pestaña correspondiente (1: Inicio, 2: Señal y Filtrada, etc.).\n"
-        "- **CTRL + B:** Oculta/Muestra el panel lateral de estadísticas y datos de la pestaña activa actual para agrandar la gráfica.\n"
-        "- **CTRL + SHIFT + B:** Oculta/Muestra el panel lateral derecho global de configuración del SDR.\n"
-        "- **CTRL + SHIFT + [1-6]:** Colapsa de forma remota el panel de estadísticas de una pestaña específica (ej. 4 para el Histograma).\n"
-        "- **F5 / F8 / F11:** Control global de reproducción (F5), parada de emergencia (F8) y pantalla completa (F11).\n"
-        "- **CTRL + Scroll / SHIFT + Scroll:** Ajusta el zoom vertical (Y) u horizontal (X) de los gráficos activos de forma interactiva.",
+        "- **CTRL + TAB / CTRL + SHIFT + TAB:** Navega secuencialmente entre las pestañas del sistema.\n"
+        "- **CTRL + [1-6]:** Salta directamente a una pestaña (1: Inicio, 2: Monitoreo Dual, etc.).\n"
+        "- **CTRL + B:** Oculta o muestra el panel lateral de visualización activa.\n"
+        "- **CTRL + SHIFT + B:** Oculta o muestra el panel de configuración global del hardware.\n"
+        "- **Coma (,) / Punto (.):** Navegación cuadro a cuadro hacia atrás o adelante durante la pausa de la captura.\n"
+        "- **F1 - F4 (Monitoreo Dual):** Dibuja un recuadro amarillo para seleccionar una de las cuatro gráficas activas.\n"
+        "- **CTRL + F1 - F4 (Monitoreo Dual):** Maximiza la gráfica correspondiente a pantalla completa o la restaura al diseño original.\n"
+        "- **F5 / F8 / F11:** Controles de adquisición: iniciar/pausar (F5), detener (F8) y pantalla completa general (F11).",
         selectable=True,
     )
 

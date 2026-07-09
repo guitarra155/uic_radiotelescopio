@@ -299,6 +299,8 @@ def build_header(page: ft.Page) -> ft.Control:
             on_play_pause(None)
         elif msg == "emergency_stop":
             on_emergency(None)
+        elif msg == "update_frame_label":
+            _update_frame_label()
         elif msg == "refresh_charts":
             header_title.value = f"Frecuencia : {engine_instance.center_freq} MHz"
             header_title.update()

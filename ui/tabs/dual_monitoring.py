@@ -103,18 +103,20 @@ def build_dual_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
             
         # Actualizar los iconos de todos para que el estado sea correcto
         for box in [box_spec_raw, box_spec_filt, box_amp_raw, box_amp_filt]:
-            btn = box.content.controls[0].controls[1]
-            if maximized_chart[0] is None:
-                btn.icon = ft.Icons.FULLSCREEN
-            else:
-                if box.visible:
-                    btn.icon = ft.Icons.FULLSCREEN_EXIT
+            btn = getattr(box, "btn_maximize", None)
+            if btn:
+                if maximized_chart[0] is None:
+                    btn.icon = ft.Icons.FULLSCREEN
+                else:
+                    if box.visible:
+                        btn.icon = ft.Icons.FULLSCREEN_EXIT
                     
         # Avisar al backend para ajustar resoluciones SVG
         from core.dsp_engine import engine_instance
         engine_instance.maximized_dual_chart = maximized_chart[0]
         e.control.page.pubsub.send_all("refresh_charts")
-        e.control.page.update()
+        if e and e.control and e.control.page:
+            e.control.page.update()
 
     def on_fullscreen_global(e, chart_id):
         from core.dsp_engine import engine_instance
@@ -158,7 +160,7 @@ def build_dual_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
             width=26,
             height=26
         )
-        return ft.Container(
+        box = ft.Container(
             content=ft.Column([
                 ft.Row([
                     ft.Text(title, color=accent, size=9, weight=ft.FontWeight.BOLD),
@@ -180,6 +182,9 @@ def build_dual_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
                              bottom=ft.BorderSide(1, BORDER_COL), left=ft.BorderSide(1, BORDER_COL)),
             padding=ft.Padding(left=6, top=2, right=2, bottom=4),
         )
+        box.btn_maximize = btn
+        box.btn_fs = btn_fs
+        return box
 
     box_spec_raw = _chart_box(img_spec_raw, "mon_raw_spec", "ESPECTRO ORIGINAL", ACCENT_CYAN)
     box_spec_filt = _chart_box(img_spec_filt, "mon_filt_spec", "ESPECTRO FILTRADO", ACCENT_GREEN)
@@ -189,14 +194,83 @@ def build_dual_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
     row_1 = ft.Row([box_spec_raw, box_spec_filt], expand=True, spacing=10, vertical_alignment=ft.CrossAxisAlignment.STRETCH)
     row_2 = ft.Row([box_amp_raw, box_amp_filt], expand=True, spacing=10, vertical_alignment=ft.CrossAxisAlignment.STRETCH)
 
+    boxes = [box_spec_raw, box_spec_filt, box_amp_raw, box_amp_filt]
+    accents = [ACCENT_CYAN, ACCENT_GREEN, ACCENT_CYAN, ACCENT_AMBER]
+    chart_ids = ["mon_raw_spec", "mon_filt_spec", "mon_raw_amp", "mon_filt_amp"]
+    selected_idx = [None]
+
+    async def on_dual_keyboard_msg(msg):
+        from core.dsp_engine import engine_instance
+        if engine_instance.active_tab != 1: return  # Pestaña 2 (índice 1)
+        
+        if isinstance(msg, tuple) and len(msg) == 2:
+            cmd, idx = msg
+            if cmd == "select_dual_chart":
+                selected_idx[0] = idx
+                for i, (box, accent) in enumerate(zip(boxes, accents)):
+                    if i == idx:
+                        # Borde amarillo grueso
+                        box.border = ft.Border(
+                            top=ft.BorderSide(3, ft.Colors.YELLOW),
+                            right=ft.BorderSide(3, ft.Colors.YELLOW),
+                            bottom=ft.BorderSide(3, ft.Colors.YELLOW),
+                            left=ft.BorderSide(3, ft.Colors.YELLOW)
+                        )
+                    else:
+                        # Borde normal
+                        box.border = ft.Border(
+                            top=ft.BorderSide(2, accent),
+                            right=ft.BorderSide(1, BORDER_COL),
+                            bottom=ft.BorderSide(1, BORDER_COL),
+                            left=ft.BorderSide(1, BORDER_COL)
+                        )
+                    if box.page:
+                        try: box.update()
+                        except: pass
+            elif cmd == "maximize_dual_chart":
+                box = boxes[idx]
+                chart_id = chart_ids[idx]
+                class FakeEvent:
+                    def __init__(self):
+                        self.control = getattr(box, "btn_maximize", None)
+                e_fake = FakeEvent()
+                if e_fake.control:
+                    on_maximize(e_fake, chart_id)
+
+    page.pubsub.subscribe(on_dual_keyboard_msg)
+
     # Grid 2x2
     grid = ft.Column([
         row_1,
         row_2,
     ], expand=True, spacing=10, horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
 
+    help_banner = ft.Container(
+        content=ft.Row([
+            ft.Icon(ft.Icons.KEYBOARD_ROUNDED, color=ACCENT_CYAN, size=15),
+            ft.Text(
+                "Navegación por teclado: [F1 - F4] Seleccionar gráfica (borde amarillo)  •  [CTRL + F1 - F4] Maximizar / Restaurar vista",
+                color=TEXT_MUTED,
+                size=10,
+                weight=ft.FontWeight.W_500
+            )
+        ], spacing=8, alignment=ft.MainAxisAlignment.CENTER),
+        padding=ft.Padding(top=5, bottom=5, left=10, right=10),
+        bgcolor=PANEL_BG,
+        border_radius=6,
+        border=ft.Border(
+            top=ft.BorderSide(1, BORDER_COL), right=ft.BorderSide(1, BORDER_COL),
+            bottom=ft.BorderSide(1, BORDER_COL), left=ft.BorderSide(1, BORDER_COL)
+        )
+    )
+
+    main_layout = ft.Column([
+        grid,
+        help_banner
+    ], expand=True, spacing=8, horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
+
     return ft.Container(
-        content=grid,
+        content=main_layout,
         expand=True,
         padding=ft.Padding(left=10, top=10, right=10, bottom=10),
     )

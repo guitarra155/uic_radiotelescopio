@@ -50,6 +50,24 @@ def main(page: ft.Page):
         elif e.key == "F11":
             page.window.full_screen = not page.window.full_screen
             page.update()
+        elif e.key in {"ArrowLeft", "Left", ","} and engine_instance.is_paused and not getattr(engine_instance, "any_field_focused", False):
+            engine_instance.seek_frames(1)
+            engine_instance.data_ready = True
+            engine_instance._seek_refresh = True
+            page.pubsub.send_all("refresh_charts_all")
+            page.pubsub.send_all("update_frame_label")
+        elif e.key in {"ArrowRight", "Right", "."} and engine_instance.is_paused and not getattr(engine_instance, "any_field_focused", False):
+            engine_instance.seek_frames(-1)
+            engine_instance.data_ready = True
+            engine_instance._seek_refresh = True
+            page.pubsub.send_all("refresh_charts_all")
+            page.pubsub.send_all("update_frame_label")
+        elif e.ctrl and e.key in {"F1", "F2", "F3", "F4"}:
+            idx = int(e.key[1]) - 1
+            page.pubsub.send_all(("maximize_dual_chart", idx))
+        elif e.key in {"F1", "F2", "F3", "F4"} and not e.ctrl and not e.shift:
+            idx = int(e.key[1]) - 1
+            page.pubsub.send_all(("select_dual_chart", idx))
         if e.ctrl and e.shift:
             if e.key == "Tab":
                 prev_idx = (engine_instance.active_tab - 1) % len(tab_labels)

@@ -12,6 +12,7 @@ def build_config(page: ft.Page) -> ft.Control:
     
     # Contenedor raíz que se refrescará por completo
     root_container = ft.Container(expand=True)
+    focused_fields = set()
 
     def on_ui_event(e):
         """Cualquier cambio en la UI dispara un refresco total del panel."""
@@ -53,7 +54,7 @@ def build_config(page: ft.Page) -> ft.Control:
         return btn
 
     def make_input(value, on_submit, input_width=INPUT_WIDTH):
-        return ft.TextField(
+        tf = ft.TextField(
             value=str(value),
             width=input_width,
             height=28,
@@ -63,9 +64,23 @@ def build_config(page: ft.Page) -> ft.Control:
             bgcolor=DARK_BG,
             border_color=BORDER_COL,
             focused_border_color=ACCENT_CYAN,
-            on_submit=on_submit,
-            on_blur=on_submit
         )
+
+        def handle_focus(e):
+            focused_fields.add(tf)
+            engine_instance.any_field_focused = True
+            if tf.page:
+                tf.update()
+
+        def handle_blur(e):
+            focused_fields.discard(tf)
+            engine_instance.any_field_focused = len(focused_fields) > 0
+            on_submit(e)
+
+        tf.on_focus = handle_focus
+        tf.on_blur = handle_blur
+        tf.on_submit = on_submit
+        return tf
 
     def row(label, control):
         return ft.Row([
@@ -370,11 +385,11 @@ def build_config(page: ft.Page) -> ft.Control:
                     btn_y.icon_color = new_color_y
                     updated.append(btn_y)
 
-            # Sincronizar textfields SOLO SI auto está activado para ese eje
+            # Sincronizar textfields SOLO SI auto está activado para ese eje y no tienen foco
             if is_x:
                 for key in ["xmin", "xmax"]:
                     tf = fields.get(key)
-                    if tf and tf.page:
+                    if tf and tf.page and tf not in focused_fields:
                         new_val = fmt_float(cfg.get(key, 0))
                         if tf.value != new_val:
                             tf.value = new_val
@@ -383,7 +398,7 @@ def build_config(page: ft.Page) -> ft.Control:
             if is_y:
                 for key in ["ymin", "ymax"]:
                     tf = fields.get(key)
-                    if tf and tf.page:
+                    if tf and tf.page and tf not in focused_fields:
                         new_val = fmt_float(cfg.get(key, 0))
                         if tf.value != new_val:
                             tf.value = new_val
