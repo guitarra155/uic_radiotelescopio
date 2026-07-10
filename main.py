@@ -165,12 +165,12 @@ def main(page: ft.Page):
     footer = build_footer()
 
     tab_labels = [
-        ("🏠", "Inicio & Configuración"),     # 0
-        ("🌓", "Señal y Señal Filtrada"),      # 1
-        ("🌈", "Espectrograma"),               # 2
-        ("📊", "Histograma"),                  # 3
-        ("⚡", "Potencia vs. Tiempo"),          # 4
-        ("📶", "SNR vs. Frecuencia"),           # 5
+        ("🏠", "1.- Inicio & Configuración"),     # 0
+        ("🌓", "2.- Señal y Señal Filtrada"),      # 1
+        ("🌈", "3.- Espectrograma"),               # 2
+        ("📊", "4.- Histograma"),                  # 3
+        ("⚡", "5.- Potencia vs. Tiempo"),          # 4
+        ("📶", "6.- SNR vs. Frecuencia"),           # 5
     ]
 
     # Renderizamos los components visuals de cada módulo
