@@ -163,7 +163,7 @@ def main(page: ft.Page):
     # Components de Layout Base
     header = build_header(page)
     footer = build_footer()
-
+    #Definimos las tabs
     tab_labels = [
         ("🏠", "1.- Inicio & Configuración"),     # 0
         ("🌓", "2.- Señal y Señal Filtrada"),      # 1
