@@ -64,10 +64,16 @@ def main(page: ft.Page):
             page.pubsub.send_all("update_frame_label")
         elif e.ctrl and e.key in {"F1", "F2", "F3", "F4"}:
             idx = int(e.key[1]) - 1
-            page.pubsub.send_all(("maximize_dual_chart", idx))
+            if engine_instance.active_tab == 1:
+                page.pubsub.send_all(("maximize_dual_chart", idx))
+            elif engine_instance.active_tab == 2:
+                page.pubsub.send_all(("maximize_spec", idx))
         elif e.key in {"F1", "F2", "F3", "F4"} and not e.ctrl and not e.shift:
             idx = int(e.key[1]) - 1
-            page.pubsub.send_all(("select_dual_chart", idx))
+            if engine_instance.active_tab == 1:
+                page.pubsub.send_all(("select_dual_chart", idx))
+            elif engine_instance.active_tab == 2:
+                page.pubsub.send_all(("select_spec_method", idx))
         if e.ctrl and e.shift:
             if e.key == "Tab":
                 prev_idx = (engine_instance.active_tab - 1) % len(tab_labels)
@@ -138,7 +144,11 @@ def main(page: ft.Page):
     page.window.min_height= 620
     page.padding = 0
     page.spacing = 0
-    page.theme   = ft.Theme(color_scheme_seed=ACCENT_CYAN, use_material3=True)
+    page.theme   = ft.Theme(
+        color_scheme_seed=ACCENT_CYAN,
+        use_material3=True,
+        focus_color="rgba(0, 210, 255, 0.22)"
+    )
 
     # Capturar y sincronizar las dimensions de la ventana con el renderizador de gráficas
     def on_page_resize(e):

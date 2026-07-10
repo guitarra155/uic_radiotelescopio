@@ -204,6 +204,26 @@ El `__init__.py` aplica `make_synchronized` a todas las funciones `chart_*` con 
 - **Exportación Manual de Detecciones en Pestaña 6:**
   - Se implementó un botón `"Guardar Detección"` (`btn_save`) en el panel lateral de **SNR vs. Frecuencia** (`ui/tabs/freq_snr.py`).
   - Al presionarse, guarda la curva completa de SNR observada en formato CSV (`Resultados_Datos/cfar_detection_YYYYMMDD_HHMMSS.csv`) —ideal para importar en Excel o MATLAB— y la lista de frecuencias detectadas por el CFAR con sus metadatos (frecuencia central, tasa de muestreo, timestamp, piso de ruido) en un archivo JSON descriptivo (`Resultados_Datos/cfar_detection_YYYYMMDD_HHMMSS.json`), mostrando confirmación en pantalla.
+- **Barra Lateral de Navegación Vertical Colapsable (Sidebar):**
+  - Se sustituyó la barra horizontal superior clásica por un menú lateral izquierdo colapsable en [main.py](file:///c:/uic_radiotelescopio/main.py).
+  - **Auto-Hover:** La barra colapsa a un ancho mínimo de 52px (mostrando únicamente iconos e indicando el nombre mediante Tooltips) y se expande de manera automática a 190px mediante una animación suave de 180ms al aproximar el mouse.
+  - **Fijación Manual:** El botón en la esquina superior del sidebar (`toggle_btn`) o el atajo de teclado `Ctrl + Shift + S` permiten anclar la barra en estado expandido permanentemente.
+  - **Botón de Modo de Navegación:** Un botón ubicado en la base del menú lateral (icono `GRID_VIEW`) permite alternar al vuelo todo el sistema al modo clásico superior (topbar horizontal). La barra superior cuenta a su vez con un botón de retorno (`VIEW_SIDEBAR`) en el extremo derecho para restaurar el modo vertical de forma recíproca.
+- **Navegación Cuadro por Cuadro (Snapshots):**
+  - Se añadieron las teclas de acceso rápido **Coma (`,`)** y **Punto (`.`)** en el manejador global de teclado en [main.py](file:///c:/uic_radiotelescopio/main.py) para retroceder y avanzar respectivamente un frame en el historial durante la pausa de adquisición.
+- **Soporte de Foco de Alta Visibilidad:**
+  - Se configuró la propiedad global `focus_color` en el tema de Flet (`main.py`) asignando un color cian transparente (`rgba(0, 210, 255, 0.22)`) a cualquier control con foco de teclado para facilitar la navegación mediante la tecla **Tab** en modo oscuro.
+  - Se implementó un rastreador dinámico de foco en [sdr_config.py](file:///c:/uic_radiotelescopio/ui/tabs/sdr_config.py). Mientras un `TextField` tenga el foco de teclado del usuario, se omiten las actualizaciones e hilos de sincronización en segundo plano sobre ese control para prevenir la pérdida del cursor y bloqueos en la navegación con Tab.
+- **Atajos de Selección y Ampliación en Monitoreo Dual (Pestaña 2):**
+  - **Selección Directa (F1 - F4):** Al presionar F1 a F4 se resalta la gráfica correspondiente (Espectro Original, Espectro Filtrado, Amplitud Original o Amplitud Filtrada) dibujando un borde amarillo de 3px a su alrededor para denotar foco activo.
+  - **Ampliación Directa (CTRL + F1 - F4):** Maximiza a pantalla completa la gráfica seleccionada en el grid 2x2. Volver a presionar el mismo atajo restaura el cuadrante a su tamaño y posición original.
+  - **Ayuda Visual:** Se agregó un banner informativo de ayuda (`help_banner`) en el pie de la pestaña [dual_monitoring.py](file:///c:/uic_radiotelescopio/ui/tabs/dual_monitoring.py) que documenta estas combinaciones.
+- **Atajos de Selección y Ampliación en Espectrograma (Pestaña 3):**
+  - **Selección Directa (F1 - F4):** Cambia el método 2D del espectrograma a Waterfall (F1), CWT (F2), AR/Burg (F3) o Correlograma (F4).
+  - **Ampliación Directa (CTRL + F1 - F4):** Alterna el gráfico a pantalla completa o lo restaura al tamaño predeterminado de la pestaña [spectrogram.py](file:///c:/uic_radiotelescopio/ui/tabs/spectrogram.py).
+  - **Ayuda Visual:** Un banner informativo de ayuda (`help_banner`) describe los atajos al pie de la gráfica.
+- **Documentación Matemática:**
+  - Se generó el archivo de soporte matemático formal [formulas_dsp.md](file:///c:/uic_radiotelescopio/docs/formulas_dsp.md) que describe el cálculo lineal de potencia promedio y estimación de relación señal-ruido.
 
 ---
 

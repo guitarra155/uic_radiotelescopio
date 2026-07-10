@@ -435,8 +435,10 @@ def build_estado(page: ft.Page) -> ft.Control:
         "- **CTRL + B:** Oculta o muestra el panel lateral de visualización activa.\n"
         "- **CTRL + SHIFT + B:** Oculta o muestra el panel de configuración global del hardware.\n"
         "- **Coma (,) / Punto (.):** Navegación cuadro a cuadro hacia atrás o adelante durante la pausa de la captura.\n"
-        "- **F1 - F4 (Monitoreo Dual):** Dibuja un recuadro amarillo para seleccionar una de las cuatro gráficas activas.\n"
-        "- **CTRL + F1 - F4 (Monitoreo Dual):** Maximiza la gráfica correspondiente a pantalla completa o la restaura al diseño original.\n"
+        "- **F1 - F4 (Pestaña 2):** Dibuja un recuadro amarillo para seleccionar una de las cuatro gráficas activas.\n"
+        "- **CTRL + F1 - F4 (Pestaña 2):** Maximiza la gráfica correspondiente a pantalla completa o la restaura al diseño original.\n"
+        "- **F1 - F4 (Pestaña 3):** Cambia el método espectral activo (F1: Waterfall, F2: CWT, F3: AR/Burg, F4: Correlograma).\n"
+        "- **CTRL + F1 - F4 (Pestaña 3):** Maximiza el espectrograma activo a pantalla completa o lo restaura al tamaño normal.\n"
         "- **F5 / F8 / F11:** Controles de adquisición: iniciar/pausar (F5), detener (F8) y pantalla completa general (F11).",
         selectable=True,
     )

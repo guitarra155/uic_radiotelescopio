@@ -142,7 +142,7 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
             cwt_scales_row.visible = (val == "cwt")
 
             # Actualizar controles afectados y refrescar panel de config lateral
-            controls_to_update = [desc_text, status_badge, ar_order_row, corr_lag_row, cwt_scales_row]
+            controls_to_update = [method_radio, desc_text, status_badge, ar_order_row, corr_lag_row, cwt_scales_row]
             for c in controls_to_update:
                 if c.page:
                     c.update()
@@ -486,6 +486,48 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
     
     header_row2 = ft.Row([desc_text, ft.Container(expand=True), status_badge], spacing=8)
 
+    help_banner = ft.Container(
+        content=ft.Row([
+            ft.Icon(ft.Icons.KEYBOARD_ROUNDED, color=ACCENT_CYAN, size=15),
+            ft.Text(
+                "Navegación por teclado: [F1 - F4] Cambiar método espectral  •  [CTRL + F1 - F4] Maximizar / Restaurar vista",
+                color=TEXT_MUTED,
+                size=10,
+                weight=ft.FontWeight.W_500
+            )
+        ], spacing=8, alignment=ft.MainAxisAlignment.CENTER),
+        padding=ft.Padding(top=5, bottom=5, left=10, right=10),
+        bgcolor=PANEL_BG,
+        border_radius=6,
+        border=ft.Border(
+            top=ft.BorderSide(1, BORDER_COL), right=ft.BorderSide(1, BORDER_COL),
+            bottom=ft.BorderSide(1, BORDER_COL), left=ft.BorderSide(1, BORDER_COL)
+        )
+    )
+
+    async def on_spec_keyboard_msg(msg):
+        from core.dsp_engine import engine_instance
+        if engine_instance.active_tab != 2: return  # Pestaña Espectrograma (índice 2)
+        
+        if isinstance(msg, tuple) and len(msg) == 2:
+            cmd, idx = msg
+            if cmd == "select_spec_method":
+                methods_keys = ["waterfall", "cwt", "ar_burg_2d", "correlogram_2d"]
+                if 0 <= idx < len(methods_keys):
+                    target_val = methods_keys[idx]
+                    method_radio.value = target_val
+                    class FakeEvent:
+                        def __init__(self):
+                            self.control = method_radio
+                    on_method_change(FakeEvent())
+            elif cmd == "maximize_spec":
+                class FakeEvent:
+                    def __init__(self):
+                        self.control = btn_fs
+                on_fullscreen_global(FakeEvent())
+
+    page.pubsub.subscribe(on_spec_keyboard_msg)
+
     main_container.content = ft.Column(
         [
             header_row1,
@@ -511,6 +553,7 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
                 padding=6,
             ),
             legend,
+            help_banner,
         ],
         expand=True,
         spacing=8,
