@@ -620,6 +620,7 @@ class DSPEngine:
                                         └──→ SNR
         """
         # ── 1. Calcular batches para promediar todo el bloque ─────────
+        t_start = time.perf_counter()
         if batches is None:
             batches = max(1, len(iq) // self.fft_size)
 
@@ -671,7 +672,7 @@ class DSPEngine:
                         zcr = np.mean(np.abs(np.diff(np.sign(trimmed_iq.real))))
                         
                         # Guardar a disco
-                        import time, os
+                        import os
                         if not os.path.exists("data"): os.makedirs("data")
                         fname = f"data/trigger_{int(time.time())}.npy"
                         np.save(fname, trimmed_iq)
@@ -733,6 +734,7 @@ class DSPEngine:
         
         self.spectrum_raw_data = (1 - alpha_eff) * self.spectrum_raw_data + alpha_eff * pwr_raw
 
+        t_pre_welch = time.perf_counter()
         # ── 4. Espectro de Potencia (FFT) sobre señal FILTRADA ───────────────
         if self.use_welch:
             from core.advanced_dsp import run_welch  # importación diferida: solo cuando use_welch está activo
@@ -904,6 +906,7 @@ class DSPEngine:
             except Exception:
                 pass  # Nunca detener el stream por un error de DSP avanzado
 
+        t_pre_hist = time.perf_counter()
         # ── 6. Histograma (Distribución) sobre señal RAW ────────────────────
         if getattr(self, "histogram_mode", "Magnitud") == "Magnitud":
             self.histogram_data = np.abs(self.amplitude_data).copy()
@@ -997,6 +1000,13 @@ class DSPEngine:
                 "elapsed":      self.elapsed_samples,
             }
             self._frame_snapshots.append(snap)
+
+        t_total = time.perf_counter() - t_start
+        print(f"[DSP PERF] Frame {self.elapsed_samples // len(iq)} | "
+              f"Filtrado MA: {((t_pre_welch - t_start) * 1000):.2f} ms | "
+              f"FFT/Pwr: {((t_pre_hist - t_pre_welch) * 1000):.2f} ms | "
+              f"CFAR/Detección: {((t_total - (t_pre_hist - t_start)) * 1000):.2f} ms | "
+              f"Total DSP: {(t_total * 1000):.2f} ms")
 
     def _auto_detect_ranges(self):
         """Auto-detecta los rangos óptimos basándose en los datos actuales, evitando NaNs."""

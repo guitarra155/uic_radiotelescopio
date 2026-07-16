@@ -18,7 +18,7 @@ skinparam sequence {
     MessageAlignment center
 }
 
-title Modelo de Concurrencia: Hilo GUI vs. Hilo DSP
+title Diagrama de secuencia del modelo de concurrencia y comunicación asíncrona del sistema
 
 participant "Usuario" as USR #FCF3CF
 participant "Hilo GUI\n(Flet Main)" as GUI #FADBD8
