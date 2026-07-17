@@ -26,3 +26,8 @@ El sistema se diseña con un enfoque modular, dividido en tres capas principales
 - **GUI:** Flet
 - **Cómputo Científico:** NumPy, SciPy (Análisis y procesamiento estadístico)
 - **Gráficos:** Matplotlib (Visualización científica avanzada)
+
+## 5. Material Documental de Tesis
+Se incorpora material estructurado de apoyo para la defensa oral del proyecto:
+- [PROPUESTA_DIAPOSITIVAS.md](file:///c:/uic_radiotelescopio/docs/PROPUESTA_DIAPOSITIVAS.md): Planificación detallada para una exposición de 20 a 25 minutos. Asocia el texto preciso para cada diapositiva, estimaciones temporales de disertación y la correspondencia visual con los diagramas de arquitectura, secuencias de comunicación de hardware e interfaces gráficas del sistema.
+
