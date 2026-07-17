@@ -12,6 +12,7 @@ if sys.platform.startswith("win"):
 import flet as ft
 
 from core.constants import *
+import core.constants as C
 from ui.components.layout import build_header, build_footer
 from ui.tabs.dual_monitoring import build_dual_monitoring
 from ui.tabs.spectrogram import build_spectrogram
@@ -24,6 +25,7 @@ from ui.tabs.estado import build_estado
 def main(page: ft.Page):
     from core.dsp_engine import engine_instance
     engine_instance.load_config()
+    C.set_theme(getattr(engine_instance, "theme", "dark"))
 
     # key_state: diccionario compartido con todos los tabs para detectar Ctrl/Shift en scroll.
     # page.on_keyboard_event entrega KeyboardEvent con .ctrl/.shift actualizados en cada keydown.
@@ -108,8 +110,8 @@ def main(page: ft.Page):
 
 
     page.title      = "Plataforma DSP"
-    page.theme_mode = ft.ThemeMode.DARK
-    page.bgcolor    = DARK_BG
+    page.theme_mode = ft.ThemeMode.DARK if getattr(engine_instance, "theme", "dark") == "dark" else ft.ThemeMode.LIGHT
+    page.bgcolor    = C.DARK_BG
     # Leer configuración guardada de ventana
     saved_res = getattr(engine_instance, "window_res", "Auto-Detect (Pantalla Actual)")
     saved_mode = getattr(engine_instance, "window_mode", "Normal")
@@ -145,7 +147,7 @@ def main(page: ft.Page):
     page.padding = 0
     page.spacing = 0
     page.theme   = ft.Theme(
-        color_scheme_seed=ACCENT_CYAN,
+        color_scheme_seed=C.ACCENT_CYAN,
         use_material3=True,
         focus_color="rgba(0, 210, 255, 0.22)"
     )
@@ -213,15 +215,15 @@ def main(page: ft.Page):
         icon_ctrl = item.content.controls[0]   # Text emoji
         label_ctrl = item.content.controls[1]  # Text label
         if active:
-            icon_ctrl.color = ACCENT_CYAN
-            label_ctrl.color = TEXT_MAIN
-            item.bgcolor = "#0D2137"          # Fondo azul profundo
+            icon_ctrl.color = C.ACCENT_CYAN
+            label_ctrl.color = C.TEXT_MAIN
+            item.bgcolor = C.SIDEBAR_ACTIVE_BG
             item.border = ft.Border(
-                left=ft.BorderSide(4, ACCENT_CYAN)
+                left=ft.BorderSide(4, C.ACCENT_CYAN)
             )
         else:
-            icon_ctrl.color = TEXT_MUTED
-            label_ctrl.color = TEXT_MUTED
+            icon_ctrl.color = C.TEXT_MUTED
+            label_ctrl.color = C.TEXT_MUTED
             item.bgcolor = "transparent"
             item.border = ft.Border(
                 left=ft.BorderSide(3, "transparent")
@@ -233,11 +235,11 @@ def main(page: ft.Page):
         is_active = (i == 0)
         icon_ctrl = ft.Text(
             icon, size=20,
-            color=ACCENT_CYAN if is_active else TEXT_MUTED,
+            color=C.ACCENT_CYAN if is_active else C.TEXT_MUTED,
         )
         label_ctrl = ft.Text(
             label, size=12,
-            color=ACCENT_CYAN if is_active else TEXT_MUTED,
+            color=C.ACCENT_CYAN if is_active else C.TEXT_MUTED,
             weight=ft.FontWeight.W_500,
             no_wrap=True,
             overflow=ft.TextOverflow.ELLIPSIS,
@@ -252,10 +254,10 @@ def main(page: ft.Page):
             padding=ft.Padding(left=12, right=8, top=10, bottom=10),
             border_radius=8,
             ink=True,
-            bgcolor="#1C2333" if is_active else "transparent",
+            bgcolor=C.SIDEBAR_ACTIVE_BG if is_active else "transparent",
             tooltip=label,
             border=ft.Border(
-                left=ft.BorderSide(3, ACCENT_CYAN if is_active else "transparent")
+                left=ft.BorderSide(3, C.ACCENT_CYAN if is_active else "transparent")
             ),
         )
         item.on_click = lambda e, idx=i: switch_to_tab(idx)
@@ -359,8 +361,8 @@ def main(page: ft.Page):
 
     sidebar_col = ft.Container(
         width=SIDEBAR_W_COLLAPSED,
-        bgcolor=PANEL_BG,
-        border=ft.Border(right=ft.BorderSide(1, BORDER_COL)),
+        bgcolor=C.PANEL_BG,
+        border=ft.Border(right=ft.BorderSide(1, C.BORDER_COL)),
         on_hover=_on_sidebar_hover,
         animate=ft.Animation(180, ft.AnimationCurve.EASE_IN_OUT),
         content=ft.Column(
@@ -372,14 +374,14 @@ def main(page: ft.Page):
                     ),
                     padding=ft.Padding(left=4, right=8, top=6, bottom=2),
                 ),
-                ft.Divider(height=1, color=BORDER_COL),
+                ft.Divider(height=1, color=C.BORDER_COL),
                 ft.Column(
                     sidebar_items,
                     spacing=2,
                     expand=True,
                     scroll=ft.ScrollMode.AUTO,
                 ),
-                ft.Divider(height=1, color=BORDER_COL),
+                ft.Divider(height=1, color=C.BORDER_COL),
                 nav_mode_btn,
             ],
             spacing=0,
@@ -402,7 +404,7 @@ def main(page: ft.Page):
 
     # ── Barra horizontal clásica (Top-bar) ─────────────────────────────────
     tb_indicators = [
-        ft.Container(height=2, bgcolor=ACCENT_CYAN if i == 0 else "transparent", border_radius=1)
+        ft.Container(height=2, bgcolor=C.ACCENT_CYAN if i == 0 else "transparent", border_radius=1)
         for i in range(len(tab_labels))
     ]
     tb_btns = []
@@ -410,7 +412,7 @@ def main(page: ft.Page):
     def _make_tb_btn(i, icon, label):
         lbl = ft.Text(
             f"{icon}  {label}",
-            color=ACCENT_CYAN if i == 0 else TEXT_MUTED,
+            color=C.ACCENT_CYAN if i == 0 else C.TEXT_MUTED,
             size=13,
         )
         btn = ft.Container(
@@ -431,12 +433,12 @@ def main(page: ft.Page):
     def _tb_set_active(idx):
         for j, (b, ind) in enumerate(zip(tb_btns, tb_indicators)):
             active = (j == idx)
-            _tb_lbls[j].color = ACCENT_CYAN if active else TEXT_MUTED
-            ind.bgcolor = ACCENT_CYAN if active else "transparent"
+            _tb_lbls[j].color = C.ACCENT_CYAN if active else C.TEXT_MUTED
+            ind.bgcolor = C.ACCENT_CYAN if active else "transparent"
 
     topbar_row = ft.Container(
-        bgcolor=PANEL_BG,
-        border=ft.Border(bottom=ft.BorderSide(1, BORDER_COL)),
+        bgcolor=C.PANEL_BG,
+        border=ft.Border(bottom=ft.BorderSide(1, C.BORDER_COL)),
         height=40,
         visible=False,
         padding=ft.Padding(left=10, right=10, top=0, bottom=0),
@@ -450,7 +452,7 @@ def main(page: ft.Page):
                 ),
                 ft.IconButton(
                     icon=ft.Icons.VIEW_SIDEBAR,
-                    icon_color=TEXT_MUTED,
+                    icon_color=C.TEXT_MUTED,
                     icon_size=18,
                     tooltip="Cambiar a barra lateral vertical",
                     on_click=lambda e: _toggle_nav_mode(),
@@ -471,8 +473,8 @@ def main(page: ft.Page):
     # Panel Derecho: Configuración Fija (ancho dinámico)
     right_panel = ft.Container(
         content=build_config(page),
-        border=ft.Border(left=ft.BorderSide(1, BORDER_COL)),
-        bgcolor=DARK_BG,
+        border=ft.Border(left=ft.BorderSide(1, C.BORDER_COL)),
+        bgcolor=C.DARK_BG,
         expand=False,
         visible=False
     )
@@ -489,11 +491,92 @@ def main(page: ft.Page):
         horizontal_alignment=ft.CrossAxisAlignment.STRETCH
     )
 
-    # ── Manejo de Reset de Configuración y Fullscreen ───────────────────────
+    # ── Manejo de Reset de Configuración, Fullscreen y Cambio de Tema ───────────────────────
     def on_main_pubsub(msg):
         if msg == "config_reset":
             right_panel.content = build_config(page)
             page.update()
+        elif isinstance(msg, tuple) and msg[0] == "apply_theme":
+            theme_name = msg[1]
+            C.set_theme(theme_name)
+            
+            # 1. Actualizar el tema del contenedor Flet
+            page.theme_mode = ft.ThemeMode.DARK if theme_name == "dark" else ft.ThemeMode.LIGHT
+            page.bgcolor = C.DARK_BG
+            page.theme.color_scheme_seed = C.ACCENT_CYAN
+            
+            # 2. Re-construir header y footer con la nueva paleta de colores
+            nonlocal header, footer
+            # Remover componentes viejos de la UI
+            main_col = page.controls[0]
+            main_col.controls.clear()
+            
+            # Recrear header y footer
+            header = build_header(page)
+            footer = build_footer()
+            
+            # Recrear el panel derecho y actualizar colores de contenedores principales
+            right_panel.content = build_config(page)
+            right_panel.border = ft.Border(left=ft.BorderSide(1, C.BORDER_COL))
+            right_panel.bgcolor = C.DARK_BG
+            
+            sidebar_col.bgcolor = C.PANEL_BG
+            sidebar_col.border = ft.Border(right=ft.BorderSide(1, C.BORDER_COL))
+            # Actualizar divisores y bordes en el sidebar
+            sidebar_col.content.controls[1].color = C.BORDER_COL
+            sidebar_col.content.controls[3].color = C.BORDER_COL
+            
+            # Actualizar items individuales del sidebar
+            for i, item in enumerate(sidebar_items):
+                is_act = (i == selected[0])
+                item.content.controls[0].color = C.ACCENT_CYAN if is_act else C.TEXT_MUTED
+                item.content.controls[1].color = C.ACCENT_CYAN if is_act else C.TEXT_MUTED
+                item.bgcolor = C.SIDEBAR_ACTIVE_BG if is_act else "transparent"
+                item.border = ft.Border(left=ft.BorderSide(3 if is_act else 3, C.ACCENT_CYAN if is_act else "transparent"))
+            
+            # Re-construir la barra superior horizontal si está activa
+            nonlocal tb_indicators, tb_btns, _tb_lbls
+            tb_indicators.clear()
+            tb_btns.clear()
+            _tb_lbls.clear()
+            
+            for i, (icon, label) in enumerate(tab_labels):
+                ind = ft.Container(height=2, bgcolor=C.ACCENT_CYAN if i == selected[0] else "transparent", border_radius=1)
+                tb_indicators.append(ind)
+                b, l = _make_tb_btn(i, icon, label)
+                tb_btns.append(b)
+                _tb_lbls.append(l)
+                
+            topbar_row.bgcolor = C.PANEL_BG
+            topbar_row.border = ft.Border(bottom=ft.BorderSide(1, C.BORDER_COL))
+            topbar_row.content.controls[0].controls = [ft.Column([btn, ind], spacing=0) for btn, ind in zip(tb_btns, tb_indicators)]
+            topbar_row.content.controls[1].icon_color = C.TEXT_MUTED
+            
+            # 3. Limpiar caché de Matplotlib para regenerar las gráficas vectoriales con colores del tema
+            from ui.charts import clear_chart_cache
+            clear_chart_cache()
+            
+            # 4. Forzar re-inicialización del contenido de las pestañas
+            nonlocal tab_contents
+            tab_contents = [
+                build_estado(page),                          # 0
+                build_dual_monitoring(page, key_state),      # 1
+                build_spectrogram(page, key_state),          # 2
+                build_statistics(page, key_state),           # 3
+                build_signal_analysis(page, key_state),      # 4
+                build_freq_snr(page, key_state),             # 5
+            ]
+            tab_body.content = tab_contents[selected[0]]
+            
+            # Re-ensamblar la estructura en la ventana
+            main_col.controls.extend([
+                header,
+                main_view,
+                footer,
+            ])
+            
+            page.update()
+            page.pubsub.send_all("refresh_charts")
         elif msg == "toggle_fullscreen_chart":
             is_fs = getattr(engine_instance, "chart_fullscreen_active", False)
             header.visible = not is_fs

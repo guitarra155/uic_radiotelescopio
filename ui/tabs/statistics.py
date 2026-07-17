@@ -4,7 +4,7 @@ Lógica y UI para la pestaña de Histograma y Análisis Estadístico
 """
 
 import flet as ft
-from core.constants import *
+import core.constants as C
 from ui.charts import chart_histogram
 from ui.components.shared import panel, border_all
 
@@ -17,15 +17,15 @@ def build_statistics(page: ft.Page, key_state: dict) -> ft.Control:
         padding=ft.Padding(left=14, top=14, right=14, bottom=14),
     )
 
-    val_media = ft.Text("0.0000", color=ACCENT_GREEN, size=10, weight=ft.FontWeight.W_600, expand=1)
-    val_std   = ft.Text("0.0000", color=ACCENT_GREEN, size=10, weight=ft.FontWeight.W_600, expand=1)
-    val_kur   = ft.Text("0.00",  color=ACCENT_AMBER, size=10, weight=ft.FontWeight.W_600, expand=1)
-    val_sesgo = ft.Text("0.00",  color=ACCENT_AMBER, size=10, weight=ft.FontWeight.W_600, expand=1)
-    val_rango_t = ft.Text("0.0s - 0.0s", color=ACCENT_CYAN, size=10, weight=ft.FontWeight.W_600, expand=1)
+    val_media = ft.Text("0.0000", color=C.ACCENT_GREEN, size=10, weight=ft.FontWeight.W_600, expand=1)
+    val_std   = ft.Text("0.0000", color=C.ACCENT_GREEN, size=10, weight=ft.FontWeight.W_600, expand=1)
+    val_kur   = ft.Text("0.00",  color=C.ACCENT_AMBER, size=10, weight=ft.FontWeight.W_600, expand=1)
+    val_sesgo = ft.Text("0.00",  color=C.ACCENT_AMBER, size=10, weight=ft.FontWeight.W_600, expand=1)
+    val_rango_t = ft.Text("0.0s - 0.0s", color=C.ACCENT_CYAN, size=10, weight=ft.FontWeight.W_600, expand=1)
 
     is_rendering = [False]
     
-    info_lbl = ft.Text("Distribución detectada:\nProcesando...", color=ACCENT_CYAN, size=11, italic=True)
+    info_lbl = ft.Text("Distribución detectada:\nProcesando...", color=C.ACCENT_CYAN, size=11, italic=True)
 
     async def on_refresh(msg):
         if isinstance(msg, tuple) and msg[0] == "toggle_tab_panel":
@@ -84,22 +84,22 @@ def build_statistics(page: ft.Page, key_state: dict) -> ft.Control:
     page.pubsub.subscribe(on_refresh)
 
     stat_rows = [
-        ft.Row([ft.Text("Media (μ)", color=TEXT_MAIN, size=10, expand=1), val_media]),
-        ft.Row([ft.Text("Std Dev (σ)", color=TEXT_MAIN, size=10, expand=1), val_std]),
-        ft.Row([ft.Text("Kurtosis", color=TEXT_MAIN, size=10, expand=1), val_kur]),
-        ft.Row([ft.Text("Sesgo", color=TEXT_MAIN, size=10, expand=1), val_sesgo]),
-        ft.Row([ft.Text("Rango Temporal", color=TEXT_MAIN, size=10, expand=1), val_rango_t])
+        ft.Row([ft.Text("Media (μ)", color=C.TEXT_MAIN, size=10, expand=1), val_media]),
+        ft.Row([ft.Text("Std Dev (σ)", color=C.TEXT_MAIN, size=10, expand=1), val_std]),
+        ft.Row([ft.Text("Kurtosis", color=C.TEXT_MAIN, size=10, expand=1), val_kur]),
+        ft.Row([ft.Text("Sesgo", color=C.TEXT_MAIN, size=10, expand=1), val_sesgo]),
+        ft.Row([ft.Text("Rango Temporal", color=C.TEXT_MAIN, size=10, expand=1), val_rango_t])
     ]
 
     side = panel(
         width=240,
         content=ft.Column([
-            ft.Text("📊  Estadística", color=ACCENT_CYAN, size=14,
+            ft.Text("📊  Estadística", color=C.ACCENT_CYAN, size=14,
                     weight=ft.FontWeight.BOLD),
-            ft.Divider(color=BORDER_COL, height=12),
+            ft.Divider(color=C.BORDER_COL, height=12),
             info_lbl,
-            ft.Divider(color=BORDER_COL, height=12),
-            ft.Text("Estadísticas en vivo:", color=TEXT_MUTED, size=11),
+            ft.Divider(color=C.BORDER_COL, height=12),
+            ft.Text("Estadísticas en vivo:", color=C.TEXT_MUTED, size=11),
             *stat_rows,
         ], spacing=8),
     )
@@ -117,7 +117,7 @@ def build_statistics(page: ft.Page, key_state: dict) -> ft.Control:
 
     btn_fs = ft.IconButton(
         icon=ft.Icons.ASPECT_RATIO,
-        icon_color=ACCENT_AMBER,
+        icon_color=C.ACCENT_AMBER,
         icon_size=18,
         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4)),
         on_click=on_fullscreen_global,
@@ -130,13 +130,13 @@ def build_statistics(page: ft.Page, key_state: dict) -> ft.Control:
     def on_toggle_side(e):
         side.visible = not side.visible
         btn_toggle_side.icon = ft.Icons.VIEW_SIDEBAR_OUTLINED if side.visible else ft.Icons.VIEW_SIDEBAR
-        btn_toggle_side.icon_color = ACCENT_CYAN if side.visible else ACCENT_AMBER
+        btn_toggle_side.icon_color = C.ACCENT_CYAN if side.visible else C.ACCENT_AMBER
         btn_toggle_side.tooltip = "Ocultar panel de estadísticas" if side.visible else "Mostrar panel de estadísticas"
         e.control.page.update()
 
     btn_toggle_side = ft.IconButton(
         icon=ft.Icons.VIEW_SIDEBAR_OUTLINED,
-        icon_color=ACCENT_CYAN,
+        icon_color=C.ACCENT_CYAN,
         icon_size=18,
         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4)),
         on_click=on_toggle_side,
@@ -186,8 +186,8 @@ def build_statistics(page: ft.Page, key_state: dict) -> ft.Control:
 
     hist_mode_dd = ft.RadioGroup(
         content=ft.Row([
-            ft.Radio(value="Magnitud", label="Magnitud", fill_color=ACCENT_CYAN),
-            ft.Radio(value="Fase", label="Fase", fill_color=ACCENT_CYAN)
+            ft.Radio(value="Magnitud", label="Magnitud", fill_color=C.ACCENT_CYAN),
+            ft.Radio(value="Fase", label="Fase", fill_color=C.ACCENT_CYAN)
         ], spacing=10),
         value="Magnitud",
         on_change=on_hist_mode_change,
@@ -196,7 +196,7 @@ def build_statistics(page: ft.Page, key_state: dict) -> ft.Control:
     chart_area = ft.Container(
         content=ft.Column([
             ft.Row([
-                ft.Text("HISTOGRAMA / DISTRIBUCIÓN", color=ACCENT_CYAN, size=10, weight=ft.FontWeight.BOLD),
+                ft.Text("HISTOGRAMA / DISTRIBUCIÓN", color=C.ACCENT_CYAN, size=10, weight=ft.FontWeight.BOLD),
                 ft.Row([hist_mode_dd, btn_toggle_side, btn_fs], spacing=5, vertical_alignment=ft.CrossAxisAlignment.CENTER)
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             ft.Container(
@@ -210,7 +210,7 @@ def build_statistics(page: ft.Page, key_state: dict) -> ft.Control:
                 expand=True
             )
         ], spacing=2, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
-        expand=True, bgcolor=PANEL_BG,
+        expand=True, bgcolor=C.PANEL_BG,
         border_radius=10, border=border_all(), padding=6
     )
 

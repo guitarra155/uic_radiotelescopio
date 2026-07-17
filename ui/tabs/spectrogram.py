@@ -6,7 +6,7 @@ Métodos: Waterfall FFT, CWT/Morlet, AR/Burg, Correlograma.
 
 import numpy as np
 import flet as ft
-from core.constants import *
+import core.constants as C
 from ui.charts import chart_spectrogram, chart_cwt_map, chart_ar_spectrogram, chart_correlogram_spectrogram
 from ui.components.shared import panel, border_all
 
@@ -18,9 +18,9 @@ _METHODS = [
 ]
 
 _METHOD_COLORS = {
-    "waterfall": ACCENT_CYAN,
+    "waterfall": C.ACCENT_CYAN,
     "cwt": "#00C8FF",
-    "ar_burg_2d": "#B380FF",
+    "ar_burg_2d": C.COLOR_PURPLE,
     "correlogram_2d": "#40E0D0",
 }
 
@@ -71,7 +71,7 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
     method_radio = ft.RadioGroup(
         value=current_method[0],
         content=ft.Row([
-            ft.Radio(value=k, label=lbl, active_color=ACCENT_CYAN) for k, lbl in _METHODS
+            ft.Radio(value=k, label=lbl, active_color=C.ACCENT_CYAN) for k, lbl in _METHODS
         ], wrap=True, spacing=10)
     )
 
@@ -79,11 +79,11 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
     _init_method = current_method[0]
     desc_text = ft.Text(
         _METHOD_DESCRIPTIONS.get(_init_method, ""),
-        color=TEXT_MUTED, size=10, italic=True,
+        color=C.TEXT_MUTED, size=10, italic=True,
     )
     status_badge = ft.Text(
         "Listo" if _init_method == "waterfall" else "Esperando primer frame...",
-        color=ACCENT_GREEN if _init_method == "waterfall" else ACCENT_AMBER,
+        color=C.ACCENT_GREEN if _init_method == "waterfall" else C.ACCENT_AMBER,
         size=10, weight=ft.FontWeight.W_600,
     )
 
@@ -135,7 +135,7 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
             # Actualizar componentes de UI individuales
             desc_text.value = _METHOD_DESCRIPTIONS.get(val, "")
             status_badge.value = "Calculando..." if val != "waterfall" else "Listo"
-            status_badge.color = ACCENT_AMBER if val != "waterfall" else ACCENT_GREEN
+            status_badge.color = C.ACCENT_AMBER if val != "waterfall" else C.ACCENT_GREEN
             
             ar_order_row.visible = (val == "ar_burg_2d")
             corr_lag_row.visible = (val == "correlogram_2d")
@@ -191,7 +191,7 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
             iq = engine_instance.corr_iq_buffer[:engine_instance._corr_buf_idx].copy()
         else:
             status_badge.value = "Acumulando muestras... espera unos segundos"
-            status_badge.color = ACCENT_AMBER
+            status_badge.color = C.ACCENT_AMBER
             try:
                 if status_badge.page: status_badge.update()
             except Exception:
@@ -238,7 +238,7 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
                     if b64:
                         img.src = b64
                         status_badge.value = f"OK — {dict(_METHODS).get(method, method)} (Renderizado Rápido)"
-                        status_badge.color = _METHOD_COLORS.get(method, ACCENT_CYAN)
+                        status_badge.color = _METHOD_COLORS.get(method, C.ACCENT_CYAN)
                         if img.page: img.update()
                         if status_badge.page: status_badge.update()
                 except Exception as ex:
@@ -344,7 +344,7 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
 
                 img.src = b64
                 status_badge.value = f"OK — {dict(_METHODS).get(method, method)}"
-                status_badge.color = _METHOD_COLORS.get(method, ACCENT_CYAN)
+                status_badge.color = _METHOD_COLORS.get(method, C.ACCENT_CYAN)
                 try:
                     if img.page: img.update()
                     if status_badge.page: status_badge.update()
@@ -352,7 +352,7 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
                     pass
         except Exception as ex:
             status_badge.value = f"Error: {str(ex)[:60]}"
-            status_badge.color = ACCENT_RED
+            status_badge.color = C.ACCENT_RED
             try:
                 if status_badge.page: status_badge.update()
             except Exception:
@@ -418,12 +418,12 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
 
     legend = ft.Row(
         [
-            sw(ACCENT_RED),
-            ft.Text("RFI Intenso", color=TEXT_MAIN, size=10),
-            sw(ACCENT_AMBER),
-            ft.Text("Senal moderada", color=TEXT_MAIN, size=10),
+            sw(C.ACCENT_RED),
+            ft.Text("RFI Intenso", color=C.TEXT_MAIN, size=10),
+            sw(C.ACCENT_AMBER),
+            ft.Text("Senal moderada", color=C.TEXT_MAIN, size=10),
             sw("#3F51B5"),
-            ft.Text("Ruido base", color=TEXT_MAIN, size=10),
+            ft.Text("Ruido base", color=C.TEXT_MAIN, size=10),
         ],
         spacing=8,
         alignment=ft.MainAxisAlignment.CENTER,
@@ -450,7 +450,7 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
 
     btn_fs = ft.IconButton(
         icon=ft.Icons.ASPECT_RATIO,
-        icon_color=ACCENT_AMBER,
+        icon_color=C.ACCENT_AMBER,
         icon_size=18,
         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4)),
         on_click=on_fullscreen_global,
@@ -464,7 +464,7 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
         [
             ft.Text(
                 "Espectrograma 2D",
-                color=ACCENT_CYAN,
+                color=C.ACCENT_CYAN,
                 weight=ft.FontWeight.BOLD,
                 size=14,
             ),
@@ -475,7 +475,7 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
             ft.TextButton(
                 "Restaurar",
                 on_click=reset_defaults,
-                style=ft.ButtonStyle(color=ACCENT_CYAN),
+                style=ft.ButtonStyle(color=C.ACCENT_CYAN),
             ),
             ft.Container(expand=True)
         ],
@@ -488,20 +488,20 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
 
     help_banner = ft.Container(
         content=ft.Row([
-            ft.Icon(ft.Icons.KEYBOARD_ROUNDED, color=ACCENT_CYAN, size=15),
+            ft.Icon(ft.Icons.KEYBOARD_ROUNDED, color=C.ACCENT_CYAN, size=15),
             ft.Text(
                 "Navegación por teclado: [F1 - F4] Cambiar método espectral  •  [CTRL + F1 - F4] Maximizar / Restaurar vista",
-                color=TEXT_MUTED,
+                color=C.TEXT_MUTED,
                 size=10,
                 weight=ft.FontWeight.W_500
             )
         ], spacing=8, alignment=ft.MainAxisAlignment.CENTER),
         padding=ft.Padding(top=5, bottom=5, left=10, right=10),
-        bgcolor=PANEL_BG,
+        bgcolor=C.PANEL_BG,
         border_radius=6,
         border=ft.Border(
-            top=ft.BorderSide(1, BORDER_COL), right=ft.BorderSide(1, BORDER_COL),
-            bottom=ft.BorderSide(1, BORDER_COL), left=ft.BorderSide(1, BORDER_COL)
+            top=ft.BorderSide(1, C.BORDER_COL), right=ft.BorderSide(1, C.BORDER_COL),
+            bottom=ft.BorderSide(1, C.BORDER_COL), left=ft.BorderSide(1, C.BORDER_COL)
         )
     )
 
@@ -535,7 +535,7 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
             ft.Container(
                 content=ft.Column([
                     ft.Row([
-                        ft.Text("ESPECTROGRAMA", color=ACCENT_CYAN, size=10, weight=ft.FontWeight.BOLD),
+                        ft.Text("ESPECTROGRAMA", color=C.ACCENT_CYAN, size=10, weight=ft.FontWeight.BOLD),
                         btn_fs
                     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                     ft.GestureDetector(
@@ -547,7 +547,7 @@ def build_spectrogram(page: ft.Page, key_state: dict) -> ft.Control:
                     )
                 ], spacing=2, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
                 expand=True,
-                bgcolor=PANEL_BG,
+                bgcolor=C.PANEL_BG,
                 border_radius=10,
                 border=border_all(),
                 padding=6,

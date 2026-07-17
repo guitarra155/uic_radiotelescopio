@@ -15,10 +15,11 @@ El sistema se diseña con un enfoque modular, dividido en tres capas principales
 3. **Representación Visual:** Renderizado de gráficas bidimensionales y tridimensionales, espectrogramas en cascada y perfiles temporales de acumulación de potencia.
 
 ## 3. Descripción Detallada de Funciones y Módulos
-- `main.py`: Punto de entrada del sistema y controlador central de la interfaz gráfica.
-- `core/dsp_engine.py`: Gestión de concurrencia y procesamiento central.
-- `core/cfar_detector.py`: Implementación del algoritmo CFAR para mantener una tasa constante de falsa alarma en la detección de la señal.
-- `ui/tabs/`: Directorio de controladores individuales orientados a las distintas representaciones (espectrogramas, histogramas, modelos 3D de potencia espectral).
+- `main.py`: Punto de entrada del sistema y controlador central de la interfaz gráfica. Contiene el gestor de eventos PubSub y el orquestador del cambio de tema dinámico del sistema.
+- `core/constants.py`: Archivo de constantes globales y definición del sistema de paleta de colores para los modos **Oscuro (Dark)**, **Claro (Light)** y **Blanco (White)**.
+- `core/dsp_engine.py`: Gestión de concurrencia y procesamiento central. Carga y guarda los archivos de configuración local (`config.json`), incluyendo el estado persistente del tema visual seleccionado.
+- `ui/charts/base.py`: Controlador de graficación basado en Matplotlib con soporte de tamaño dinámico, renderizado en formato SVG y limpieza dinámica de caché de figuras para el cambio de temas.
+- `ui/tabs/`: Directorio de controladores individuales orientados a las distintas representaciones (espectrogramas, histogramas, modelos de potencia espectral).
 - `ui/components/`: Definición de componentes visuales, barra superior, widgets compartidos y disposición estructural.
 
 ## 4. Dependencias del Sistema
@@ -30,4 +31,3 @@ El sistema se diseña con un enfoque modular, dividido en tres capas principales
 ## 5. Material Documental de Tesis
 Se incorpora material estructurado de apoyo para la defensa oral del proyecto:
 - [PROPUESTA_DIAPOSITIVAS.md](file:///c:/uic_radiotelescopio/docs/PROPUESTA_DIAPOSITIVAS.md): Planificación detallada para una exposición de 20 a 25 minutos. Asocia el texto preciso para cada diapositiva, estimaciones temporales de disertación y la correspondencia visual con los diagramas de arquitectura, secuencias de comunicación de hardware e interfaces gráficas del sistema.
-

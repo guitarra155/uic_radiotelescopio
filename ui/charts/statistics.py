@@ -8,7 +8,7 @@ Gráficas del Tab 3 — Histograma y Estadística:
 import math
 import numpy as np
 
-from core.constants import *
+import core.constants as C
 from core.dsp_engine import engine_instance
 from ui.charts.cache import cache
 from ui.charts.base import (
@@ -47,7 +47,7 @@ def chart_histogram() -> str:
             bins_range = np.linspace(-np.pi, np.pi, 100)
 
         counts, bins, _ = ax.hist(
-            samples, bins=bins_range, color=ACCENT_CYAN, alpha=0.4,
+            samples, bins=bins_range, color=C.ACCENT_CYAN, alpha=0.4,
             label="Datos Medidos", histtype='stepfilled', density=True,
         )
         mu, std = np.mean(samples), np.std(samples)
@@ -91,7 +91,7 @@ def chart_histogram() -> str:
                 if show_weibull:
                     shape_w, loc_w, scale_w = weibull_min.fit(fit_samples, floc=0)
                     weibull_pdf = weibull_min.pdf(x, shape_w, loc_w, scale_w)
-                    ax.plot(x, weibull_pdf, color="#FF9100", linewidth=1.8, linestyle="--", label=f"Weibull (c={shape_w:.2f})")
+                    ax.plot(x, weibull_pdf, color=C.COLOR_ORANGE, linewidth=1.8, linestyle="--", label=f"Weibull (c={shape_w:.2f})")
                     
                     weibull_centers = weibull_min.pdf(bin_centers, shape_w, loc_w, scale_w)
                     sse_weibull = np.sum((counts - weibull_centers) ** 2)
@@ -134,13 +134,11 @@ def chart_histogram() -> str:
                 # Usar muestras submuestreadas para KDE para evitar lentitud
                 kde = gaussian_kde(fit_samples if mode == "Magnitud" else samples)
                 kde_vals = kde(x)
-                ax.plot(x, kde_vals, color="#FFFF00", linewidth=2.0, linestyle=":", label="Real Observado (KDE)")
+                ax.plot(x, kde_vals, color=C.COLOR_KDE, linewidth=2.0, linestyle=":", label="Real Observado (KDE)")
             except Exception:
                 pass
 
-        leg = ax.legend(loc="upper right", fontsize=8, facecolor=MPL_AXBG, edgecolor=BORDER_COL, labelcolor='#ECEFF1')
-        for text in leg.get_texts():
-            text.set_color("#ECEFF1")
+        leg = ax.legend(loc="upper right", fontsize=8, facecolor=C.MPL_AXBG, edgecolor=C.BORDER_COL, labelcolor=C.MPL_TEXT)
 
     cfg_id = "stat_hist_mag" if mode == "Magnitud" else "stat_hist_fase"
     cfg = engine_instance.charts_config.get(cfg_id)
@@ -183,9 +181,9 @@ def chart_signal_time() -> str:
     if is_new or "line_i" not in cache.artists["signal_time"]:
         ax.clear()
         style_ax(ax, "Señal en el Tiempo (I / Q)", "Tiempo (s)", "Amplitud (V)")
-        (li,) = ax.plot(t, raw.real, color=ACCENT_CYAN, linewidth=0.8, label="I", rasterized=True)
-        (lq,) = ax.plot(t, raw.imag, color="#E040FB", linewidth=0.8, label="Q", rasterized=True)
-        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL, labelcolor='#ECEFF1')
+        (li,) = ax.plot(t, raw.real, color=C.ACCENT_CYAN, linewidth=0.8, label="I", rasterized=True)
+        (lq,) = ax.plot(t, raw.imag, color=C.COLOR_PINK, linewidth=0.8, label="Q", rasterized=True)
+        ax.legend(loc="upper right", fontsize=7, facecolor=C.MPL_AXBG, edgecolor=C.BORDER_COL, labelcolor=C.MPL_TEXT)
         cache.artists["signal_time"]["line_i"] = li
         cache.artists["signal_time"]["line_q"] = lq
     else:

@@ -10,7 +10,7 @@ Gráficas del Tab 1 — Monitoreo Dual (Señal RAW vs Filtrada):
 import numpy as np
 import matplotlib as mpl
 
-from core.constants import *
+import core.constants as C
 from core.dsp_engine import engine_instance
 from ui.charts.cache import cache
 from ui.charts.base import (
@@ -58,11 +58,11 @@ def chart_amplitude() -> str:
     if is_new or "line_i" not in cache.artists["amplitude"]:
         ax.clear()
         style_ax(ax, f"Amplitud vs Tiempo (Streaming) {time_str}", "Tiempo (s)", "Amplitud Baseband (V)")
-        (line_i,) = ax.plot(t, sig.real, color=ACCENT_CYAN, linewidth=engine_instance.chart_line_width,
+        (line_i,) = ax.plot(t, sig.real, color=C.ACCENT_CYAN, linewidth=engine_instance.chart_line_width,
                             alpha=0.85, label="I (Real)", rasterized=True)
-        (line_q,) = ax.plot(t, sig.imag, color="#E040FB", linewidth=engine_instance.chart_line_width,
+        (line_q,) = ax.plot(t, sig.imag, color=C.COLOR_PINK, linewidth=engine_instance.chart_line_width,
                             alpha=0.85, label="Q (Imaginario)", rasterized=True)
-        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL, labelcolor='#ECEFF1')
+        ax.legend(loc="upper right", fontsize=7, facecolor=C.MPL_AXBG, edgecolor=C.BORDER_COL, labelcolor=C.MPL_TEXT)
         cache.artists["amplitude"]["line_i"] = line_i
         cache.artists["amplitude"]["line_q"] = line_q
     else:
@@ -72,7 +72,7 @@ def chart_amplitude() -> str:
         line_q.set_linewidth(engine_instance.chart_line_width)
         line_i.set_data(t, sig.real)
         line_q.set_data(t, sig.imag)
-        ax.set_title(f"Amplitud vs Tiempo (Streaming) {time_str}", color=ACCENT_CYAN, fontsize=9, pad=6)
+        ax.set_title(f"Amplitud vs Tiempo (Streaming) {time_str}", color=C.ACCENT_CYAN, fontsize=9, pad=6)
 
     safe_set_ylim(ax, cfg["ymin"], cfg["ymax"])
     safe_set_xlim(ax, cfg["xmin"], cfg["xmax"])
@@ -131,11 +131,11 @@ def chart_amplitude_ma() -> str:
             f"Amplitud Filtrada — MA ({int(engine_instance.moving_avg_samples)} muestras) {time_str}",
             "Tiempo (s)", "Amplitud (V)",
         )
-        (line_i,) = ax.plot(t, sig.real, color=ACCENT_GREEN, linewidth=engine_instance.chart_line_width,
+        (line_i,) = ax.plot(t, sig.real, color=C.ACCENT_GREEN, linewidth=engine_instance.chart_line_width,
                             alpha=0.9, label="I Filtrado", rasterized=True)
-        (line_q,) = ax.plot(t, sig.imag, color=ACCENT_AMBER, linewidth=engine_instance.chart_line_width,
+        (line_q,) = ax.plot(t, sig.imag, color=C.ACCENT_AMBER, linewidth=engine_instance.chart_line_width,
                             alpha=0.9, label="Q Filtrado", rasterized=True)
-        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL, labelcolor='#ECEFF1')
+        ax.legend(loc="upper right", fontsize=7, facecolor=C.MPL_AXBG, edgecolor=C.BORDER_COL, labelcolor=C.MPL_TEXT)
         cache.artists["amplitude_ma"]["line_i"] = line_i
         cache.artists["amplitude_ma"]["line_q"] = line_q
     else:
@@ -147,7 +147,7 @@ def chart_amplitude_ma() -> str:
         line_q.set_linewidth(engine_instance.chart_line_width)
         ax.set_title(
             f"Amplitud Filtrada — MA ({int(engine_instance.moving_avg_samples)} muestras) {time_str}",
-            color=ACCENT_CYAN, fontsize=9, pad=6,
+            color=C.ACCENT_CYAN, fontsize=9, pad=6,
         )
 
     safe_set_ylim(ax, cfg["ymin"], cfg["ymax"])
@@ -183,10 +183,10 @@ def chart_spectrum() -> str:
     if is_new or "line" not in cache.artists["spectrum"]:
         ax.clear()
         style_ax(ax, f"Espectro de Frecuencia (Señal Filtrada) {time_str}", "Frecuencia (MHz)", "Potencia (dBFS)")
-        (line,) = ax.plot(full_freq, spec, color=ACCENT_GREEN, linewidth=engine_instance.chart_line_width, rasterized=True)
-        hline = ax.axhline(y=engine_instance.db_noise_floor, color=ACCENT_AMBER, linestyle="--",
+        (line,) = ax.plot(full_freq, spec, color=C.ACCENT_GREEN, linewidth=engine_instance.chart_line_width, rasterized=True)
+        hline = ax.axhline(y=engine_instance.db_noise_floor, color=C.ACCENT_AMBER, linestyle="--",
                            linewidth=0.8, alpha=0.7, label="Piso de Ruido")
-        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL, labelcolor='#ECEFF1')
+        ax.legend(loc="upper right", fontsize=7, facecolor=C.MPL_AXBG, edgecolor=C.BORDER_COL, labelcolor=C.MPL_TEXT)
         cache.artists["spectrum"]["line"] = line
         cache.artists["spectrum"]["hline"] = hline
     else:
@@ -196,7 +196,7 @@ def chart_spectrum() -> str:
         line.set_data(full_freq, spec)
         nf = engine_instance.db_noise_floor
         hline.set_ydata([nf, nf])
-        ax.set_title(f"Espectro de Frecuencia (Señal Filtrada) {time_str}", color=ACCENT_CYAN, fontsize=9, pad=6)
+        ax.set_title(f"Espectro de Frecuencia (Señal Filtrada) {time_str}", color=C.ACCENT_CYAN, fontsize=9, pad=6)
 
     cfg = engine_instance.charts_config["mon_filt_spec"]
     safe_set_ylim(ax, cfg["ymin"], cfg["ymax"])
@@ -224,10 +224,10 @@ def chart_spectrum_raw() -> str:
     if is_new or "line" not in cache.artists["spectrum_raw"]:
         ax.clear()
         style_ax(ax, f"Espectro (Señal Original — Sin Filtrar) {time_str}", "Frecuencia (MHz)", "Potencia (dBFS)")
-        (line,) = ax.plot(full_freq, spec, color=ACCENT_CYAN, linewidth=engine_instance.chart_line_width, rasterized=True)
-        hline = ax.axhline(y=engine_instance.db_noise_floor_raw, color=ACCENT_AMBER, linestyle="--",
+        (line,) = ax.plot(full_freq, spec, color=C.ACCENT_CYAN, linewidth=engine_instance.chart_line_width, rasterized=True)
+        hline = ax.axhline(y=engine_instance.db_noise_floor_raw, color=C.ACCENT_AMBER, linestyle="--",
                            linewidth=0.8, alpha=0.7, label="Piso de Ruido (RAW)")
-        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL, labelcolor='#ECEFF1')
+        ax.legend(loc="upper right", fontsize=7, facecolor=C.MPL_AXBG, edgecolor=C.BORDER_COL, labelcolor=C.MPL_TEXT)
         cache.artists["spectrum_raw"]["line"] = line
         cache.artists["spectrum_raw"]["hline"] = hline
     else:
@@ -237,7 +237,7 @@ def chart_spectrum_raw() -> str:
         line.set_data(full_freq, spec)
         nf = engine_instance.db_noise_floor_raw
         hline.set_ydata([nf, nf])
-        ax.set_title(f"Espectro (Señal Original — Sin Filtrar) {time_str}", color=ACCENT_CYAN, fontsize=9, pad=6)
+        ax.set_title(f"Espectro (Señal Original — Sin Filtrar) {time_str}", color=C.ACCENT_CYAN, fontsize=9, pad=6)
 
     cfg = engine_instance.charts_config["mon_raw_spec"]
     safe_set_ylim(ax, cfg["ymin"], cfg["ymax"])

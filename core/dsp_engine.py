@@ -1589,6 +1589,7 @@ class DSPEngine:
             "window_mode": getattr(self, "window_mode", "Normal"),
             "chart_line_width": getattr(self, "chart_line_width", 1.0),
             "auto_spectral_lock": getattr(self, "auto_spectral_lock", True),
+            "theme": getattr(self, "theme", "dark"),
         }
         try:
             sanitized = self._sanitize(conf)
@@ -1650,6 +1651,7 @@ class DSPEngine:
                 self.ma_enabled = conf.get("ma_enabled", self.ma_enabled)
                 self.raw_mode = conf.get("raw_mode", self.raw_mode)
                 self.auto_spectral_lock = conf.get("auto_spectral_lock", True)
+                self.theme = conf.get("theme", "dark")
                 if "visual_span_mhz" in conf:
                     self.update_visual_span(conf["visual_span_mhz"])
 

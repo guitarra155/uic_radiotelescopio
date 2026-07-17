@@ -14,7 +14,7 @@ Para agregar un nuevo algoritmo:
 
 import numpy as np
 
-from core.constants import *
+import core.constants as C
 from core.dsp_engine import engine_instance
 from ui.charts.cache import cache
 from ui.charts.base import (
@@ -31,7 +31,7 @@ def chart_ar_spectrum(result: dict) -> str:
     if is_new or "line" not in cache.artists["ar_spectrum"]:
         ax.clear()
         style_ax(ax, "Espectro AR/Burg (Alta Resolución)", "Frecuencia (MHz)", "PSD (dB)")
-        (line,) = ax.plot(freqs, psd, color="#B380FF", linewidth=1.1, alpha=0.95)
+        (line,) = ax.plot(freqs, psd, color=C.COLOR_PURPLE, linewidth=1.1, alpha=0.95)
         cache.artists["ar_spectrum"]["line"] = line
     else:
         line = cache.artists["ar_spectrum"]["line"]
@@ -54,7 +54,7 @@ def chart_music_spectrum(result: dict) -> str:
     if is_new or "line" not in cache.artists[name]:
         ax.clear()
         style_ax(ax, f"Pseudo-Espectro {method}", "Frecuencia (MHz)", "Pseudo-potencia (dB)")
-        col = ACCENT_RED if "MUSIC" in method else "#FF80AB"
+        col = C.ACCENT_RED if "MUSIC" in method else "#FF80AB"
         (line,) = ax.plot(freqs, spec, color=col, linewidth=1.2)
         cache.artists[name]["line"] = line
     else:
@@ -77,14 +77,14 @@ def chart_welch_spectrum(result: dict) -> str:
     if is_new or "line" not in cache.artists[name]:
         ax.clear()
         style_ax(ax, f"Espectro de Welch ({n_seg} segmentos)", "Frecuencia (MHz)", "PSD (dB)")
-        (line,) = ax.plot(freqs, psd, color="#FFD700", linewidth=1.1, alpha=0.95)
+        (line,) = ax.plot(freqs, psd, color=C.COLOR_GOLD, linewidth=1.1, alpha=0.95)
         cache.artists[name]["line"] = line
     else:
         line = cache.artists[name]["line"]
         line.set_data(freqs, psd)
         safe_set_xlim(ax, freqs[0], freqs[-1])
         safe_set_ylim(ax, np.min(psd) - 5, np.max(psd) + 5)
-        ax.set_title(f"Espectro de Welch ({n_seg} segmentos)", color=ACCENT_CYAN, fontsize=9, pad=6)
+        ax.set_title(f"Espectro de Welch ({n_seg} segmentos)", color=C.ACCENT_CYAN, fontsize=9, pad=6)
 
     return fig_to_b64(fig)
 
@@ -107,6 +107,6 @@ def chart_correlogram_spectrum(result: dict) -> str:
         line.set_data(freqs, psd)
         safe_set_xlim(ax, freqs[0], freqs[-1])
         safe_set_ylim(ax, np.min(psd) - 5, np.max(psd) + 5)
-        ax.set_title(f"Correlograma — lag máx {max_lag} muestras", color=ACCENT_CYAN, fontsize=9, pad=6)
+        ax.set_title(f"Correlograma — lag máx {max_lag} muestras", color=C.ACCENT_CYAN, fontsize=9, pad=6)
 
     return fig_to_b64(fig)

@@ -1,0 +1,26 @@
+@startuml diapo11_concurrencia
+
+skinparam BackgroundColor #FFFFFF
+skinparam DefaultFontSize 13
+skinparam DefaultFontColor #2D3748
+skinparam BoxPadding 15
+skinparam ParticipantPadding 10
+
+box "Interfaz de Usuario" #FFF5F5
+participant "Hilo GUI (Flet)" as GUI #FFCDD2
+end box
+
+box "Procesamiento de Señal" #F0F8FF
+participant "Hilo DSP (Background)" as DSP #E6F2FF
+end box
+
+== Bucle de Adquisición Asíncrono ==
+
+DSP -> DSP : Adquiere muestras I/Q del SDR
+DSP -> DSP : Procesa FFT y filtros en buffer circular
+DSP -> GUI : Emite notificación PubSub ("refresh_charts")
+
+GUI -> GUI : Lee espectro procesado del Buffer
+GUI -> GUI : Genera figura y renderiza gráficos en pantalla
+
+@enduml

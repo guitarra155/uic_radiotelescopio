@@ -5,7 +5,7 @@ Soluciona los cuadros grises usando IconButtons en lugar de Checkboxes/Switches.
 """
 
 import flet as ft
-from core.constants import *
+import core.constants as C
 from core.dsp_engine import engine_instance
 
 def build_config(page: ft.Page) -> ft.Control:
@@ -26,7 +26,7 @@ def build_config(page: ft.Page) -> ft.Control:
         """Crea una fila alineada [Etiqueta | Control] con medidas estrictas."""
         return ft.Row([
             ft.Container(
-                content=ft.Text(label, color=TEXT_MUTED, size=10, no_wrap=True),
+                content=ft.Text(label, color=C.TEXT_MUTED, size=10, no_wrap=True),
                 width=LABEL_WIDTH,
                 alignment=ft.Alignment(-1, 0),
                 tooltip=tooltip
@@ -42,7 +42,7 @@ def build_config(page: ft.Page) -> ft.Control:
         """Usa Iconos en lugar de Checkbox para evitar errores de renderizado."""
         btn = ft.IconButton(
             icon=ft.Icons.CHECK_BOX if value else ft.Icons.CHECK_BOX_OUTLINE_BLANK,
-            icon_color=ACCENT_GREEN if value else TEXT_MUTED,
+            icon_color=C.ACCENT_GREEN if value else C.TEXT_MUTED,
             icon_size=20,
             on_click=on_click,
             visual_density=ft.VisualDensity.COMPACT
@@ -60,10 +60,10 @@ def build_config(page: ft.Page) -> ft.Control:
             height=28,
             text_size=11,
             content_padding=ft.Padding(8, 0, 8, 0),
-            color=TEXT_MAIN,
-            bgcolor=DARK_BG,
-            border_color=BORDER_COL,
-            focused_border_color=ACCENT_CYAN,
+            color=C.TEXT_MAIN,
+            bgcolor=C.DARK_BG,
+            border_color=C.BORDER_COL,
+            focused_border_color=C.ACCENT_CYAN,
         )
 
         def handle_focus(e):
@@ -84,7 +84,7 @@ def build_config(page: ft.Page) -> ft.Control:
 
     def row(label, control):
         return ft.Row([
-            ft.Text(label, color=TEXT_MUTED, size=11, width=120),
+            ft.Text(label, color=C.TEXT_MUTED, size=11, width=120),
             control
         ], alignment=ft.MainAxisAlignment.START, spacing=10)
 
@@ -129,7 +129,7 @@ def build_config(page: ft.Page) -> ft.Control:
         }
 
         return ft.Column([
-            ft.Text(f"📊 {title}", color=ACCENT_CYAN, size=12, weight=ft.FontWeight.BOLD),
+            ft.Text(f"📊 {title}", color=C.ACCENT_CYAN, size=12, weight=ft.FontWeight.BOLD),
             row("Auto Eje X", btn_auto_x),
             row("X Mín", tf_xmin),
             row("X Máx", tf_xmax),
@@ -141,8 +141,8 @@ def build_config(page: ft.Page) -> ft.Control:
         ], spacing=2)
 
     # --- Controles persistentes que se actualizan frecuentemente ---
-    rfi_last_val = ft.Text(engine_instance.rfi_last_time, color=TEXT_MAIN, size=10)
-    rfi_count_val = ft.Text(f"{engine_instance.rfi_event_count}", color=ACCENT_AMBER, size=10, weight=ft.FontWeight.BOLD)
+    rfi_last_val = ft.Text(engine_instance.rfi_last_time, color=C.TEXT_MAIN, size=10)
+    rfi_count_val = ft.Text(f"{engine_instance.rfi_event_count}", color=C.ACCENT_AMBER, size=10, weight=ft.FontWeight.BOLD)
     main_col = ft.Column(scroll=ft.ScrollMode.AUTO, spacing=10, expand=True)
 
     def build_dual_axis_group(title, raw_id, filt_id):
@@ -197,11 +197,11 @@ def build_config(page: ft.Page) -> ft.Control:
             if isinstance(c1, ft.IconButton):
                 c1 = ft.Container(c1, width=w, alignment=ft.Alignment(0, 0))
                 c2 = ft.Container(c2, width=w, alignment=ft.Alignment(0, 0))
-            return ft.Row([ft.Container(ft.Text(label, color=TEXT_MUTED, size=11), width=65), c1, c2], spacing=5, alignment=ft.MainAxisAlignment.START)
+            return ft.Row([ft.Container(ft.Text(label, color=C.TEXT_MUTED, size=11), width=65), c1, c2], spacing=5, alignment=ft.MainAxisAlignment.START)
 
         return ft.Column([
-            ft.Text(f"📊 {title}", color=ACCENT_CYAN, size=12, weight=ft.FontWeight.BOLD),
-            ft.Row([ft.Container(width=65), ft.Container(ft.Text("RAW", color=TEXT_MUTED, size=10, weight="bold"), width=w, alignment=ft.Alignment(0, 0)), ft.Container(ft.Text("FILTRADA", color=TEXT_MUTED, size=10, weight="bold"), width=w, alignment=ft.Alignment(0, 0))], spacing=5),
+            ft.Text(f"📊 {title}", color=C.ACCENT_CYAN, size=12, weight=ft.FontWeight.BOLD),
+            ft.Row([ft.Container(width=65), ft.Container(ft.Text("RAW", color=C.TEXT_MUTED, size=10, weight="bold"), width=w, alignment=ft.Alignment(0, 0)), ft.Container(ft.Text("FILTRADA", color=C.TEXT_MUTED, size=10, weight="bold"), width=w, alignment=ft.Alignment(0, 0))], spacing=5),
             triple("Auto Eje X", bx_r, bx_f),
             triple("X Mín", tfx_min_r, tfx_min_f),
             triple("X Máx", tfx_max_r, tfx_max_f),
@@ -219,14 +219,14 @@ def build_config(page: ft.Page) -> ft.Control:
         
         if idx == 1:
             tab_content = ft.Column([
-                ft.Text("🛡️ MONITOREO DUAL", color=ACCENT_CYAN, size=12, weight=ft.FontWeight.BOLD),
+                ft.Text("🛡️ MONITOREO DUAL", color=C.ACCENT_CYAN, size=12, weight=ft.FontWeight.BOLD),
                 row("Modo RAW", make_toggle(engine_instance.raw_mode, 
                     lambda e: (setattr(engine_instance, "raw_mode", not engine_instance.raw_mode), engine_instance.save_config(), on_ui_event(e)))),
-                ft.Divider(height=10, color=BORDER_COL),
+                ft.Divider(height=10, color=C.BORDER_COL),
                 
                 build_dual_axis_group("Amplitud", "mon_raw_amp", "mon_filt_amp"),
                 
-                ft.Text("⚙️ FILTRO MEDIA MÓVIL", color=ACCENT_AMBER, size=11, weight="bold"),
+                ft.Text("⚙️ FILTRO MEDIA MÓVIL", color=C.ACCENT_AMBER, size=11, weight="bold"),
                 row("Activado", make_toggle(engine_instance.ma_enabled, 
                     lambda e: (setattr(engine_instance, "ma_enabled", not engine_instance.ma_enabled), engine_instance.save_config(), on_ui_event(e)))),
                 row("Ventana (N)", make_input(f"{int(engine_instance.moving_avg_samples)}", 
@@ -280,11 +280,11 @@ def build_config(page: ft.Page) -> ft.Control:
             method_name = {"waterfall": "Waterfall FFT", "cwt": "CWT / Morlet", "ar_burg_2d": "AR / Burg", "correlogram_2d": "Correlograma"}.get(active_method, "Espectrograma 2D")
 
             tab_content = ft.Column([
-                ft.Text(f"📊 {method_name}", color=ACCENT_CYAN, size=12, weight=ft.FontWeight.BOLD),
+                ft.Text(f"📊 {method_name}", color=C.ACCENT_CYAN, size=12, weight=ft.FontWeight.BOLD),
                 row("Auto Eje X", btn_auto_x),
                 row("X Mín (MHz)", tf_xmin),
                 row("X Máx (MHz)", tf_xmax),
-                ft.Divider(height=5, color=BORDER_COL),
+                ft.Divider(height=5, color=C.BORDER_COL),
                 row("Auto Color", btn_auto_y),
                 row("Color Mín", tf_ymin),
                 row("Color Máx", tf_ymax),
@@ -311,18 +311,18 @@ def build_config(page: ft.Page) -> ft.Control:
                 lambda e: (setattr(engine_instance, "show_kde_fit", not engine_instance.show_kde_fit), engine_instance.save_config(), on_ui_event(e)))
 
             tab_content = ft.Column([
-                ft.Text("📈 AJUSTES DE CURVA", color=ACCENT_CYAN, size=12, weight=ft.FontWeight.BOLD),
+                ft.Text("📈 AJUSTES DE CURVA", color=C.ACCENT_CYAN, size=12, weight=ft.FontWeight.BOLD),
                 row("Curva Gauss (Térmico)", sw_gauss),
                 row("Curva Weibull (RFI)", sw_weibull),
                 row("Curva Rician (Señal)", sw_rician),
                 row("Curva KDE (Real)", sw_kde),
-                ft.Divider(height=10, color=BORDER_COL),
+                ft.Divider(height=10, color=C.BORDER_COL),
                 axis_group
             ])
         elif idx == 4: tab_content = build_axis_group("Potencia", "pow_time")
         elif idx == 5: tab_content = build_axis_group("SNR", "snr_freq")
         elif idx == 6: tab_content = build_axis_group("Algoritmo", "mon_filt_spec")
-        else: tab_content = ft.Text("Configuración general activa", color=TEXT_MUTED, size=10)
+        else: tab_content = ft.Text("Configuración general activa", color=C.TEXT_MUTED, size=10)
 
         if idx == 0:
             main_col.controls = []
@@ -340,11 +340,11 @@ def build_config(page: ft.Page) -> ft.Control:
                 pass
 
             main_col.controls = [
-                ft.Text("⚙️ CONFIGURACIÓN", size=14, weight=ft.FontWeight.BOLD, color=ACCENT_CYAN),
-                ft.Divider(height=10, color=ACCENT_CYAN),
+                ft.Text("⚙️ CONFIGURACIÓN", size=14, weight=ft.FontWeight.BOLD, color=C.ACCENT_CYAN),
+                ft.Divider(height=10, color=C.ACCENT_CYAN),
                 row("Sincronización", sync_btn),
                 reset_btn,
-                ft.Divider(height=20, color=BORDER_COL),
+                ft.Divider(height=20, color=C.BORDER_COL),
                 tab_content
             ]
 
@@ -369,7 +369,7 @@ def build_config(page: ft.Page) -> ft.Control:
             is_x = cfg.get("auto_x", False)
             if btn_x and btn_x.page:
                 new_icon_x = ft.Icons.CHECK_BOX if is_x else ft.Icons.CHECK_BOX_OUTLINE_BLANK
-                new_color_x = ACCENT_GREEN if is_x else TEXT_MUTED
+                new_color_x = C.ACCENT_GREEN if is_x else C.TEXT_MUTED
                 if btn_x.icon != new_icon_x:
                     btn_x.icon = new_icon_x
                     btn_x.icon_color = new_color_x
@@ -379,7 +379,7 @@ def build_config(page: ft.Page) -> ft.Control:
             is_y = cfg.get("auto_y", False)
             if btn_y and btn_y.page:
                 new_icon_y = ft.Icons.CHECK_BOX if is_y else ft.Icons.CHECK_BOX_OUTLINE_BLANK
-                new_color_y = ACCENT_GREEN if is_y else TEXT_MUTED
+                new_color_y = C.ACCENT_GREEN if is_y else C.TEXT_MUTED
                 if btn_y.icon != new_icon_y:
                     btn_y.icon = new_icon_y
                     btn_y.icon_color = new_color_y
@@ -419,7 +419,7 @@ def build_config(page: ft.Page) -> ft.Control:
             # Actualizar estilos del wrapper dinámicamente
             try:
                 idx = engine_instance.active_tab
-                wrapper.bgcolor = PANEL_BG if idx != 0 else ft.Colors.TRANSPARENT
+                wrapper.bgcolor = C.PANEL_BG if idx != 0 else ft.Colors.TRANSPARENT
                 wrapper.padding = ft.Padding(left=10, top=15, right=25, bottom=15) if idx != 0 else 5
                 wrapper.update()
             except: pass
@@ -459,8 +459,8 @@ def build_config(page: ft.Page) -> ft.Control:
     wrapper = ft.Container(
         content=root_container,
         width=300,
-        bgcolor=PANEL_BG,
-        border=ft.Border(left=ft.BorderSide(1, BORDER_COL)),
+        bgcolor=C.PANEL_BG,
+        border=ft.Border(left=ft.BorderSide(1, C.BORDER_COL)),
         padding=ft.Padding(left=10, top=15, right=20, bottom=15),
         alignment=ft.Alignment(-1.0, -1.0),
     )
@@ -477,7 +477,7 @@ def build_config(page: ft.Page) -> ft.Control:
 
     collapse_btn = ft.IconButton(
         icon=ft.Icons.KEYBOARD_ARROW_RIGHT,
-        icon_color=ACCENT_CYAN,
+        icon_color=C.ACCENT_CYAN,
         icon_size=20,
         on_click=toggle_collapse,
         tooltip="Minimizar/Expandir Panel",

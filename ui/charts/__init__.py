@@ -21,6 +21,7 @@ import types
 # ── Importar todos los submódulos ─────────────────────────────────────────────
 from ui.charts.base import (
     export_active_chart,
+    clear_chart_cache,
     get_dynamic_figsize,
     get_cached_fig,
     fig_to_b64,

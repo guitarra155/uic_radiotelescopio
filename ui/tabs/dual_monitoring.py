@@ -7,7 +7,7 @@ Muestra un grid 2x2:
 """
 
 import flet as ft
-from core.constants import *
+import core.constants as C
 from ui.charts import chart_amplitude, chart_spectrum_raw, chart_amplitude_ma, chart_spectrum
 from ui.components.shared import panel
 
@@ -139,7 +139,7 @@ def build_dual_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
     def _chart_box(img, chart_id, title, accent):
         btn = ft.IconButton(
             icon=ft.Icons.FULLSCREEN,
-            icon_color=TEXT_MUTED,
+            icon_color=C.TEXT_MUTED,
             icon_size=18,
             on_click=lambda e: on_maximize(e, chart_id),
             tooltip="Maximizar/Restaurar",
@@ -149,7 +149,7 @@ def build_dual_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
         )
         btn_fs = ft.IconButton(
             icon=ft.Icons.ASPECT_RATIO,
-            icon_color=ACCENT_AMBER,
+            icon_color=C.ACCENT_AMBER,
             icon_size=18,
             style=ft.ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=4)
@@ -176,26 +176,26 @@ def build_dual_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
                 )
             ], spacing=1, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
             expand=True,
-            bgcolor=PANEL_BG,
+            bgcolor=C.PANEL_BG,
             border_radius=8,
-            border=ft.Border(top=ft.BorderSide(2, accent), right=ft.BorderSide(1, BORDER_COL),
-                             bottom=ft.BorderSide(1, BORDER_COL), left=ft.BorderSide(1, BORDER_COL)),
+            border=ft.Border(top=ft.BorderSide(2, accent), right=ft.BorderSide(1, C.BORDER_COL),
+                             bottom=ft.BorderSide(1, C.BORDER_COL), left=ft.BorderSide(1, C.BORDER_COL)),
             padding=ft.Padding(left=6, top=2, right=2, bottom=4),
         )
         box.btn_maximize = btn
         box.btn_fs = btn_fs
         return box
 
-    box_spec_raw = _chart_box(img_spec_raw, "mon_raw_spec", "ESPECTRO ORIGINAL", ACCENT_CYAN)
-    box_spec_filt = _chart_box(img_spec_filt, "mon_filt_spec", "ESPECTRO FILTRADO", ACCENT_GREEN)
-    box_amp_raw = _chart_box(img_amp_raw, "mon_raw_amp", "AMPLITUD ORIGINAL", ACCENT_CYAN)
-    box_amp_filt = _chart_box(img_amp_filt, "mon_filt_amp", "AMPLITUD FILTRADA (MA)", ACCENT_AMBER)
+    box_spec_raw = _chart_box(img_spec_raw, "mon_raw_spec", "ESPECTRO ORIGINAL", C.ACCENT_CYAN)
+    box_spec_filt = _chart_box(img_spec_filt, "mon_filt_spec", "ESPECTRO FILTRADO", C.ACCENT_GREEN)
+    box_amp_raw = _chart_box(img_amp_raw, "mon_raw_amp", "AMPLITUD ORIGINAL", C.ACCENT_CYAN)
+    box_amp_filt = _chart_box(img_amp_filt, "mon_filt_amp", "AMPLITUD FILTRADA (MA)", C.ACCENT_AMBER)
 
     row_1 = ft.Row([box_spec_raw, box_spec_filt], expand=True, spacing=10, vertical_alignment=ft.CrossAxisAlignment.STRETCH)
     row_2 = ft.Row([box_amp_raw, box_amp_filt], expand=True, spacing=10, vertical_alignment=ft.CrossAxisAlignment.STRETCH)
 
     boxes = [box_spec_raw, box_spec_filt, box_amp_raw, box_amp_filt]
-    accents = [ACCENT_CYAN, ACCENT_GREEN, ACCENT_CYAN, ACCENT_AMBER]
+    accents = [C.ACCENT_CYAN, C.ACCENT_GREEN, C.ACCENT_CYAN, C.ACCENT_AMBER]
     chart_ids = ["mon_raw_spec", "mon_filt_spec", "mon_raw_amp", "mon_filt_amp"]
     selected_idx = [None]
 
@@ -209,20 +209,20 @@ def build_dual_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
                 selected_idx[0] = idx
                 for i, (box, accent) in enumerate(zip(boxes, accents)):
                     if i == idx:
-                        # Borde amarillo grueso
+                        # Borde grueso del color secundario/alerta activo
                         box.border = ft.Border(
-                            top=ft.BorderSide(3, ft.Colors.YELLOW),
-                            right=ft.BorderSide(3, ft.Colors.YELLOW),
-                            bottom=ft.BorderSide(3, ft.Colors.YELLOW),
-                            left=ft.BorderSide(3, ft.Colors.YELLOW)
+                            top=ft.BorderSide(3, C.ACCENT_AMBER),
+                            right=ft.BorderSide(3, C.ACCENT_AMBER),
+                            bottom=ft.BorderSide(3, C.ACCENT_AMBER),
+                            left=ft.BorderSide(3, C.ACCENT_AMBER)
                         )
                     else:
                         # Borde normal
                         box.border = ft.Border(
                             top=ft.BorderSide(2, accent),
-                            right=ft.BorderSide(1, BORDER_COL),
-                            bottom=ft.BorderSide(1, BORDER_COL),
-                            left=ft.BorderSide(1, BORDER_COL)
+                            right=ft.BorderSide(1, C.BORDER_COL),
+                            bottom=ft.BorderSide(1, C.BORDER_COL),
+                            left=ft.BorderSide(1, C.BORDER_COL)
                         )
                     if box.page:
                         try: box.update()
@@ -247,20 +247,20 @@ def build_dual_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
 
     help_banner = ft.Container(
         content=ft.Row([
-            ft.Icon(ft.Icons.KEYBOARD_ROUNDED, color=ACCENT_CYAN, size=15),
+            ft.Icon(ft.Icons.KEYBOARD_ROUNDED, color=C.ACCENT_CYAN, size=15),
             ft.Text(
                 "Navegación por teclado: [F1 - F4] Seleccionar gráfica (borde amarillo)  •  [CTRL + F1 - F4] Maximizar / Restaurar vista",
-                color=TEXT_MUTED,
+                color=C.TEXT_MUTED,
                 size=10,
                 weight=ft.FontWeight.W_500
             )
         ], spacing=8, alignment=ft.MainAxisAlignment.CENTER),
         padding=ft.Padding(top=5, bottom=5, left=10, right=10),
-        bgcolor=PANEL_BG,
+        bgcolor=C.PANEL_BG,
         border_radius=6,
         border=ft.Border(
-            top=ft.BorderSide(1, BORDER_COL), right=ft.BorderSide(1, BORDER_COL),
-            bottom=ft.BorderSide(1, BORDER_COL), left=ft.BorderSide(1, BORDER_COL)
+            top=ft.BorderSide(1, C.BORDER_COL), right=ft.BorderSide(1, C.BORDER_COL),
+            bottom=ft.BorderSide(1, C.BORDER_COL), left=ft.BorderSide(1, C.BORDER_COL)
         )
     )
 

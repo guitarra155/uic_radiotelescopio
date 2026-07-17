@@ -9,7 +9,7 @@ Gráficas del Tab 2 — Espectrograma:
 
 import numpy as np
 
-from core.constants import *
+import core.constants as C
 from core.dsp_engine import engine_instance
 from ui.charts.cache import cache
 from ui.charts.base import (
@@ -81,15 +81,15 @@ def _render_2d_waterfall(
             extent=[f0, f1, total_secs, 0.0],
             cmap=default_cmap, vmin=v_min, vmax=v_max, interpolation="nearest",
         )
-        vline = ax.axvline(x=fc, color=ACCENT_RED, linestyle="--",
+        vline = ax.axvline(x=fc, color=C.ACCENT_RED, linestyle="--",
                            linewidth=0.9, alpha=0.8, label=f"HI {fc:.2f} MHz")
-        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL, labelcolor='#ECEFF1')
+        ax.legend(loc="upper right", fontsize=7, facecolor=C.MPL_AXBG, edgecolor=C.BORDER_COL, labelcolor=C.MPL_TEXT)
         from mpl_toolkits.axes_grid1 import make_axes_locatable
         cax = make_axes_locatable(ax).append_axes("right", size="2%", pad=0.05)
         cbar = fig.colorbar(im, cax=cax)
-        cbar.set_label("PSD (dB)", fontsize=7, color=TEXT_MUTED)
-        cbar.ax.tick_params(labelsize=6, colors=TEXT_MUTED)
-        cbar.outline.set_edgecolor(BORDER_COL)
+        cbar.set_label("PSD (dB)", fontsize=7, color=C.TEXT_MUTED)
+        cbar.ax.tick_params(labelsize=6, colors=C.TEXT_MUTED)
+        cbar.outline.set_edgecolor(C.BORDER_COL)
         cache.artists[name]["im"] = im
         cache.artists[name]["vline"] = vline
         cache.artists[name]["cbar"] = cbar
@@ -146,9 +146,9 @@ def chart_spectrogram() -> str:
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="2%", pad=0.05)
         cbar = fig.colorbar(im, cax=cax)
-        cbar.set_label("Potencia (dBFS)", fontsize=7, color=TEXT_MUTED)
-        cbar.ax.tick_params(labelsize=6, colors=TEXT_MUTED)
-        cbar.outline.set_edgecolor(BORDER_COL)
+        cbar.set_label("Potencia (dBFS)", fontsize=7, color=C.TEXT_MUTED)
+        cbar.ax.tick_params(labelsize=6, colors=C.TEXT_MUTED)
+        cbar.outline.set_edgecolor(C.BORDER_COL)
         cache.artists["waterfall"]["im"] = im
         cache.artists["waterfall"]["cbar"] = cbar
     else:

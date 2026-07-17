@@ -5,7 +5,7 @@ Pestaña "Potencia vs. Tiempo" — rolling buffer dBFS con marcador de piso de r
 
 import asyncio
 import flet as ft
-from core.constants import *
+import core.constants as C
 from ui.charts import chart_power_time
 from ui.components.shared import panel, border_all
 
@@ -18,13 +18,13 @@ def build_signal_analysis(page: ft.Page, key_state: dict) -> ft.Control:
                    gapless_playback=True, border_radius=10, expand=True)
 
     # ── Métricas ─────────────────────────────────────────────────────────────
-    val_pwr_now   = ft.Text("—", color=ACCENT_AMBER, size=13,
+    val_pwr_now   = ft.Text("—", color=C.ACCENT_AMBER, size=13,
                              weight=ft.FontWeight.W_600)
-    val_pwr_max   = ft.Text("—", color=ACCENT_RED, size=12)
-    val_pwr_min   = ft.Text("—", color=ACCENT_GREEN, size=12)
-    val_pwr_avg   = ft.Text("—", color=TEXT_MAIN, size=12)
-    val_noise_fl  = ft.Text("—", color=TEXT_MUTED, size=12)
-    val_pwr_range = ft.Text("—", color=TEXT_MUTED, size=11)
+    val_pwr_max   = ft.Text("—", color=C.ACCENT_RED, size=12)
+    val_pwr_min   = ft.Text("—", color=C.ACCENT_GREEN, size=12)
+    val_pwr_avg   = ft.Text("—", color=C.TEXT_MAIN, size=12)
+    val_noise_fl  = ft.Text("—", color=C.TEXT_MUTED, size=12)
+    val_pwr_range = ft.Text("—", color=C.TEXT_MUTED, size=11)
 
     is_rendering = [False]
 
@@ -101,7 +101,7 @@ def build_signal_analysis(page: ft.Page, key_state: dict) -> ft.Control:
 
     def stat_row(label, val_widget):
         return ft.Row([
-            ft.Text(label, color=TEXT_MUTED, size=11, expand=1),
+            ft.Text(label, color=C.TEXT_MUTED, size=11, expand=1),
             val_widget,
         ])
 
@@ -109,26 +109,26 @@ def build_signal_analysis(page: ft.Page, key_state: dict) -> ft.Control:
         width=250,
         padding_val=14,
         content=ft.Column([
-            ft.Text("⚡  Potencia en Tiempo Real", color=ACCENT_CYAN, size=14,
+            ft.Text("⚡  Potencia en Tiempo Real", color=C.ACCENT_CYAN, size=14,
                     weight=ft.FontWeight.BOLD),
-            ft.Divider(color=BORDER_COL, height=10),
-            ft.Text("Potencia actual:", color=TEXT_MUTED, size=10),
+            ft.Divider(color=C.BORDER_COL, height=10),
+            ft.Text("Potencia actual:", color=C.TEXT_MUTED, size=10),
             ft.Container(content=val_pwr_now, padding=ft.Padding(left=2, top=0, right=0, bottom=8)),
-            ft.Divider(color=BORDER_COL, height=8),
-            ft.Text("📊  Estadísticas del buffer", color=ACCENT_CYAN, size=12,
+            ft.Divider(color=C.BORDER_COL, height=8),
+            ft.Text("📊  Estadísticas del buffer", color=C.ACCENT_CYAN, size=12,
                     weight=ft.FontWeight.BOLD),
             stat_row("Máximo:", val_pwr_max),
             stat_row("Mínimo:", val_pwr_min),
             stat_row("Promedio:", val_pwr_avg),
             stat_row("Piso ruido (med.):", val_noise_fl),
             stat_row("Rango Y activo:", val_pwr_range),
-            ft.Divider(color=BORDER_COL, height=10),
+            ft.Divider(color=C.BORDER_COL, height=10),
             ft.Text(
                 "El buffer muestra las últimas 2000\n"
                 "mediciones de potencia promedio.\n\n"
                 "Ctrl+Scroll → zoom Y\n"
                 "Shift+Scroll → zoom X",
-                color=TEXT_MUTED, size=9, italic=True,
+                color=C.TEXT_MUTED, size=9, italic=True,
             ),
         ], spacing=8),
     )
@@ -146,7 +146,7 @@ def build_signal_analysis(page: ft.Page, key_state: dict) -> ft.Control:
 
     btn_fs = ft.IconButton(
         icon=ft.Icons.ASPECT_RATIO,
-        icon_color=ACCENT_AMBER,
+        icon_color=C.ACCENT_AMBER,
         icon_size=18,
         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4)),
         on_click=on_fullscreen_global,
@@ -159,13 +159,13 @@ def build_signal_analysis(page: ft.Page, key_state: dict) -> ft.Control:
     def on_toggle_side(e):
         side.visible = not side.visible
         btn_toggle_side.icon = ft.Icons.VIEW_SIDEBAR_OUTLINED if side.visible else ft.Icons.VIEW_SIDEBAR
-        btn_toggle_side.icon_color = ACCENT_CYAN if side.visible else ACCENT_AMBER
+        btn_toggle_side.icon_color = C.ACCENT_CYAN if side.visible else C.ACCENT_AMBER
         btn_toggle_side.tooltip = "Ocultar panel de estadísticas" if side.visible else "Mostrar panel de estadísticas"
         page.update()
 
     btn_toggle_side = ft.IconButton(
         icon=ft.Icons.VIEW_SIDEBAR_OUTLINED,
-        icon_color=ACCENT_CYAN,
+        icon_color=C.ACCENT_CYAN,
         icon_size=18,
         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4)),
         on_click=on_toggle_side,
@@ -178,7 +178,7 @@ def build_signal_analysis(page: ft.Page, key_state: dict) -> ft.Control:
     chart_container = ft.Container(
         content=ft.Column([
             ft.Row([
-                ft.Text("POTENCIA VS. TIEMPO", color=ACCENT_CYAN, size=10, weight=ft.FontWeight.BOLD),
+                ft.Text("POTENCIA VS. TIEMPO", color=C.ACCENT_CYAN, size=10, weight=ft.FontWeight.BOLD),
                 ft.Row([btn_toggle_side, btn_fs], spacing=5)
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             ft.GestureDetector(
@@ -190,7 +190,7 @@ def build_signal_analysis(page: ft.Page, key_state: dict) -> ft.Control:
             )
         ], spacing=2, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
         expand=True,
-        bgcolor=PANEL_BG,
+        bgcolor=C.PANEL_BG,
         border_radius=10,
         border=border_all(),
         padding=6,

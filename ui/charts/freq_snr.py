@@ -6,7 +6,7 @@ Gráficas del Tab 5 — SNR vs. Frecuencia:
 
 import numpy as np
 
-from core.constants import *
+import core.constants as C
 from core.dsp_engine import engine_instance
 from ui.charts.cache import cache
 from ui.charts.base import (
@@ -26,8 +26,8 @@ def chart_freq_snr() -> str:
         ax.clear()
         style_ax(ax, "SNR vs. Frecuencia", "Frecuencia (MHz)", "SNR (dB)")
         (line,) = ax.plot(full_freq, snr, color="#1f77b4", linewidth=1.0)
-        ax.axhline(y=6, color=ACCENT_RED, linestyle="--", linewidth=0.8, alpha=0.7, label="Umbral 6 dB")
-        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL, labelcolor='#ECEFF1')
+        ax.axhline(y=6, color=C.ACCENT_RED, linestyle="--", linewidth=0.8, alpha=0.7, label="Umbral 6 dB")
+        ax.legend(loc="upper right", fontsize=7, facecolor=C.MPL_AXBG, edgecolor=C.BORDER_COL, labelcolor=C.MPL_TEXT)
         cache.artists["freq_snr"]["line"] = line
     else:
         line = cache.artists["freq_snr"]["line"]

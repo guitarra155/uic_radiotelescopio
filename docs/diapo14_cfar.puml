@@ -1,0 +1,24 @@
+@startuml diapo14_cfar
+
+left to right direction
+skinparam BackgroundColor #FFFFFF
+skinparam DefaultFontSize 13
+skinparam DefaultFontColor #2D3748
+skinparam BorderColor #4A5568
+skinparam linetype ortho
+
+rectangle "Espectro de Potencia\n(Entrada PSD)" as PSD #FAFAFA
+rectangle "Filtro de Mediana Deslizante\n(Kernel 4% del Espectro)" as MEDIAN #C8E6C9
+rectangle "Cálculo del Piso de Ruido\nDinámico (Local)" as NOISE #C8E6C9
+rectangle "Suma de Umbral de Sensibilidad\n(Desplazamiento +6 dB)" as THRESH #BBDEFB
+rectangle "Comparación Bin por Bin\n(Señal > Umbral)" as COMP #FFCDD2
+rectangle "Lista de Frecuencias\ny Señales Detectadas" as DETECT #FFF9C4
+
+PSD --> MEDIAN : Suavizado espectral
+MEDIAN --> NOISE : Estima ruido base
+NOISE --> THRESH : Aplica margen
+THRESH --> COMP : Define frontera
+PSD --> COMP : Compara niveles
+COMP --> DETECT : Extrae candidatos
+
+@enduml

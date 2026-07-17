@@ -1,5 +1,5 @@
 import flet as ft
-from core.constants import *
+import core.constants as C
 import tkinter as tk
 from tkinter import filedialog
 import asyncio
@@ -13,10 +13,10 @@ def build_estado(page: ft.Page) -> ft.Control:
             label=label,
             value=value,
             options=[ft.dropdown.Option(o) for o in options],
-            color=TEXT_MAIN,
-            bgcolor=DARK_BG,
-            border_color=BORDER_COL,
-            focused_border_color=ACCENT_CYAN,
+            color=C.TEXT_MAIN,
+            bgcolor=C.DARK_BG,
+            border_color=C.BORDER_COL,
+            focused_border_color=C.ACCENT_CYAN,
             border_radius=8,
             expand=True,
         )
@@ -56,8 +56,8 @@ def build_estado(page: ft.Page) -> ft.Control:
         on_click=on_pick_file,
         tooltip="Seleccionar archivo .iq",
         style=ft.ButtonStyle(
-            color=TEXT_MAIN,
-            bgcolor=PANEL_BG,
+            color=C.TEXT_MAIN,
+            bgcolor=C.PANEL_BG,
             shape=ft.RoundedRectangleBorder(radius=8),
         ),
     )
@@ -91,8 +91,8 @@ def build_estado(page: ft.Page) -> ft.Control:
         on_change=on_mode_change,
         content=ft.Column(
             [
-                ft.Radio(value="sdr", label="📡 Hardware", active_color=ACCENT_GREEN),
-                ft.Radio(value="file", label="📼 Archivo Local (.iq)", active_color=ACCENT_AMBER),
+                ft.Radio(value="sdr", label="📡 Hardware", active_color=C.ACCENT_GREEN),
+                ft.Radio(value="file", label="📼 Archivo Local (.iq)", active_color=C.ACCENT_AMBER),
             ],
             spacing=4,
         ),
@@ -109,7 +109,7 @@ def build_estado(page: ft.Page) -> ft.Control:
     
     # --- Selector de Sample Rate tipo Chips (Flawless Wrap) ---
     rate_container = ft.Column([
-        ft.Text("Sample Rate (MSps)", color=TEXT_MUTED, size=11),
+        ft.Text("Sample Rate (MSps)", color=C.TEXT_MUTED, size=11),
         ft.Container(height=4),
     ], spacing=0)
     
@@ -124,11 +124,11 @@ def build_estado(page: ft.Page) -> ft.Control:
         # Refrescar visualmente todos los botones en este panel
         for btn in buttons_list:
             if btn.data == rate_val:
-                btn.bgcolor = ACCENT_CYAN
-                btn.content.color = DARK_BG
+                btn.bgcolor = C.ACCENT_CYAN
+                btn.content.color = C.DARK_BG
             else:
-                btn.bgcolor = PANEL_BG
-                btn.content.color = TEXT_MAIN
+                btn.bgcolor = C.PANEL_BG
+                btn.content.color = C.TEXT_MAIN
             try: btn.update()
             except: pass
             
@@ -146,9 +146,9 @@ def build_estado(page: ft.Page) -> ft.Control:
     for opt in rate_opts:
         is_selected = (opt == sr_str)
         btn = ft.Container(
-            content=ft.Text(opt, size=10, weight=ft.FontWeight.BOLD, color=DARK_BG if is_selected else TEXT_MAIN),
-            bgcolor=ACCENT_CYAN if is_selected else PANEL_BG,
-            border=ft.border.all(1, BORDER_COL),
+            content=ft.Text(opt, size=10, weight=ft.FontWeight.BOLD, color=C.DARK_BG if is_selected else C.TEXT_MAIN),
+            bgcolor=C.ACCENT_CYAN if is_selected else C.PANEL_BG,
+            border=ft.border.all(1, C.BORDER_COL),
             border_radius=6,
             padding=ft.padding.all(0),
             alignment=ft.Alignment(0, 0),
@@ -209,13 +209,13 @@ def build_estado(page: ft.Page) -> ft.Control:
     span_visual_f.on_submit = on_span_change
     span_visual_f.on_blur = on_span_change
 
-    def lbl(t, color=TEXT_MUTED, size=12):
+    def lbl(t, color=C.TEXT_MUTED, size=12):
         return ft.Text(t, color=color, size=size)
 
-    def section_title(icon, title, color=ACCENT_CYAN):
+    def section_title(icon, title, color=C.ACCENT_CYAN):
         return ft.Container(
             content=ft.Text(f"{icon}  {title}", color=color, size=18, weight=ft.FontWeight.BOLD),
-            bgcolor="#0D1117",
+            bgcolor=C.DARK_BG,
             border_radius=4,
             padding=ft.Padding(left=12, top=8, right=12, bottom=8),
             margin=ft.Margin(top=15, bottom=5, left=0, right=0)
@@ -234,8 +234,8 @@ def build_estado(page: ft.Page) -> ft.Control:
         label="Smart Trigger (Captura de Transitorios)",
         value=bool(engine_instance.trigger_active),
         on_change=on_trigger_chk_change,
-        active_color=ACCENT_CYAN,
-        label_style=ft.TextStyle(color=TEXT_MAIN, size=11, weight=ft.FontWeight.BOLD)
+        active_color=C.ACCENT_CYAN,
+        label_style=ft.TextStyle(color=C.TEXT_MAIN, size=11, weight=ft.FontWeight.BOLD)
     )
     
     def on_trig_high_change(e):
@@ -258,11 +258,11 @@ def build_estado(page: ft.Page) -> ft.Control:
     trig_low_f.on_submit = on_trig_low_change
     trig_low_f.on_blur = on_trig_low_change
     
-    rfi_count_lbl = ft.Text(f"{engine_instance.rfi_event_count}", color=ACCENT_AMBER, size=14, weight=ft.FontWeight.BOLD)
+    rfi_count_lbl = ft.Text(f"{engine_instance.rfi_event_count}", color=C.ACCENT_AMBER, size=14, weight=ft.FontWeight.BOLD)
     
     trigger_card = panel(
         content=ft.Column([
-            section_title("⚡", "Eventos Transitorios & Trigger", ACCENT_CYAN),
+            section_title("⚡", "Eventos Transitorios & Trigger", C.ACCENT_CYAN),
             trigger_chk,
             lbl("Activa el autodisparo por picos de energía.", size=10),
             ft.Container(height=5),
@@ -273,7 +273,7 @@ def build_estado(page: ft.Page) -> ft.Control:
             lbl("Umbral de caída para terminar captura.", size=10),
             ft.Container(height=5),
             ft.Row([
-                ft.Text("Capturas RFI / Transitorios:", color=TEXT_MUTED, size=12, expand=2),
+                ft.Text("Capturas RFI / Transitorios:", color=C.TEXT_MUTED, size=12, expand=2),
                 rfi_count_lbl
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
         ], spacing=10)
@@ -282,8 +282,12 @@ def build_estado(page: ft.Page) -> ft.Control:
     # Tarjeta 1: Origen de Datos
     data_source_card = panel(
         content=ft.Column([
-            section_title("📁", "Origen de Datos", TEXT_MAIN),
-            ft.Row([filepath_input, pick_btn], spacing=10),
+            ft.Row([
+                section_title("📁", "Origen de Datos", C.TEXT_MAIN),
+                pick_btn
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+            ft.Container(height=5),
+            filepath_input,
             ft.Container(height=5),
             fmt_dd,
             ft.Container(height=5),
@@ -323,20 +327,20 @@ def build_estado(page: ft.Page) -> ft.Control:
         label="Activar Span",
         value=bool(engine_instance.auto_spectral_lock),
         on_change=on_lock_toggle_change,
-        active_color=ACCENT_CYAN,
-        label_style=ft.TextStyle(color=TEXT_MUTED, size=11)
+        active_color=C.ACCENT_CYAN,
+        label_style=ft.TextStyle(color=C.TEXT_MUTED, size=11)
     )
 
     # Tarjeta 2: Configuración
     freq_card = panel(
         content=ft.Column([
-            section_title("🌍", "Configuración", ACCENT_GREEN),
+            section_title("🌍", "Configuración", C.ACCENT_GREEN),
             freq_f,
             lock_chk,
             span_visual_f,
             rate_container,
-            ft.Divider(color=BORDER_COL, height=10),
-            ft.Text("Ventana de Adquisicion", color=ACCENT_AMBER, size=12, weight=ft.FontWeight.W_600),
+            ft.Divider(color=C.BORDER_COL, height=10),
+            ft.Text("Ventana de Adquisicion", color=C.ACCENT_AMBER, size=12, weight=ft.FontWeight.W_600),
             analysis_f,
             waterfall_f,
         ], spacing=15)
@@ -345,7 +349,7 @@ def build_estado(page: ft.Page) -> ft.Control:
     # Tarjeta 3: Hardware (BB60C)
     hw_card = panel(
         content=ft.Column([
-            section_title("🔧", "Hardware (BB60C)", ACCENT_CYAN),
+            section_title("🔧", "Hardware (BB60C)", C.ACCENT_CYAN),
             ref_level_f,
             lbl("Ajusta el techo de entrada para no saturar.", size=10),
             ft.Container(height=5),
@@ -365,12 +369,12 @@ def build_estado(page: ft.Page) -> ft.Control:
 
     # Añadir sección de estado informativo
     dev_rows = [
-        ("Modelo SDR", "BB60C", TEXT_MAIN),
-        ("Estado DSP", "Multihilo", ACCENT_GREEN),
+        ("Modelo SDR", "BB60C", C.TEXT_MAIN),
+        ("Estado DSP", "Multihilo", C.ACCENT_GREEN),
     ]
     info_rows = [
         ft.Row([
-            ft.Text(k, color=TEXT_MUTED, size=14, expand=2),
+            ft.Text(k, color=C.TEXT_MUTED, size=14, expand=2),
             ft.Text(v, color=c, size=14, expand=3, weight=ft.FontWeight.W_600),
         ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
         for k, v, c in dev_rows
@@ -444,43 +448,43 @@ def build_estado(page: ft.Page) -> ft.Control:
     )
 
     docs_panel = ft.ExpansionPanelList(
-        expand_icon_color=ACCENT_CYAN,
+        expand_icon_color=C.ACCENT_CYAN,
         elevation=0,
-        divider_color=BORDER_COL,
+        divider_color=C.BORDER_COL,
         controls=[
             ft.ExpansionPanel(
-                header=ft.ListTile(title=ft.Text("Manual de Usuario Rápido", color=ACCENT_CYAN, weight=ft.FontWeight.W_600)),
-                content=ft.Container(content=md_user_manual, padding=10, bgcolor=DARK_BG, border_radius=6),
+                header=ft.ListTile(title=ft.Text("Manual de Usuario Rápido", color=C.ACCENT_CYAN, weight=ft.FontWeight.W_600)),
+                content=ft.Container(content=md_user_manual, padding=10, bgcolor=C.DARK_BG, border_radius=6),
             ),
             ft.ExpansionPanel(
-                header=ft.ListTile(title=ft.Text("Atajos de Teclado y Control", color="#FF9100", weight=ft.FontWeight.W_600)),
-                content=ft.Container(content=md_shortcuts, padding=10, bgcolor=DARK_BG, border_radius=6),
+                header=ft.ListTile(title=ft.Text("Atajos de Teclado y Control", color=C.COLOR_ORANGE, weight=ft.FontWeight.W_600)),
+                content=ft.Container(content=md_shortcuts, padding=10, bgcolor=C.DARK_BG, border_radius=6),
             ),
             ft.ExpansionPanel(
-                header=ft.ListTile(title=ft.Text("Módulos y Pestañas UI", color=ACCENT_AMBER, weight=ft.FontWeight.W_600)),
-                content=ft.Container(content=md_tabs, padding=10, bgcolor=DARK_BG, border_radius=6),
+                header=ft.ListTile(title=ft.Text("Módulos y Pestañas UI", color=C.ACCENT_AMBER, weight=ft.FontWeight.W_600)),
+                content=ft.Container(content=md_tabs, padding=10, bgcolor=C.DARK_BG, border_radius=6),
             ),
             ft.ExpansionPanel(
-                header=ft.ListTile(title=ft.Text("Parámetros SDR y Hardware", color=ACCENT_GREEN, weight=ft.FontWeight.W_600)),
-                content=ft.Container(content=md_hw, padding=10, bgcolor=DARK_BG, border_radius=6),
+                header=ft.ListTile(title=ft.Text("Parámetros SDR y Hardware", color=C.ACCENT_GREEN, weight=ft.FontWeight.W_600)),
+                content=ft.Container(content=md_hw, padding=10, bgcolor=C.DARK_BG, border_radius=6),
             ),
             ft.ExpansionPanel(
-                header=ft.ListTile(title=ft.Text("Procesamiento Digital (DSP)", color="#B380FF", weight=ft.FontWeight.W_600)),
-                content=ft.Container(content=md_dsp, padding=10, bgcolor=DARK_BG, border_radius=6),
+                header=ft.ListTile(title=ft.Text("Procesamiento Digital (DSP)", color=C.COLOR_PURPLE, weight=ft.FontWeight.W_600)),
+                content=ft.Container(content=md_dsp, padding=10, bgcolor=C.DARK_BG, border_radius=6),
             ),
             ft.ExpansionPanel(
-                header=ft.ListTile(title=ft.Text("Eventos Transitorios y Recorte", color=ACCENT_RED, weight=ft.FontWeight.W_600)),
-                content=ft.Container(content=md_trigger, padding=10, bgcolor=DARK_BG, border_radius=6),
+                header=ft.ListTile(title=ft.Text("Eventos Transitorios y Recorte", color=C.ACCENT_RED, weight=ft.FontWeight.W_600)),
+                content=ft.Container(content=md_trigger, padding=10, bgcolor=C.DARK_BG, border_radius=6),
             ),
         ],
     )
 
     info_card = panel(
         content=ft.Column([
-            section_title("📊", "Información del Sistema", ACCENT_AMBER),
+            section_title("📊", "Información del Sistema", C.ACCENT_AMBER),
             *info_rows,
-            ft.Divider(color=BORDER_COL, height=15),
-            ft.Text("📖 Enciclopedia Técnica y Glosario", color=TEXT_MAIN, size=16, weight=ft.FontWeight.BOLD),
+            ft.Divider(color=C.BORDER_COL, height=15),
+            ft.Text("📖 Enciclopedia Técnica y Glosario", color=C.TEXT_MAIN, size=16, weight=ft.FontWeight.BOLD),
             docs_panel
         ], spacing=15)
     )
@@ -488,21 +492,39 @@ def build_estado(page: ft.Page) -> ft.Control:
     import asyncio
     import threading
     res_opts = [ft.dropdown.Option(o) for o in ["Auto-Detect (Pantalla Actual)", "1920x1080", "1600x900", "1366x768", "1280x720", "2560x1440"]]
-    res_dd = ft.Dropdown(label="Resolución Inicial", value=getattr(engine_instance, "window_res", "Auto-Detect (Pantalla Actual)"), options=res_opts, text_size=12, color=TEXT_MAIN, bgcolor=DARK_BG, border_color=BORDER_COL)
+    res_dd = ft.Dropdown(label="Resolución Inicial", value=getattr(engine_instance, "window_res", "Auto-Detect (Pantalla Actual)"), options=res_opts, text_size=12, color=C.TEXT_MAIN, bgcolor=C.DARK_BG, border_color=C.BORDER_COL)
     
     mode_opts = [ft.dropdown.Option(o) for o in ["Normal", "Maximizada", "Pantalla Completa"]]
-    mode_dd = ft.Dropdown(label="Modo Ventana", value=getattr(engine_instance, "window_mode", "Normal"), options=mode_opts, text_size=12, color=TEXT_MAIN, bgcolor=DARK_BG, border_color=BORDER_COL)
+    mode_dd = ft.Dropdown(label="Modo Ventana", value=getattr(engine_instance, "window_mode", "Normal"), options=mode_opts, text_size=12, color=C.TEXT_MAIN, bgcolor=C.DARK_BG, border_color=C.BORDER_COL)
     
     line_opts = [ft.dropdown.Option(str(v)) for v in [0.1, 0.2, 0.3, 0.5, 0.75, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0]]
     current_lw = str(getattr(engine_instance, "chart_line_width", 1.0))
     if current_lw not in [o.key for o in line_opts]:
         current_lw = "1.0"
-    line_dd = ft.Dropdown(label="Grosor de Línea Gráficas", value=current_lw, options=line_opts, text_size=12, color=TEXT_MAIN, bgcolor=DARK_BG, border_color=BORDER_COL)
+    line_dd = ft.Dropdown(label="Grosor de Línea Gráficas", value=current_lw, options=line_opts, text_size=12, color=C.TEXT_MAIN, bgcolor=C.DARK_BG, border_color=C.BORDER_COL)
     
+    theme_opts = [
+        ft.dropdown.Option("dark", "Oscuro (Dark)"),
+        ft.dropdown.Option("light", "Claro (Light)"),
+        ft.dropdown.Option("white", "Blanco (White)"),
+    ]
+    theme_dd = ft.Dropdown(
+        label="Tema Visual",
+        value=getattr(engine_instance, "theme", "dark"),
+        options=theme_opts,
+        text_size=12,
+        color=C.TEXT_MAIN,
+        bgcolor=C.DARK_BG,
+        border_color=C.BORDER_COL
+    )
+
     def apply_window_config(e):
         engine_instance.window_res = res_dd.value
         engine_instance.window_mode = mode_dd.value
         engine_instance.chart_line_width = float(line_dd.value)
+        old_theme = getattr(engine_instance, "theme", "dark")
+        new_theme = theme_dd.value
+        engine_instance.theme = new_theme
         engine_instance.save_config()
         
         page = e.control.page
@@ -528,6 +550,11 @@ def build_estado(page: ft.Page) -> ft.Control:
             page.window.maximized = False
             page.window.width = w
             page.window.height = h
+
+        # Si cambió el tema, notificar
+        if new_theme != old_theme:
+            page.pubsub.send_all(("apply_theme", new_theme))
+
         page.update()
         # Aplicar grosor de línea inmediatamente sin reiniciar
         try:
@@ -536,27 +563,29 @@ def build_estado(page: ft.Page) -> ft.Control:
 
         btn = e.control
         btn.text = "¡Guardado!"
-        btn.bgcolor = ACCENT_GREEN
+        btn.bgcolor = C.ACCENT_GREEN
         btn.update()
         async def revert():
             await asyncio.sleep(1.5)
             btn.text = "🖥️ Aplicar y Guardar"
-            btn.bgcolor = ACCENT_CYAN
+            btn.bgcolor = C.ACCENT_CYAN
             try: btn.update()
             except: pass
         threading.Thread(target=lambda: asyncio.run(revert())).start()
 
-    apply_btn = ft.ElevatedButton("🖥️ Aplicar y Guardar", on_click=apply_window_config, style=ft.ButtonStyle(bgcolor=ACCENT_CYAN, color=DARK_BG, shape=ft.RoundedRectangleBorder(radius=4)))
+    apply_btn = ft.ElevatedButton("🖥️ Aplicar y Guardar", on_click=apply_window_config, style=ft.ButtonStyle(bgcolor=C.ACCENT_CYAN, color=C.DARK_BG, shape=ft.RoundedRectangleBorder(radius=4)))
 
     window_card = panel(
         content=ft.Column([
-            ft.Text("🖥️ PANTALLA Y VENTANA", size=14, weight=ft.FontWeight.BOLD, color="#B380FF"),
-            ft.Divider(height=10, color="#B380FF"),
+            ft.Text("🖥️ PANTALLA Y VENTANA", size=14, weight=ft.FontWeight.BOLD, color=C.COLOR_PURPLE),
+            ft.Divider(height=10, color=C.COLOR_PURPLE),
             res_dd, 
             ft.Container(height=5),
             mode_dd, 
             ft.Container(height=5),
             line_dd,
+            ft.Container(height=5),
+            theme_dd,
             ft.Container(height=10),
             apply_btn
         ], spacing=5)
@@ -603,8 +632,8 @@ def build_estado(page: ft.Page) -> ft.Control:
 
             for btn in buttons_list:
                 is_sel = (btn.data == sr_str)
-                btn.bgcolor = ACCENT_CYAN if is_sel else PANEL_BG
-                btn.content.color = DARK_BG if is_sel else TEXT_MAIN
+                btn.bgcolor = C.ACCENT_CYAN if is_sel else C.PANEL_BG
+                btn.content.color = C.DARK_BG if is_sel else C.TEXT_MAIN
                 try: btn.update()
                 except: pass
                 

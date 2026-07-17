@@ -6,7 +6,7 @@ Gráficas del Tab 4 — Potencia vs. Tiempo:
 
 import numpy as np
 
-from core.constants import *
+import core.constants as C
 from core.dsp_engine import engine_instance
 from ui.charts.cache import cache
 from ui.charts.base import (
@@ -36,12 +36,12 @@ def chart_power_time() -> str:
     if is_new or "line" not in cache.artists["power_time"]:
         ax.clear()
         style_ax(ax, "Potencia vs. Tiempo", "Tiempo (s)", "Potencia (dBFS)")
-        (line,) = ax.plot(t, pwr, color=ACCENT_AMBER, linewidth=1.0)
+        (line,) = ax.plot(t, pwr, color=C.ACCENT_AMBER, linewidth=1.0)
         hline = ax.axhline(
-            y=engine_instance.db_noise_floor, color=ACCENT_RED,
+            y=engine_instance.db_noise_floor, color=C.ACCENT_RED,
             linestyle="--", linewidth=0.8, alpha=0.7, label="Piso de Ruido",
         )
-        ax.legend(loc="upper right", fontsize=7, facecolor=MPL_AXBG, edgecolor=BORDER_COL, labelcolor='#ECEFF1')
+        ax.legend(loc="upper right", fontsize=7, facecolor=C.MPL_AXBG, edgecolor=C.BORDER_COL, labelcolor=C.MPL_TEXT)
         cache.artists["power_time"]["line"] = line
         cache.artists["power_time"]["hline"] = hline
     else:

@@ -5,7 +5,7 @@ seleccionado en el panel derecho. Solo corre UN algoritmo a la vez.
 """
 
 import flet as ft
-from core.constants import *
+import core.constants as C
 from core.algo_registry import ALGO_REGISTRY
 from ui.components.shared import panel, border_all
 
@@ -29,19 +29,19 @@ def build_algo_result(page: ft.Page) -> ft.Control:
     )
 
     # Panel de info dinámico
-    method_name   = ft.Text("—", color=ACCENT_CYAN, size=15,
+    method_name   = ft.Text("—", color=C.ACCENT_CYAN, size=15,
                              weight=ft.FontWeight.BOLD)
     method_color_dot = ft.Container(width=12, height=12, border_radius=6,
-                                    bgcolor=ACCENT_CYAN)
-    method_desc   = ft.Text("—", color=TEXT_MUTED, size=10)
-    status_txt    = ft.Text("Esperando stream...", color=TEXT_MUTED,
+                                    bgcolor=C.ACCENT_CYAN)
+    method_desc   = ft.Text("—", color=C.TEXT_MUTED, size=10)
+    status_txt    = ft.Text("Esperando stream...", color=C.TEXT_MUTED,
                             size=11, italic=True)
 
     # ─────────────────────────────────────────────────────────────────────────
     # ── Controles de la sección Algoritmo DSP ────────────────────────────────
     # ─────────────────────────────────────────────────────────────────────────
 
-    algo_status_txt = ft.Text("Esperando stream...", color=TEXT_MUTED, size=9, italic=True)
+    algo_status_txt = ft.Text("Esperando stream...", color=C.TEXT_MUTED, size=9, italic=True)
     algo_running = [False]
     algo_counter = [0]
     algo_gen = [0]  # epoch: se incrementa al cambiar método
@@ -51,13 +51,13 @@ def build_algo_result(page: ft.Page) -> ft.Control:
         value=engine_instance.algo_params.get("method", "AR/Burg"),
         content=ft.Column(
             [
-                ft.Radio(value="AR/Burg", label="AR/Burg", active_color=ACCENT_CYAN),
-                ft.Radio(value="CWT/Morlet", label="CWT/Morlet", active_color=ACCENT_CYAN),
+                ft.Radio(value="AR/Burg", label="AR/Burg", active_color=C.ACCENT_CYAN),
+                ft.Radio(value="CWT/Morlet", label="CWT/Morlet", active_color=C.ACCENT_CYAN),
 
-                ft.Divider(color=BORDER_COL, height=4),
-                ft.Radio(value="Welch", label="Welch PSD", active_color="#FFD700"),
+                ft.Divider(color=C.BORDER_COL, height=4),
+                ft.Radio(value="Welch", label="Welch PSD", active_color=C.COLOR_GOLD),
                 ft.Radio(value="Correlograma", label="Correlograma", active_color="#40E0D0"),
-                ft.Divider(color=BORDER_COL, height=4),
+                ft.Divider(color=C.BORDER_COL, height=4),
             ],
             spacing=2,
         ),
@@ -83,8 +83,8 @@ def build_algo_result(page: ft.Page) -> ft.Control:
         m = engine_instance.algo_params.get("method", "AR/Burg")
         meta = _ALGO_META.get(m, {})
         method_name.value = m
-        method_name.color = meta.get("color", ACCENT_CYAN)
-        method_color_dot.bgcolor = meta.get("color", ACCENT_CYAN)
+        method_name.color = meta.get("color", C.ACCENT_CYAN)
+        method_color_dot.bgcolor = meta.get("color", C.ACCENT_CYAN)
         method_desc.value = meta.get("desc", "")
         if do_update:
             try:
@@ -109,7 +109,7 @@ def build_algo_result(page: ft.Page) -> ft.Control:
 
             algo_status_txt.value = f"⚠ Clicked: {val}"
             status_txt.value = "Método cambiado — esperando recálculo..."
-            status_txt.color = ACCENT_AMBER
+            status_txt.color = C.ACCENT_AMBER
 
             # Mostrar placeholder
             img.src = None
@@ -204,7 +204,7 @@ def build_algo_result(page: ft.Page) -> ft.Control:
             # Update visual components
             img.src = b64
             status_txt.value = f"✓ {method} actualizado"
-            status_txt.color = ACCENT_GREEN
+            status_txt.color = C.ACCENT_GREEN
             algo_status_txt.value = f"✓ {method}"
 
             try:
@@ -252,10 +252,10 @@ def build_algo_result(page: ft.Page) -> ft.Control:
     _update_param_visibility()
 
     chart_border = ft.Border(
-        top=ft.BorderSide(2, "#B380FF"),
-        right=ft.BorderSide(1, BORDER_COL),
-        bottom=ft.BorderSide(1, BORDER_COL),
-        left=ft.BorderSide(1, BORDER_COL),
+        top=ft.BorderSide(2, C.COLOR_PURPLE),
+        right=ft.BorderSide(1, C.BORDER_COL),
+        bottom=ft.BorderSide(1, C.BORDER_COL),
+        left=ft.BorderSide(1, C.BORDER_COL),
     )
 
     def on_fullscreen_global(e):
@@ -271,7 +271,7 @@ def build_algo_result(page: ft.Page) -> ft.Control:
 
     btn_fs = ft.IconButton(
         icon=ft.Icons.ASPECT_RATIO,
-        icon_color=ACCENT_AMBER,
+        icon_color=C.ACCENT_AMBER,
         icon_size=18,
         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4)),
         on_click=on_fullscreen_global,
@@ -284,13 +284,13 @@ def build_algo_result(page: ft.Page) -> ft.Control:
     chart_container = ft.Container(
         content=ft.Column([
             ft.Row([
-                ft.Text("ALGORITMO DSP", color=ACCENT_CYAN, size=10, weight=ft.FontWeight.BOLD),
+                ft.Text("ALGORITMO DSP", color=C.ACCENT_CYAN, size=10, weight=ft.FontWeight.BOLD),
                 btn_fs
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             img
         ], spacing=2, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
         expand=True,
-        bgcolor=PANEL_BG,
+        bgcolor=C.PANEL_BG,
         border_radius=10,
         border=chart_border,
         padding=8,
@@ -301,17 +301,17 @@ def build_algo_result(page: ft.Page) -> ft.Control:
         padding_val=14,
         content=ft.Column([
             ft.Row([method_color_dot, method_name], spacing=8),
-            ft.Divider(color=BORDER_COL, height=10),
-            ft.Text("Descripción:", color=TEXT_MUTED, size=10),
+            ft.Divider(color=C.BORDER_COL, height=10),
+            ft.Text("Descripción:", color=C.TEXT_MUTED, size=10),
             method_desc,
-            ft.Divider(color=BORDER_COL, height=10),
-            ft.Text("Método Avanzado:", color=TEXT_MAIN, size=12),
+            ft.Divider(color=C.BORDER_COL, height=10),
+            ft.Text("Método Avanzado:", color=C.TEXT_MAIN, size=12),
             method_rg,
             ar_order_row,
             music_ns_row,
             corr_lag_row,
-            ft.Divider(color=BORDER_COL, height=10),
-            ft.Text("Estado:", color=TEXT_MUTED, size=10),
+            ft.Divider(color=C.BORDER_COL, height=10),
+            ft.Text("Estado:", color=C.TEXT_MUTED, size=10),
             status_txt,
             algo_status_txt,
         ], spacing=8, scroll=ft.ScrollMode.AUTO),

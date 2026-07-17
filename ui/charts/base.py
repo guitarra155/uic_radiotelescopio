@@ -6,8 +6,9 @@ Funciones base compartidas por todos los módulos de chart:
   - fig_to_b64            : serializa una Figure a SVG Base64
   - safe_set_ylim         : set_ylim sin que Matplotlib se queje
   - safe_set_xlim         : set_xlim sin que Matplotlib se queje
-  - style_ax              : aplica tema oscuro a un eje
+  - style_ax              : aplica tema al eje según paleta activa
   - export_active_chart   : exporta la gráfica activa a PNG/SVG
+  - clear_chart_cache     : limpia la caché de figuras al cambiar de tema
 """
 
 import io
@@ -19,9 +20,26 @@ import numpy as np
 import matplotlib as mpl
 from matplotlib.figure import Figure
 
-from core.constants import *
+import core.constants as C
 from core.dsp_engine import engine_instance
 from ui.charts.cache import cache
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Limpieza de caché (para cambio de tema)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def clear_chart_cache():
+    """Elimina todas las figuras en caché para forzar recreación con la nueva paleta."""
+    for fig in cache.figs.values():
+        try:
+            import matplotlib.pyplot as plt
+            plt.close(fig)
+        except Exception:
+            pass
+    cache.figs.clear()
+    cache.axes.clear()
+    cache.artists.clear()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -118,7 +136,7 @@ def get_cached_fig(name, figsize=(9.5, 3.0), is_3d=False):
     """Crea o recupera una figura de la caché para evitar sobrecoste de memoria."""
     if name not in cache.figs:
         fig = Figure(figsize=figsize, dpi=96)
-        fig.patch.set_facecolor(MPL_BG)
+        fig.patch.set_facecolor(C.MPL_BG)
         ax = fig.subplots()
         style_ax(ax)
         try:
@@ -150,7 +168,7 @@ def fig_to_b64(fig: Figure, dpi: int = 96) -> str:
         fig.tight_layout(pad=0.25)
     except Exception:
         pass
-    fig.savefig(buf, format="svg", facecolor=MPL_BG, edgecolor=MPL_BG)
+    fig.savefig(buf, format="svg", facecolor=C.MPL_BG, edgecolor=C.MPL_BG)
     buf.seek(0)
     enc = base64.b64encode(buf.read()).decode()
     buf.close()
@@ -188,19 +206,19 @@ def safe_set_xlim(ax, xmin, xmax, fallback_span=1.0):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Estilo oscuro
+# Estilo dinámico de ejes (lee paleta activa)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def style_ax(ax, title="", xlabel="", ylabel=""):
-    """Aplica formato Dark Theme nativo a un eje de Matplotlib."""
-    ax.set_facecolor(MPL_AXBG)
-    ax.tick_params(colors=MPL_TEXT, labelsize=8)
+    """Aplica formato de tema activo a un eje de Matplotlib."""
+    ax.set_facecolor(C.MPL_AXBG)
+    ax.tick_params(colors=C.MPL_TEXT, labelsize=8)
     for sp in ax.spines.values():
-        sp.set_edgecolor(BORDER_COL)
+        sp.set_edgecolor(C.BORDER_COL)
     if title:
-        ax.set_title(title, color=ACCENT_CYAN, fontsize=9, pad=6)
+        ax.set_title(title, color=C.ACCENT_CYAN, fontsize=9, pad=6)
     if xlabel:
-        ax.set_xlabel(xlabel, color=TEXT_MUTED, fontsize=8)
+        ax.set_xlabel(xlabel, color=C.TEXT_MUTED, fontsize=8)
     if ylabel:
-        ax.set_ylabel(ylabel, color=TEXT_MUTED, fontsize=8)
-    ax.grid(True, color=MPL_GRID, linestyle="--", linewidth=0.5, alpha=0.6)
+        ax.set_ylabel(ylabel, color=C.TEXT_MUTED, fontsize=8)
+    ax.grid(True, color=C.MPL_GRID, linestyle="--", linewidth=0.5, alpha=0.6)

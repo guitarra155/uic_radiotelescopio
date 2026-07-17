@@ -6,7 +6,7 @@ con panel de señales de interés detectadas en tiempo real.
 
 import asyncio
 import flet as ft
-from core.constants import *
+import core.constants as C
 from ui.charts import chart_freq_snr
 from ui.components.shared import panel, border_all
 
@@ -25,7 +25,7 @@ def build_freq_snr(page: ft.Page, key_state: dict) -> ft.Control:
     # ── Tabla de señales detectadas ──────────────────────────────────────────
     signals_col = ft.Column([], spacing=4, scroll=ft.ScrollMode.AUTO)
     signals_count = ft.Text(
-        "0 señales detectadas", color=ACCENT_AMBER, size=12, weight=ft.FontWeight.W_600
+        "0 señales detectadas", color=C.ACCENT_AMBER, size=12, weight=ft.FontWeight.W_600
     )
 
     def _rebuild_signals_table():
@@ -35,7 +35,7 @@ def build_freq_snr(page: ft.Page, key_state: dict) -> ft.Control:
             if soi
             else "Sin señales sobre el umbral"
         )
-        signals_count.color = ACCENT_AMBER if soi else TEXT_MUTED
+        signals_count.color = C.ACCENT_AMBER if soi else C.TEXT_MUTED
         signals_col.controls.clear()
 
         if soi:
@@ -45,21 +45,21 @@ def build_freq_snr(page: ft.Page, key_state: dict) -> ft.Control:
                     [
                         ft.Text(
                             "Frec. (MHz)",
-                            color=TEXT_MUTED,
+                            color=C.TEXT_MUTED,
                             size=10,
                             weight=ft.FontWeight.W_600,
                             expand=2,
                         ),
                         ft.Text(
                             "SNR (dB)",
-                            color=TEXT_MUTED,
+                            color=C.TEXT_MUTED,
                             size=10,
                             weight=ft.FontWeight.W_600,
                             expand=1,
                         ),
                         ft.Text(
                             "Estado",
-                            color=TEXT_MUTED,
+                            color=C.TEXT_MUTED,
                             size=10,
                             weight=ft.FontWeight.W_600,
                             expand=1,
@@ -67,20 +67,20 @@ def build_freq_snr(page: ft.Page, key_state: dict) -> ft.Control:
                     ]
                 )
             )
-            signals_col.controls.append(ft.Divider(color=BORDER_COL, height=4))
+            signals_col.controls.append(ft.Divider(color=C.BORDER_COL, height=4))
 
             for freq_mhz, snr_db in sorted(soi, key=lambda x: x[1], reverse=True):
                 # Clasificar por SNR
                 if snr_db >= 20:
-                    badge, badge_col = "FUERTE", ACCENT_RED
+                    badge, badge_col = "FUERTE", C.ACCENT_RED
                 elif snr_db >= 12:
-                    badge, badge_col = "MODERADA", ACCENT_AMBER
+                    badge, badge_col = "MODERADA", C.ACCENT_AMBER
                 else:
-                    badge, badge_col = "DÉBIL", ACCENT_GREEN
+                    badge, badge_col = "DÉBIL", C.ACCENT_GREEN
 
                 # Destacar HI 1420.40 MHz
                 is_hi = abs(freq_mhz - 1420.40) < 0.02
-                freq_color = ACCENT_CYAN if is_hi else TEXT_MAIN
+                freq_color = C.ACCENT_CYAN if is_hi else C.TEXT_MAIN
                 freq_label = f"{freq_mhz:.4f}" + (" ★" if is_hi else "")
 
                 signals_col.controls.append(
@@ -112,7 +112,7 @@ def build_freq_snr(page: ft.Page, key_state: dict) -> ft.Control:
                                 ),
                             ]
                         ),
-                        bgcolor="#0A0F16",
+                        bgcolor=C.DARK_BG,
                         border_radius=6,
                         padding=ft.Padding(left=10, right=10, top=6, bottom=6),
                     )
@@ -121,7 +121,7 @@ def build_freq_snr(page: ft.Page, key_state: dict) -> ft.Control:
             signals_col.controls.append(
                 ft.Text(
                     "El umbral actual es 6 dB.\nAumenta el SNR o activa el stream.",
-                    color=TEXT_MUTED,
+                    color=C.TEXT_MUTED,
                     size=10,
                     italic=True,
                 )
@@ -130,9 +130,9 @@ def build_freq_snr(page: ft.Page, key_state: dict) -> ft.Control:
     _rebuild_signals_table()
 
     # ── Estadísticas rápidas ─────────────────────────────────────────────────
-    val_noise = ft.Text("—", color=TEXT_MUTED, size=11)
-    val_pico = ft.Text("—", color=ACCENT_GREEN, size=11)
-    val_rango = ft.Text("—", color=TEXT_MUTED, size=11)
+    val_noise = ft.Text("—", color=C.TEXT_MUTED, size=11)
+    val_pico = ft.Text("—", color=C.ACCENT_GREEN, size=11)
+    val_rango = ft.Text("—", color=C.TEXT_MUTED, size=11)
 
     # ── Refresco automático ──────────────────────────────────────────────────
     is_rendering = [False]
@@ -247,7 +247,7 @@ def build_freq_snr(page: ft.Page, key_state: dict) -> ft.Control:
 
         # Efecto visual de guardado exitoso
         btn_save.text = "¡Guardado!"
-        btn_save.bgcolor = ACCENT_GREEN
+        btn_save.bgcolor = C.ACCENT_GREEN
         btn_save.color = ft.Colors.WHITE
         try: btn_save.update()
         except: pass
@@ -255,8 +255,8 @@ def build_freq_snr(page: ft.Page, key_state: dict) -> ft.Control:
         async def revert():
             await asyncio.sleep(1.5)
             btn_save.text = "💾 Guardar Detección"
-            btn_save.bgcolor = ACCENT_CYAN
-            btn_save.color = DARK_BG
+            btn_save.bgcolor = C.ACCENT_CYAN
+            btn_save.color = C.DARK_BG
             try: btn_save.update()
             except: pass
 
@@ -266,8 +266,8 @@ def build_freq_snr(page: ft.Page, key_state: dict) -> ft.Control:
         "💾 Guardar Detección",
         on_click=save_current_detections,
         style=ft.ButtonStyle(
-            bgcolor=ACCENT_CYAN,
-            color=DARK_BG,
+            bgcolor=C.ACCENT_CYAN,
+            color=C.DARK_BG,
             shape=ft.RoundedRectangleBorder(radius=4)
         ),
         width=250,
@@ -281,57 +281,57 @@ def build_freq_snr(page: ft.Page, key_state: dict) -> ft.Control:
             [
                 ft.Text(
                     "📶  Señales Detectadas",
-                    color=ACCENT_CYAN,
+                    color=C.ACCENT_CYAN,
                     size=14,
                     weight=ft.FontWeight.BOLD,
                 ),
                 ft.Row(
                     [
-                        ft.Text("Auto-detección:", color=TEXT_MUTED, size=10),
+                        ft.Text("Auto-detección:", color=C.TEXT_MUTED, size=10),
                         ft.TextButton(
                             "Restaurar",
                             on_click=reset_defaults,
-                            style=ft.ButtonStyle(color=ACCENT_CYAN),
+                            style=ft.ButtonStyle(color=C.ACCENT_CYAN),
                         ),
                     ],
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 ),
                 ft.Text(
                     "Umbral: 6 dB sobre el piso de ruido",
-                    color=TEXT_MUTED,
+                    color=C.TEXT_MUTED,
                     size=10,
                     italic=True,
                 ),
-                ft.Divider(color=BORDER_COL, height=8),
+                ft.Divider(color=C.BORDER_COL, height=8),
                 signals_count,
                 ft.Container(
                     content=signals_col,
                     expand=True,
-                    bgcolor=PANEL_BG,
+                    bgcolor=C.PANEL_BG,
                 ),
-                ft.Divider(color=BORDER_COL, height=8),
+                ft.Divider(color=C.BORDER_COL, height=8),
                 ft.Text(
                     "📊  Estadísticas",
-                    color=ACCENT_CYAN,
+                    color=C.ACCENT_CYAN,
                     size=13,
                     weight=ft.FontWeight.BOLD,
                 ),
                 ft.Row(
                     [
-                        ft.Text("Piso ruido:", color=TEXT_MAIN, size=10, expand=1),
+                        ft.Text("Piso ruido:", color=C.TEXT_MAIN, size=10, expand=1),
                         val_noise,
                     ]
                 ),
                 ft.Row(
-                    [ft.Text("Pico SNR:", color=TEXT_MAIN, size=10, expand=1), val_pico]
+                    [ft.Text("Pico SNR:", color=C.TEXT_MAIN, size=10, expand=1), val_pico]
                 ),
                 ft.Row(
-                    [ft.Text("Rango X:", color=TEXT_MAIN, size=10, expand=1), val_rango]
+                    [ft.Text("Rango X:", color=C.TEXT_MAIN, size=10, expand=1), val_rango]
                 ),
-                ft.Divider(color=BORDER_COL, height=8),
+                ft.Divider(color=C.BORDER_COL, height=8),
                 ft.Text(
                     "Ctrl+Scroll → zoom Y\nShift+Scroll → zoom X",
-                    color=TEXT_MUTED,
+                    color=C.TEXT_MUTED,
                     size=9,
                     italic=True,
                 ),
@@ -356,7 +356,7 @@ def build_freq_snr(page: ft.Page, key_state: dict) -> ft.Control:
 
     btn_fs = ft.IconButton(
         icon=ft.Icons.ASPECT_RATIO,
-        icon_color=ACCENT_AMBER,
+        icon_color=C.ACCENT_AMBER,
         icon_size=18,
         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4)),
         on_click=on_fullscreen_global,
@@ -369,13 +369,13 @@ def build_freq_snr(page: ft.Page, key_state: dict) -> ft.Control:
     def on_toggle_side(e):
         side.visible = not side.visible
         btn_toggle_side.icon = ft.Icons.VIEW_SIDEBAR_OUTLINED if side.visible else ft.Icons.VIEW_SIDEBAR
-        btn_toggle_side.icon_color = ACCENT_CYAN if side.visible else ACCENT_AMBER
+        btn_toggle_side.icon_color = C.ACCENT_CYAN if side.visible else C.ACCENT_AMBER
         btn_toggle_side.tooltip = "Ocultar panel de señales detectadas" if side.visible else "Mostrar panel de señales detectadas"
         page.update()
 
     btn_toggle_side = ft.IconButton(
         icon=ft.Icons.VIEW_SIDEBAR_OUTLINED,
-        icon_color=ACCENT_CYAN,
+        icon_color=C.ACCENT_CYAN,
         icon_size=18,
         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4)),
         on_click=on_toggle_side,
@@ -388,7 +388,7 @@ def build_freq_snr(page: ft.Page, key_state: dict) -> ft.Control:
     chart_container = ft.Container(
         content=ft.Column([
             ft.Row([
-                ft.Text("FRECUENCIA VS. SNR", color=ACCENT_CYAN, size=10, weight=ft.FontWeight.BOLD),
+                ft.Text("FRECUENCIA VS. SNR", color=C.ACCENT_CYAN, size=10, weight=ft.FontWeight.BOLD),
                 ft.Row([btn_toggle_side, btn_fs], spacing=5)
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             ft.GestureDetector(
@@ -400,7 +400,7 @@ def build_freq_snr(page: ft.Page, key_state: dict) -> ft.Control:
             )
         ], spacing=2, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
         expand=True,
-        bgcolor=PANEL_BG,
+        bgcolor=C.PANEL_BG,
         border_radius=10,
         border=border_all(),
         padding=6,

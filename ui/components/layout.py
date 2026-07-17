@@ -1,22 +1,23 @@
 """
 components/layout.py
 Define la cabecera (Header) y el pie de página (Footer) de la aplicación.
+Usa import de módulo para compatibilidad con temas dinámicos.
 """
 
 import flet as ft
 import os
-from core.constants import *
+import core.constants as C
 from ui.components.shared import border_all
 from core.dsp_engine import engine_instance
 
 def build_header(page: ft.Page) -> ft.Control:
-    sdr_dot = ft.Text("●", color=ACCENT_RED, size=16)
-    sdr_lbl = ft.Text("Estado Actual: Detenido", color=ACCENT_RED, size=12, weight=ft.FontWeight.W_600)
-    timer_lbl = ft.Text("", color=ACCENT_AMBER, size=14, weight=ft.FontWeight.W_700)
+    sdr_dot = ft.Text("●", color=C.ACCENT_RED, size=16)
+    sdr_lbl = ft.Text("Estado Actual: Detenido", color=C.ACCENT_RED, size=12, weight=ft.FontWeight.W_600)
+    timer_lbl = ft.Text("", color=C.ACCENT_AMBER, size=14, weight=ft.FontWeight.W_700)
 
     header_title = ft.Text(
         f"Frecuencia Central SDR: {engine_instance.center_freq} MHz",
-        color=ACCENT_CYAN, size=14, weight=ft.FontWeight.BOLD, expand=True,
+        color=C.ACCENT_CYAN, size=14, weight=ft.FontWeight.BOLD, expand=True,
     )
 
     # ── Estado interno de reproducción ─────────────────────────────────────
@@ -27,7 +28,7 @@ def build_header(page: ft.Page) -> ft.Control:
     # ── Etiqueta de frame actual durante el review ──────────────────────────
     frame_lbl = ft.Text(
         "Frame 0 / 0",
-        color=ACCENT_AMBER,
+        color=C.ACCENT_AMBER,
         size=11,
         weight=ft.FontWeight.W_600,
         visible=False,
@@ -45,8 +46,8 @@ def build_header(page: ft.Page) -> ft.Control:
 
     # ── Botón principal Play / Pausa / Reanudar ─────────────────────────────
     play_btn = ft.ElevatedButton(
-        content=ft.Text("▶ Iniciar Adquisición", color=DARK_BG, weight=ft.FontWeight.BOLD),
-        bgcolor=ACCENT_GREEN,
+        content=ft.Text("▶ Iniciar Adquisición", color=C.DARK_BG, weight=ft.FontWeight.BOLD),
+        bgcolor=C.ACCENT_GREEN,
         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
         on_click=lambda e: on_play_pause(e),
     )
@@ -62,7 +63,7 @@ def build_header(page: ft.Page) -> ft.Control:
 
     btn_prev10 = ft.IconButton(
         icon=ft.Icons.FAST_REWIND,
-        icon_color=ACCENT_AMBER,
+        icon_color=C.ACCENT_AMBER,
         icon_size=20,
         tooltip="Retroceder 10 frames",
         on_click=lambda e: on_seek(10),
@@ -70,7 +71,7 @@ def build_header(page: ft.Page) -> ft.Control:
     )
     btn_prev1 = ft.IconButton(
         icon=ft.Icons.SKIP_PREVIOUS,
-        icon_color=ACCENT_AMBER,
+        icon_color=C.ACCENT_AMBER,
         icon_size=20,
         tooltip="Retroceder 1 frame",
         on_click=lambda e: on_seek(1),
@@ -78,7 +79,7 @@ def build_header(page: ft.Page) -> ft.Control:
     )
     btn_next1 = ft.IconButton(
         icon=ft.Icons.SKIP_NEXT,
-        icon_color=ACCENT_CYAN,
+        icon_color=C.ACCENT_CYAN,
         icon_size=20,
         tooltip="Avanzar 1 frame",
         on_click=lambda e: on_seek(-1),
@@ -86,7 +87,7 @@ def build_header(page: ft.Page) -> ft.Control:
     )
     btn_next10 = ft.IconButton(
         icon=ft.Icons.FAST_FORWARD,
-        icon_color=ACCENT_CYAN,
+        icon_color=C.ACCENT_CYAN,
         icon_size=20,
         tooltip="Avanzar 10 frames",
         on_click=lambda e: on_seek(-10),
@@ -94,7 +95,7 @@ def build_header(page: ft.Page) -> ft.Control:
     )
     btn_latest = ft.IconButton(
         icon=ft.Icons.LAST_PAGE,
-        icon_color=ACCENT_GREEN,
+        icon_color=C.ACCENT_GREEN,
         icon_size=20,
         tooltip="Ir al frame más reciente",
         on_click=lambda e: on_seek(-9999),
@@ -105,16 +106,39 @@ def build_header(page: ft.Page) -> ft.Control:
         from ui.charts import export_active_chart
         path, err = export_active_chart(fmt)
         if err:
-            sb = ft.SnackBar(ft.Text(err, color="#FFFFFF"), bgcolor=ACCENT_RED)
+            sb = ft.SnackBar(ft.Text(err, color="#FFFFFF"), bgcolor=C.ACCENT_RED)
         else:
-            sb = ft.SnackBar(ft.Text(f"Exportado: {path}", color="#FFFFFF"), bgcolor=ACCENT_GREEN)
-        e.control.page.overlay.append(sb)
+            def open_file(ev):
+                try:
+                    os.startfile(path)
+                except Exception as ex:
+                    print(f"Error abriendo archivo: {ex}")
+            sb = ft.SnackBar(
+                content=ft.Text(f"Exportado: {path}", color="#FFFFFF"),
+                bgcolor=C.ACCENT_GREEN,
+                action="ABRIR ARCHIVO",
+                on_action=open_file
+            )
+        page = e.control.page
+        page.overlay.append(sb)
         sb.open = True
-        e.control.page.update()
+        page.update()
+
+        # Desaparecer naturalmente tras 4 segundos de forma compatible
+        import threading
+        import time
+        def auto_close():
+            time.sleep(4.0)
+            try:
+                sb.open = False
+                page.update()
+            except:
+                pass
+        threading.Thread(target=auto_close, daemon=True).start()
 
     btn_export_png = ft.IconButton(
         icon=ft.Icons.IMAGE,
-        icon_color=ft.Colors.WHITE,
+        icon_color=C.TEXT_MAIN,
         icon_size=20,
         tooltip="Exportar Vista Actual (PNG)",
         on_click=lambda e: do_export(e, "png"),
@@ -132,7 +156,7 @@ def build_header(page: ft.Page) -> ft.Control:
     seek_panel = ft.Container(
         content=ft.Row(
             [
-                ft.Text("◀ REVIEW:", color=TEXT_MUTED, size=10, italic=True),
+                ft.Text("◀ REVIEW:", color=C.TEXT_MUTED, size=10, italic=True),
                 btn_prev10,
                 btn_prev1,
                 frame_lbl,
@@ -146,12 +170,12 @@ def build_header(page: ft.Page) -> ft.Control:
             spacing=2,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),
-        bgcolor=PANEL_BG,
+        bgcolor=C.PANEL_BG,
         border=ft.Border(
-            left=ft.BorderSide(2, ACCENT_AMBER),
-            right=ft.BorderSide(1, BORDER_COL),
-            top=ft.BorderSide(1, BORDER_COL),
-            bottom=ft.BorderSide(1, BORDER_COL),
+            left=ft.BorderSide(2, C.ACCENT_AMBER),
+            right=ft.BorderSide(1, C.BORDER_COL),
+            top=ft.BorderSide(1, C.BORDER_COL),
+            bottom=ft.BorderSide(1, C.BORDER_COL),
         ),
         border_radius=6,
         padding=ft.Padding(left=8, top=4, right=8, bottom=4),
@@ -159,7 +183,7 @@ def build_header(page: ft.Page) -> ft.Control:
     )
 
     # ── Botón de grabación IQ ───────────────────────────────────────────────
-    rec_lbl = ft.Text("", color=ACCENT_RED, size=11, weight=ft.FontWeight.W_700, visible=False)
+    rec_lbl = ft.Text("", color=C.ACCENT_RED, size=11, weight=ft.FontWeight.W_700, visible=False)
     rec_btn = ft.ElevatedButton(
         content=ft.Row(
             [ft.Text("⏺", size=13), ft.Text("REC", color="#FFFFFF", weight=ft.FontWeight.BOLD, size=12)],
@@ -179,7 +203,7 @@ def build_header(page: ft.Page) -> ft.Control:
             path = engine_instance.start_iq_recording()
             if path:
                 _rec_state[0] = True
-                rec_btn.bgcolor = ACCENT_RED
+                rec_btn.bgcolor = C.ACCENT_RED
                 rec_btn.content.controls[0].value = "⏹"
                 rec_btn.content.controls[1].value = "STOP REC"
                 rec_lbl.value = "● REC"
@@ -195,7 +219,7 @@ def build_header(page: ft.Page) -> ft.Control:
             rec_btn.content.controls[1].value = "REC"
             rec_lbl.visible = False
             if path:
-                sb = ft.SnackBar(ft.Text(f"✅ Archivo guardado: {path}", color="#fff"), bgcolor=ACCENT_GREEN)
+                sb = ft.SnackBar(ft.Text(f"✅ Archivo guardado: {path}", color="#fff"), bgcolor=C.ACCENT_GREEN)
                 e.control.page.overlay.append(sb)
                 sb.open = True
         e.control.page.update()
@@ -206,10 +230,10 @@ def build_header(page: ft.Page) -> ft.Control:
     def _set_playing_ui():
         _state[0] = "playing"
         play_btn.content.value = "⏸ Pausar"
-        play_btn.bgcolor = ACCENT_AMBER
-        sdr_dot.color = ACCENT_AMBER
+        play_btn.bgcolor = C.ACCENT_AMBER
+        sdr_dot.color = C.ACCENT_AMBER
         sdr_lbl.value = "Streaming Activo..."
-        sdr_lbl.color = ACCENT_AMBER
+        sdr_lbl.color = C.ACCENT_AMBER
         seek_panel.visible = False
         frame_lbl.visible = False
         # Mostrar botón REC solo en modo SDR
@@ -218,10 +242,10 @@ def build_header(page: ft.Page) -> ft.Control:
     def _set_paused_ui():
         _state[0] = "paused"
         play_btn.content.value = "▶ Reanudar"
-        play_btn.bgcolor = ACCENT_GREEN
-        sdr_dot.color = ACCENT_AMBER
+        play_btn.bgcolor = C.ACCENT_GREEN
+        sdr_dot.color = C.ACCENT_AMBER
         sdr_lbl.value = "⏸"
-        sdr_lbl.color = ACCENT_AMBER
+        sdr_lbl.color = C.ACCENT_AMBER
         # Mostrar controles de review solo si hay historial
         has_frames = len(engine_instance._frame_snapshots) > 0
         seek_panel.visible = has_frames
@@ -233,10 +257,10 @@ def build_header(page: ft.Page) -> ft.Control:
         _state[0] = "stopped"
         engine_instance.is_paused = False
         play_btn.content.value = "▶ Iniciar Adquisición"
-        play_btn.bgcolor = ACCENT_GREEN
-        sdr_dot.color = ACCENT_RED
+        play_btn.bgcolor = C.ACCENT_GREEN
+        sdr_dot.color = C.ACCENT_RED
         sdr_lbl.value = "Estado Actual: Detenido"
-        sdr_lbl.color = ACCENT_RED
+        sdr_lbl.color = C.ACCENT_RED
         timer_lbl.value = ""
         seek_panel.visible = False
         frame_lbl.visible = False
@@ -259,7 +283,7 @@ def build_header(page: ft.Page) -> ft.Control:
                 if not os.path.exists(path):
                     page.snack_bar = ft.SnackBar(
                         ft.Text(f"⚠ Archivo no encontrado en: {path}", color="#fff"),
-                        bgcolor=ACCENT_RED,
+                        bgcolor=C.ACCENT_RED,
                     )
                     page.snack_bar.open = True
                     page.update()
@@ -326,7 +350,7 @@ def build_header(page: ft.Page) -> ft.Control:
                 color="#FFFFFF",
                 weight=ft.FontWeight.BOLD,
             ),
-            bgcolor=ACCENT_RED,
+            bgcolor=C.ACCENT_RED,
         )
         page.overlay.append(sb)
         sb.open = True
@@ -334,21 +358,21 @@ def build_header(page: ft.Page) -> ft.Control:
 
     emg_btn = ft.ElevatedButton(
         content=ft.Text("⛔  Stop", color="#FFFFFF", weight=ft.FontWeight.BOLD),
-        bgcolor=ACCENT_RED,
+        bgcolor=C.ACCENT_RED,
         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
         on_click=on_emergency,
     )
 
     return ft.Container(
-        bgcolor=PANEL_BG,
-        border=ft.Border(bottom=ft.BorderSide(1, BORDER_COL)),
+        bgcolor=C.PANEL_BG,
+        border=ft.Border(bottom=ft.BorderSide(1, C.BORDER_COL)),
         padding=ft.Padding(left=20, top=10, right=20, bottom=10),
         content=ft.Row(
             [
-                ft.Icon(ft.Icons.WIFI_TETHERING, color=ACCENT_CYAN, size=26),
+                ft.Icon(ft.Icons.WIFI_TETHERING, color=C.ACCENT_CYAN, size=26),
                 ft.Text(
                     "Procesamiento DSP —",
-                    color=TEXT_MAIN,
+                    color=C.TEXT_MAIN,
                     size=15,
                     weight=ft.FontWeight.BOLD,
                 ),
@@ -374,16 +398,16 @@ def build_footer() -> ft.Control:
     from datetime import datetime
     now_str = datetime.now().strftime("%Y-%m-%d  %H:%M %Z").strip()
     return ft.Container(
-        bgcolor=PANEL_BG,
-        border=ft.Border(top=ft.BorderSide(1, BORDER_COL)),
+        bgcolor=C.PANEL_BG,
+        border=ft.Border(top=ft.BorderSide(1, C.BORDER_COL)),
         padding=ft.Padding(left=20, top=6, right=20, bottom=6),
         content=ft.Row(
             [
-                ft.Text("UIC Radiotelescopio  •  v2.1.1",         color=TEXT_MUTED, size=10),
-                ft.Text("•",                                        color=BORDER_COL, size=10),
-                ft.Text("Signal Hound BB60C",   color=TEXT_MUTED, size=10),
+                ft.Text("UIC Radiotelescopio  •  v2.1.1",         color=C.TEXT_MUTED, size=10),
+                ft.Text("•",                                        color=C.BORDER_COL, size=10),
+                ft.Text("Signal Hound BB60C",   color=C.TEXT_MUTED, size=10),
                 ft.Container(expand=True),
-                ft.Text(now_str,                                    color=TEXT_MUTED, size=10),
+                ft.Text(now_str,                                    color=C.TEXT_MUTED, size=10),
             ],
             spacing=8,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
