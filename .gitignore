@@ -11,6 +11,7 @@ venv/
 debug.txt
 *.log
 vscode/
+ArchivosIQ/*.iq
 *.rar
 # IA, Entorno y Caché (Prevención de errores ENAMETOOLONG)
 .agents/
@@ -18,4 +19,5 @@ vscode/
 .ruff_cache/
 bun.exe
 data/
+
 
