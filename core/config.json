@@ -3,13 +3,12 @@
     "sample_rate": 2500000,
     "trigger_high": 15.0,
     "trigger_low": 5.0,
-    "cal_offset_dbm": -30.0,
-    "dbm_min": -150,
-    "dbm_max": -80,
+    "db_min": -100.0,
+    "db_max": 0.0,
     "f_min": 1400.0,
     "f_max": 1440.0,
-    "power_dbm_min": -150,
-    "power_dbm_max": -80,
+    "power_db_min": -100,
+    "power_db_max": 0,
     "snr_db_min": -5,
     "snr_db_max": 30,
     "amp_min": 0.0,
@@ -25,7 +24,7 @@
         "welch_fft": 1024,
         "welch_overlap": 0.5,
         "corr_max_lag": 512,
-        "spec2d_method": "correlogram_2d"
+        "spec2d_method": "ar_burg_2d"
     },
     "analysis_window_sec": 0.1,
     "moving_avg_samples": 4,
@@ -40,40 +39,40 @@
         "mon_raw_spec": {
             "xmin": 1419.2057499999999,
             "xmax": 1421.60575,
-            "ymin": -146.24020903472182,
-            "ymax": -121.886180785403546,
+            "ymin": -75.43808966089318,
+            "ymax": -56.93509209499988,
             "auto_x": 0,
             "auto_y": 1
         },
         "mon_raw_amp": {
             "xmin": 0.0,
             "xmax": 0.1,
-            "ymin": -0.033920169621706006,
-            "ymax": 0.033920169621706006,
+            "ymin": -0.03304014354944229,
+            "ymax": 0.03304014354944229,
             "auto_x": 1,
             "auto_y": 1
         },
         "mon_filt_spec": {
             "xmin": 1419.2057499999999,
             "xmax": 1421.60575,
-            "ymin": -146.24020903472182,
-            "ymax": -121.886180785403546,
+            "ymin": -75.43808966089318,
+            "ymax": -56.93509209499988,
             "auto_x": 0,
             "auto_y": 1
         },
         "mon_filt_amp": {
             "xmin": 0.0,
             "xmax": 0.1,
-            "ymin": -0.017773462459445,
-            "ymax": 0.017773462459445,
+            "ymin": -0.02090015038847923,
+            "ymax": 0.02090015038847923,
             "auto_x": 1,
             "auto_y": 1
         },
         "spec_wf": {
             "xmin": 1419.15575,
             "xmax": 1421.65575,
-            "ymin": -146.24020903472182,
-            "ymax": -121.886180785403546,
+            "ymin": -75.43808966089318,
+            "ymax": -56.93509209499988,
             "auto_x": 1,
             "auto_y": 1
         },
@@ -86,24 +85,24 @@
             "auto_y": 1
         },
         "spec_ar": {
-            "xmin": 1419.15575,
-            "xmax": 1421.65575,
-            "ymin": -150.0,
-            "ymax": -90.0,
-            "auto_x": 1,
-            "auto_y": 1
+            "xmin": 1420.0,
+            "xmax": 1420.8,
+            "ymin": -130.0,
+            "ymax": -100.0,
+            "auto_x": 0,
+            "auto_y": 0
         },
         "spec_corr": {
-            "xmin": 1419.15575,
-            "xmax": 1421.65575,
-            "ymin": -150.0,
-            "ymax": -120.0,
-            "auto_x": 1,
-            "auto_y": 1
+            "xmin": 1420.0,
+            "xmax": 1420.8,
+            "ymin": -90.0,
+            "ymax": -70.0,
+            "auto_x": 0,
+            "auto_y": 0
         },
         "stat_hist": {
-            "xmin": -0.9996588031062856,
-            "xmax": 1.0291745755821466,
+            "xmin": -0.9996713156288024,
+            "xmax": 1.026735246181488,
             "ymin": 0.0,
             "ymax": 100.0,
             "auto_x": 1,
@@ -112,8 +111,8 @@
         "pow_time": {
             "xmin": 0.0,
             "xmax": 30.0,
-            "ymin": -149.84100615524921,
-            "ymax": -149.07149871099987,
+            "ymin": -79.82616079204496,
+            "ymax": -79.23555752180275,
             "auto_x": 1,
             "auto_y": 1
         },
@@ -131,12 +130,12 @@
             "xmin": 0.0,
             "xmax": 0.05,
             "ymin": 0.0,
-            "ymax": 93.72884
+            "ymax": 83.38923
         }
     },
     "window_res": "Auto-Detect (Pantalla Actual)",
     "window_mode": "Pantalla Completa",
-    "chart_line_width": 1.0,
+    "chart_line_width": 0.5,
     "auto_spectral_lock": 1,
     "theme": "light"
 }
