@@ -64,15 +64,15 @@ def build_signal_analysis(page: ft.Page, key_state: dict) -> ft.Control:
                 current_pwr = float(data_pwr[(written - 1) % d_len])
 
             noise_fl = float(np.median(p_active))
-            val_pwr_now.value   = f"{current_pwr:.2f} dBFS"
-            val_pwr_max.value   = f"{float(np.max(p_active)):.2f} dBFS"
-            val_pwr_min.value   = f"{float(np.min(p_active)):.2f} dBFS"
-            val_pwr_avg.value   = f"{float(np.mean(p_active)):.2f} dBFS"
-            val_noise_fl.value  = f"{noise_fl:.2f} dBFS"
+            val_pwr_now.value   = f"{current_pwr:.2f} dBm"
+            val_pwr_max.value   = f"{float(np.max(p_active)):.2f} dBm"
+            val_pwr_min.value   = f"{float(np.min(p_active)):.2f} dBm"
+            val_pwr_avg.value   = f"{float(np.mean(p_active)):.2f} dBm"
+            val_noise_fl.value  = f"{noise_fl:.2f} dBm"
 
             cfg = engine_instance.charts_config.get("pow_time", {})
             val_pwr_range.value = (f"{cfg.get('ymin', 0):.0f} → "
-                                   f"{cfg.get('ymax', 0):.0f} dBFS")
+                                   f"{cfg.get('ymax', 0):.0f} dBm")
 
             # (Combinado en el bloque anterior)
         finally:

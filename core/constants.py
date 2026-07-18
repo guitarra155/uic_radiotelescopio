@@ -136,6 +136,12 @@ def set_theme(name: str):
     COLOR_KDE    = p["COLOR_KDE"]
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Unidad de potencia del sistema (dBm — con offset de calibración aplicado)
+# ─────────────────────────────────────────────────────────────────────────────
+POWER_UNIT = "dBm"
+
+
 def get(key: str) -> str:
     """Retorna el valor actual de un color del tema activo."""
     return PALETTES[current_theme].get(key, "#FF00FF")

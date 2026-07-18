@@ -35,7 +35,7 @@ def chart_power_time() -> str:
 
     if is_new or "line" not in cache.artists["power_time"]:
         ax.clear()
-        style_ax(ax, "Potencia vs. Tiempo", "Tiempo (s)", "Potencia (dBFS)")
+        style_ax(ax, "Potencia vs. Tiempo", "Tiempo (s)", "Potencia (dBm)")
         (line,) = ax.plot(t, pwr, color=C.ACCENT_AMBER, linewidth=1.0)
         hline = ax.axhline(
             y=engine_instance.db_noise_floor, color=C.ACCENT_RED,

@@ -182,7 +182,7 @@ def chart_spectrum() -> str:
 
     if is_new or "line" not in cache.artists["spectrum"]:
         ax.clear()
-        style_ax(ax, f"Espectro de Frecuencia (Señal Filtrada) {time_str}", "Frecuencia (MHz)", "Potencia (dBFS)")
+        style_ax(ax, f"Espectro de Frecuencia (Señal Filtrada) {time_str}", "Frecuencia (MHz)", "Potencia (dBm)")
         (line,) = ax.plot(full_freq, spec, color=C.ACCENT_GREEN, linewidth=engine_instance.chart_line_width, rasterized=True)
         hline = ax.axhline(y=engine_instance.db_noise_floor, color=C.ACCENT_AMBER, linestyle="--",
                            linewidth=0.8, alpha=0.7, label="Piso de Ruido")
@@ -223,7 +223,7 @@ def chart_spectrum_raw() -> str:
 
     if is_new or "line" not in cache.artists["spectrum_raw"]:
         ax.clear()
-        style_ax(ax, f"Espectro (Señal Original — Sin Filtrar) {time_str}", "Frecuencia (MHz)", "Potencia (dBFS)")
+        style_ax(ax, f"Espectro (Señal Original — Sin Filtrar) {time_str}", "Frecuencia (MHz)", "Potencia (dBm)")
         (line,) = ax.plot(full_freq, spec, color=C.ACCENT_CYAN, linewidth=engine_instance.chart_line_width, rasterized=True)
         hline = ax.axhline(y=engine_instance.db_noise_floor_raw, color=C.ACCENT_AMBER, linestyle="--",
                            linewidth=0.8, alpha=0.7, label="Piso de Ruido (RAW)")

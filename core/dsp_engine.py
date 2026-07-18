@@ -130,8 +130,8 @@ class DSPEngine:
         self.histogram_mode = "Magnitud"
         self.histogram_data = np.random.normal(0, 1, 1000)
 
-        # Power vs Time buffer (dBFS instantáneo, sincronizado con waterfall_steps)
-        self.power_time_data = np.full(self.waterfall_steps, -100.0)
+        # Power vs Time buffer (dBm — con offset cal_offset_dbm, sincronizado con waterfall_steps)
+        self.power_time_data = np.full(self.waterfall_steps, -130.0)
         self.power_samples_written = 0
 
         # SNR por bin de frecuencia (misma longitud que spectrum_data)
@@ -179,15 +179,20 @@ class DSPEngine:
         )
         self.iq_format = "int16"
 
-        # Rangos de potencia espectro (AUTO-DETECTADOS)
-        self.db_min = -90
-        self.db_max = -50
-        self.db_noise_floor = -80  # Piso de ruido detectado (filtrado)
-        self.db_noise_floor_raw = -80 # Piso de ruido detectado (RAW)
+        # Offset calibración dBFS→dBm: igual al Reference Level del BB60C
+        # Fuente: Signal Hound API Reference — P_dBm = P_dBFS + Reference_Level
+        # Con bb60c_ref_level=-30 dBm → 0 dBFS equivale a -30 dBm en la entrada RF
+        self.cal_offset_dbm: float = -30.0
 
-        # Rangos de gráfica Potencia vs Tiempo
-        self.power_db_min = -90
-        self.power_db_max = -50
+        # Rangos de potencia espectro en dBm (AUTO-DETECTADOS)
+        self.dbm_min = -150
+        self.dbm_max = -80
+        self.db_noise_floor = -130  # Piso de ruido detectado (filtrado, dBm)
+        self.db_noise_floor_raw = -130  # Piso de ruido detectado (RAW, dBm)
+
+        # Rangos de gráfica Potencia vs Tiempo (dBm)
+        self.power_dbm_min = -150
+        self.power_dbm_max = -80
 
         # Referencias de Y para SNR vs Frecuencia
         self.snr_db_min = -5
@@ -728,7 +733,7 @@ class DSPEngine:
             blk = blk - np.mean(blk)
             fft_c = np.fft.fftshift(np.fft.fft(blk * self.window_raw))
             pwr_raw_avg += np.abs(fft_c) ** 2
-        pwr_raw = 10 * np.log10(pwr_raw_avg / (max(1, batches) * self.window_raw_pwr) + 1e-12)
+        pwr_raw = 10 * np.log10(pwr_raw_avg / (max(1, batches) * self.window_raw_pwr) + 1e-12) + self.cal_offset_dbm
         # 🛸 Alpha efectivo: 1.0 en modo RAW (sin suavizado)
         alpha_eff = 1.0 if self.raw_mode else self.vbw_alpha
         
@@ -762,7 +767,7 @@ class DSPEngine:
                 block_iq = block_iq - np.mean(block_iq)
                 fft_complex = np.fft.fftshift(np.fft.fft(block_iq * self.window_raw))
                 pwr_avg += np.abs(fft_complex) ** 2
-            pwr = 10 * np.log10(pwr_avg / (max(1, batches) * self.window_raw_pwr) + 1e-12)
+            pwr = 10 * np.log10(pwr_avg / (max(1, batches) * self.window_raw_pwr) + 1e-12) + self.cal_offset_dbm
 
         # ---- Estabilización Absoluta del Piso de Ruido (Anti-Flicker / Anti-Líneas) ----
         # Esto fuerza a que todos los frames tengan exactamente la misma mediana de ruido base.
@@ -927,7 +932,7 @@ class DSPEngine:
             self.power_samples_written += 1
 
         # ── 8. SNR logarítmico por bin sobre señal RAW ───────────────────
-        # Fórmula: SNR[dB] = P_señal[dBFS] - P_ruido[dBFS]
+        # Fórmula: SNR[dB] = P_señal[dBm] - P_ruido[dBm]  (offset se cancela, SNR es relativo)
         # El piso de ruido se estima con un filtro de mediana local (baseline dinámico)
         # para que las señales fuertes no levanten artificialmente el fondo.
         _k_size = max(3, int(len(self.spectrum_raw_data) * 0.04))
@@ -1614,10 +1619,12 @@ class DSPEngine:
                 self.sample_rate = conf.get("sample_rate", self.sample_rate)
                 self.trigger_high = conf.get("trigger_high", getattr(self, "trigger_high", 15.0))
                 self.trigger_low = conf.get("trigger_low", getattr(self, "trigger_low", 5.0))
-                self.db_min = conf.get("db_min", self.db_min)
-                self.db_max = conf.get("db_max", self.db_max)
-                self.power_db_min = conf.get("power_db_min", getattr(self, "power_db_min", -100))
-                self.power_db_max = conf.get("power_db_max", getattr(self, "power_db_max", 0))
+                self.cal_offset_dbm = conf.get("cal_offset_dbm", self.cal_offset_dbm)
+                # Compatibilidad: acepta tanto dbm_min/max (nuevo) como db_min/max (legacy)
+                self.dbm_min = conf.get("dbm_min", conf.get("db_min", self.dbm_min))
+                self.dbm_max = conf.get("dbm_max", conf.get("db_max", self.dbm_max))
+                self.power_dbm_min = conf.get("power_dbm_min", conf.get("power_db_min", getattr(self, "power_dbm_min", -150)))
+                self.power_dbm_max = conf.get("power_dbm_max", conf.get("power_db_max", getattr(self, "power_dbm_max", -80)))
                 self.f_min = conf.get("f_min", self.f_min)
                 self.f_max = conf.get("f_max", self.f_max)
                 self.amp_min = conf.get("amp_min", self.amp_min)

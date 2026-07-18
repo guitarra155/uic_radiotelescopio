@@ -159,7 +159,7 @@ def build_freq_snr(page: ft.Page, key_state: dict) -> ft.Control:
             _rebuild_signals_table()
 
             noise_floor = float(np.median(engine_instance.spectrum_data))
-            val_noise.value = f"{noise_floor:.1f} dBFS"
+            val_noise.value = f"{noise_floor:.1f} dBm"
 
             snr = engine_instance.snr_data
             best_bin = int(np.argmax(snr))

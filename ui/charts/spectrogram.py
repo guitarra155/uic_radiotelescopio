@@ -146,7 +146,7 @@ def chart_spectrogram() -> str:
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="2%", pad=0.05)
         cbar = fig.colorbar(im, cax=cax)
-        cbar.set_label("Potencia (dBFS)", fontsize=7, color=C.TEXT_MUTED)
+        cbar.set_label("Potencia (dBm)", fontsize=7, color=C.TEXT_MUTED)
         cbar.ax.tick_params(labelsize=6, colors=C.TEXT_MUTED)
         cbar.outline.set_edgecolor(C.BORDER_COL)
         cache.artists["waterfall"]["im"] = im
