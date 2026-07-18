@@ -27,11 +27,6 @@ def main(page: ft.Page):
     engine_instance.load_config()
     C.set_theme(getattr(engine_instance, "theme", "dark"))
 
-    # key_state: diccionario compartido con todos los tabs para detectar Ctrl/Shift en scroll.
-    # page.on_keyboard_event entrega KeyboardEvent con .ctrl/.shift actualizados en cada keydown.
-    # Para detectar el RELEASE de Ctrl/Shift: e.ctrl/e.shift ya vienen en False cuando
-    # se pulsa cualquier otra tecla sin el modificador. Adicionalmente, detectamos las
-    # teclas "Control"/"Shift" directamente para forzar el reset inmediato.
     key_state = {'ctrl': False, 'shift': False}
 
     def on_keyboard(e: ft.KeyboardEvent):
