@@ -124,7 +124,6 @@ class DualMonitorWindow(QtWidgets.QMainWindow):
         user32.SetWindowLongW(qt_hwnd, GWL_STYLE, style)
         
         # 2. Forzar al Flet parent a recortar el pintado en la zona de su hijo (WS_CLIPCHILDREN = 0x02000000)
-        # Esto previene que el motor de pintado de Flet dibuje sobre la ventana de Qt
         WS_CLIPCHILDREN = 0x02000000
         parent_style = user32.GetWindowLongW(self.flet_hwnd, GWL_STYLE)
         user32.SetWindowLongW(self.flet_hwnd, GWL_STYLE, parent_style | WS_CLIPCHILDREN)
@@ -148,19 +147,23 @@ class DualMonitorWindow(QtWidgets.QMainWindow):
             self.try_embed()
 
         user32 = ctypes.windll.user32
+        qt_hwnd = int(self.winId())
         
-        # Si la pestaña no está activa, ocultamos la ventana hija
+        # Si la pestaña no está activa, ocultamos la ventana hija nativa de Windows
         if not self.is_visible_state:
             if self.isVisible():
+                user32.ShowWindow(qt_hwnd, 0) # SW_HIDE = 0
                 self.hide()
             return
         
         # Si Flet está minimizado, ocultamos
         if user32.IsIconic(self.flet_hwnd):
             if self.isVisible():
+                user32.ShowWindow(qt_hwnd, 0)
                 self.hide()
             return
         elif not self.isVisible() and self.is_visible_state:
+            user32.ShowWindow(qt_hwnd, 5) # SW_SHOW = 5
             self.show()
 
         # Obtener el tamaño del área cliente interna de Flet
@@ -178,19 +181,23 @@ class DualMonitorWindow(QtWidgets.QMainWindow):
         header_h = int(56 * scale)
         footer_h = int(25 * scale)
 
-        # Coordenadas relativas al área cliente de Flet
+        # Coordenadas relativas al área cliente de Flet (Píxeles Físicos)
         x = sidebar_w + int(10 * scale)
         y = header_h + int(10 * scale)
         w = w_client - sidebar_w - right_panel_w - int(20 * scale)
         h = h_client - header_h - footer_h - int(20 * scale)
 
-        logical_x = x / scale
-        logical_y = y / scale
-        logical_w = w / scale
-        logical_h = h / scale
-
-        # Posicionar ventana de Qt dentro de Flet
-        self.setGeometry(int(logical_x), int(logical_y), int(logical_w), int(logical_h))
+        # Usar SetWindowPos nativo en píxeles físicos para posicionar la ventana hija WS_CHILD
+        # Esto evita cualquier desajuste por DPI de Qt6 o Flet.
+        user32.SetWindowPos(
+            qt_hwnd, 
+            0, 
+            int(x), 
+            int(y), 
+            int(w), 
+            int(h), 
+            0x0014 # SWP_NOZORDER | SWP_NOACTIVATE
+        )
 
     def read_udp(self):
         data = None
@@ -214,9 +221,13 @@ class DualMonitorWindow(QtWidgets.QMainWindow):
                     cmd = text.split(" ")[0]
                     if cmd == "cmd:show":
                         self.is_visible_state = True
+                        user32 = ctypes.windll.user32
+                        user32.ShowWindow(int(self.winId()), 5)
                         self.show()
                     elif cmd == "cmd:hide":
                         self.is_visible_state = False
+                        user32 = ctypes.windll.user32
+                        user32.ShowWindow(int(self.winId()), 0)
                         self.hide()
             except:
                 pass
