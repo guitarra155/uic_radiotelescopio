@@ -20,8 +20,7 @@ class DualMonitorWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.setWindowTitle("Monitor Acelerado por GPU (SDR++)")
         
-        # Como va a ser una ventana hija nativa de Flet (WS_CHILD),
-        # inicialmente la creamos sin bordes.
+        # Frameless window
         self.setWindowFlags(QtCore.Qt.WindowType.FramelessWindowHint)
         
         # Tema Oscuro Premium
@@ -106,14 +105,14 @@ class DualMonitorWindow(QtWidgets.QMainWindow):
         self.flet_hwnd = hwnd_out[0]
 
     def try_embed(self):
-        """Incrusta la ventana Qt como hija real de Flet mediante Win32"""
+        """Incrusta la ventana Qt como hija real de Flet mediante Win32 y aplica WS_CLIPCHILDREN"""
         if self.embedded or not self.flet_hwnd:
             return
             
         user32 = ctypes.windll.user32
         qt_hwnd = int(self.winId())
         
-        # 1. Cambiar estilo a ventana hija (WS_CHILD = 0x40000000)
+        # 1. Cambiar estilo de la ventana de Qt a ventana hija (WS_CHILD = 0x40000000)
         GWL_STYLE = -16
         WS_CHILD = 0x40000000
         WS_POPUP = 0x80000000
@@ -124,12 +123,18 @@ class DualMonitorWindow(QtWidgets.QMainWindow):
         style = (style | WS_CHILD) & ~WS_POPUP & ~WS_CAPTION & ~WS_THICKFRAME
         user32.SetWindowLongW(qt_hwnd, GWL_STYLE, style)
         
-        # 2. Hacer a Flet el padre real de la ventana de Qt
+        # 2. Forzar al Flet parent a recortar el pintado en la zona de su hijo (WS_CLIPCHILDREN = 0x02000000)
+        # Esto previene que el motor de pintado de Flet dibuje sobre la ventana de Qt
+        WS_CLIPCHILDREN = 0x02000000
+        parent_style = user32.GetWindowLongW(self.flet_hwnd, GWL_STYLE)
+        user32.SetWindowLongW(self.flet_hwnd, GWL_STYLE, parent_style | WS_CLIPCHILDREN)
+        
+        # 3. Establecer Flet como padre
         user32.SetParent(qt_hwnd, self.flet_hwnd)
         self.embedded = True
         
-        # Forzar refresco de estilos en Windows
-        user32.SetWindowPos(qt_hwnd, 0, 0, 0, 0, 0, 0x0027) # SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER
+        # Forzar refresco
+        user32.SetWindowPos(qt_hwnd, 0, 0, 0, 0, 0, 0x0027)
 
     def loop_tick(self):
         self.read_udp()
@@ -144,13 +149,13 @@ class DualMonitorWindow(QtWidgets.QMainWindow):
 
         user32 = ctypes.windll.user32
         
-        # Si la pestaña no está activa en Flet, ocultamos la ventana hija
+        # Si la pestaña no está activa, ocultamos la ventana hija
         if not self.is_visible_state:
             if self.isVisible():
                 self.hide()
             return
         
-        # Si Flet está minimizado, Qt también se minimiza/oculta automáticamente
+        # Si Flet está minimizado, ocultamos
         if user32.IsIconic(self.flet_hwnd):
             if self.isVisible():
                 self.hide()
@@ -158,13 +163,13 @@ class DualMonitorWindow(QtWidgets.QMainWindow):
         elif not self.isVisible() and self.is_visible_state:
             self.show()
 
-        # Obtener el tamaño del área cliente interna de Flet (excluye marcos de ventana)
+        # Obtener el tamaño del área cliente interna de Flet
         rect = RECT()
         user32.GetClientRect(self.flet_hwnd, ctypes.byref(rect))
         w_client = rect.right - rect.left
         h_client = rect.bottom - rect.top
 
-        # Escala DPI de Flet para ajustar los márgenes lógicos
+        # Escala DPI de Flet
         dpi = user32.GetDpiForWindow(self.flet_hwnd)
         scale = dpi / 96.0
 
@@ -179,7 +184,6 @@ class DualMonitorWindow(QtWidgets.QMainWindow):
         w = w_client - sidebar_w - right_panel_w - int(20 * scale)
         h = h_client - header_h - footer_h - int(20 * scale)
 
-        # Qt6 espera coordenadas divididas por la escala DPI de su propio contexto
         logical_x = x / scale
         logical_y = y / scale
         logical_w = w / scale
