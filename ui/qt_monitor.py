@@ -87,22 +87,13 @@ class DualMonitorWindow(QtWidgets.QMainWindow):
         self.timer.start(16)
 
     def find_flet_hwnd(self):
+        """Encuentra la ventana de Flet buscando la clase de ventana de Flutter"""
         user32 = ctypes.windll.user32
-        hwnd_out = [0]
-        WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_int, ctypes.c_void_p)
+        user32.FindWindowW.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p]
+        user32.FindWindowW.restype = ctypes.c_void_p
         
-        def enum_cb(hwnd, extra):
-            length = user32.GetWindowTextLengthW(hwnd)
-            buff = ctypes.create_unicode_buffer(length + 1)
-            user32.GetWindowTextW(hwnd, buff, length + 1)
-            title = buff.value
-            if title.startswith("Plataforma DSP"):
-                hwnd_out[0] = hwnd
-                return False
-            return True
-            
-        user32.EnumWindows(WNDENUMPROC(enum_cb), 0)
-        self.flet_hwnd = hwnd_out[0]
+        # En Windows, todas las ventanas creadas por Flutter tienen esta clase de ventana fija
+        self.flet_hwnd = user32.FindWindowW("FLUTTER_RUNNER_WIN32_WINDOW", None)
 
     def try_embed(self):
         """Incrusta la ventana Qt como hija real de Flet mediante Win32 y aplica WS_CLIPCHILDREN"""
@@ -188,7 +179,6 @@ class DualMonitorWindow(QtWidgets.QMainWindow):
         h = h_client - header_h - footer_h - int(20 * scale)
 
         # Usar SetWindowPos nativo en píxeles físicos para posicionar la ventana hija WS_CHILD
-        # Esto evita cualquier desajuste por DPI de Qt6 o Flet.
         user32.SetWindowPos(
             qt_hwnd, 
             0, 
