@@ -1010,6 +1010,31 @@ class DSPEngine:
 
         self.data_ready = True # Notificar a la UI
 
+        # Broadcast UDP a qt_monitor.py (Evita que Flet se congele corriendo Qt en hilos)
+        if getattr(self, "udp_active", True):
+            try:
+                import socket
+                if not hasattr(self, "_udp_sock"):
+                    self._udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    self._udp_addr = ("127.0.0.1", 9999)
+                
+                # Decimar IQ a 1024 puntos para no saturar el buffer de red
+                raw_y = np.real(iq).astype(np.float32)
+                filt_y = np.real(self.amplitude_ma_data).astype(np.float32)
+                step = max(1, len(raw_y) // 1024)
+                step_f = max(1, len(filt_y) // 1024)
+                
+                payload = (
+                    self.frequencies_mhz.astype(np.float32).tobytes() +
+                    self.spectrum_raw_data.astype(np.float32).tobytes() +
+                    self.spectrum_data.astype(np.float32).tobytes() +
+                    raw_y[::step][:1024].tobytes() +
+                    filt_y[::step_f][:1024].tobytes()
+                )
+                self._udp_sock.sendto(payload, self._udp_addr)
+            except Exception as e:
+                pass
+
         # ── 11. Snapshot de frame para navegación en pausa ───────────────────
         # Solo guardar si NO estamos en modo review (para no sobreescribir historial con datos del seek)
         if not self._review_active:
