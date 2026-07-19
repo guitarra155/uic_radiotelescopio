@@ -6,6 +6,16 @@ import pyqtgraph as pg
 from PyQt6 import QtWidgets, QtCore
 import ctypes
 
+# ── FORZAR CONCORDANCIA DE DPI EN WINDOWS ──
+# Esto asegura que PyQt6 y Flet hablen en el mismo sistema de coordenadas (píxeles físicos)
+try:
+    ctypes.windll.shcore.SetProcessDpiAwareness(2) # Per-Monitor DPI Aware
+except:
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except:
+        pass
+
 # Estructura RECT para Win32
 class RECT(ctypes.Structure):
     _fields_ = [
@@ -20,7 +30,7 @@ class DualMonitorWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.setWindowTitle("Monitor Acelerado por GPU (SDR++)")
         
-        # Hacerla sin bordes (Frameless) y siempre visible sobre Flet (WindowStaysOnTopHint)
+        # Frameless, stays on top
         self.setWindowFlags(
             QtCore.Qt.WindowType.FramelessWindowHint | 
             QtCore.Qt.WindowType.WindowStaysOnTopHint |
@@ -108,10 +118,8 @@ class DualMonitorWindow(QtWidgets.QMainWindow):
         self.flet_hwnd = hwnd_out[0]
 
     def loop_tick(self):
-        # 1. Leer socket
         self.read_udp()
 
-        # 2. Seguir la ventana de Flet en pantalla
         if not self.is_visible_state:
             return
 
@@ -130,32 +138,42 @@ class DualMonitorWindow(QtWidgets.QMainWindow):
         elif not self.isVisible() and self.is_visible_state:
             self.show()
 
-        # Obtener coordenadas de la ventana de Flet
+        # Obtener coordenadas físicas de Flet
         rect = RECT()
         user32.GetWindowRect(self.flet_hwnd, ctypes.byref(rect))
         
+        # Calcular escala DPI actual en Windows para ajustar coordenadas si es necesario
+        dpi = user32.GetDpiForWindow(self.flet_hwnd)
+        scale = dpi / 96.0
+
         w_flet = rect.right - rect.left
         h_flet = rect.bottom - rect.top
 
-        # Estimar offsets de layout basándonos en la estructura de Flet
-        # Sidebar colapsado: 52px, panel derecho: 320px
-        # Header: ~56px, Footer: ~25px
-        # Bordes de ventana Windows típica: 8px izquierda/derecha, 30px arriba (título)
-        border_x = 8
-        title_y = 31
+        # En Windows 10/11, si la ventana está maximizada, rect.left es -8 píxeles
+        # debido al borde invisible del sistema de sombras. Ajustamos esto.
+        is_maximized = user32.IsZoomed(self.flet_hwnd)
+        border_x = 0 if is_maximized else int(8 * scale)
+        title_y = int(23 * scale) if is_maximized else int(31 * scale)
         
-        sidebar_w = 52
-        right_panel_w = 320
-        header_h = 56
-        footer_h = 25
+        sidebar_w = int(52 * scale)
+        right_panel_w = int(320 * scale)
+        header_h = int(56 * scale)
+        footer_h = int(25 * scale)
 
-        x = rect.left + border_x + sidebar_w + 10
-        y = rect.top + title_y + header_h + 10
-        w = w_flet - (border_x * 2) - sidebar_w - right_panel_w - 20
-        h = h_flet - title_y - border_x - header_h - footer_h - 20
+        # Ajuste exacto al contenedor vacío de Flet
+        x = rect.left + border_x + sidebar_w + int(10 * scale)
+        y = rect.top + title_y + header_h + int(10 * scale)
+        w = w_flet - (border_x * 2) - sidebar_w - right_panel_w - int(20 * scale)
+        h = h_flet - title_y - border_x - header_h - footer_h - int(20 * scale)
 
-        # Si el tamaño cambia o la ventana se mueve, ajustar
-        self.setGeometry(int(x), int(y), int(w), int(h))
+        # Si tenemos DPI escala activa en Qt6, debemos pasarle las coordenadas escaladas hacia abajo
+        # ya que Qt las multiplicará internamente por la escala.
+        logical_x = x / scale
+        logical_y = y / scale
+        logical_w = w / scale
+        logical_h = h / scale
+
+        self.setGeometry(int(logical_x), int(logical_y), int(logical_w), int(logical_h))
 
     def read_udp(self):
         data = None
@@ -187,10 +205,6 @@ class DualMonitorWindow(QtWidgets.QMainWindow):
                 pass
             return
 
-        # Header (16 bytes)
-        if len(data) < 16:
-            return
-
         header = np.frombuffer(data[:16], dtype=np.float32)
         center_freq = header[0]
         sample_rate = header[1]
@@ -211,19 +225,9 @@ class DualMonitorWindow(QtWidgets.QMainWindow):
         fs_mhz = sample_rate / 1_000_000.0
         freqs = np.linspace(center_freq - fs_mhz / 2, center_freq + fs_mhz / 2, fft_size)
 
-        # Actualizar curvas
         self.curve_spec_raw.setData(freqs, spec_raw)
         self.curve_spec_filt.setData(freqs, spec_filt)
-        
-        # En la amplitud temporal de PyQtGraph dibujamos parte Real (I) e Imaginaria (Q) por separado
-        # El tamaño recibido es wave_size, pero en dsp_engine decimamos I y Q de forma sintonizada
         self.curve_amp_raw_i.setData(amp_raw)
-        # Para simplificar y simular Q, mostramos un desfase o calculamos magnitud
-        # En dsp_engine enviamos solo Real de IQ raw y Real de IQ filtrado. 
-        # Modifiquemos dsp_engine para que envíe I y Q reales, o grafiquemos solo una.
-        # Grafiquemos por ahora la parte Real. 
-        # Para pintar Q también, use y_raw.imag en dsp_engine.
-        
         self.curve_amp_filt_i.setData(amp_filt)
 
     def closeEvent(self, event):
