@@ -725,15 +725,27 @@ class DSPEngine:
         self.amplitude_ma_data = iq_f.copy()
 
         # ── 3b. Espectro RAW (FFT sobre señal sin filtrar) → solo para Tab 1 ───
-        pwr_raw_avg = np.zeros(self.fft_size)
-        for b in range(batches):
-            blk = iq[b * self.fft_size : (b + 1) * self.fft_size]
-            if len(blk) < self.fft_size:
-                break
-            blk = blk - np.mean(blk)
-            fft_c = np.fft.fftshift(np.fft.fft(blk * self.window_raw))
-            pwr_raw_avg += np.abs(fft_c) ** 2
-        pwr_raw = 10 * np.log10(pwr_raw_avg / (max(1, batches) * self.window_raw_pwr) + 1e-12) + self.cal_offset_dbm
+        try:
+            from core.dsp_c_wrapper import compute_spectrum_fast
+            pwr_raw = compute_spectrum_fast(
+                iq_complex=iq,
+                fft_size=self.fft_size,
+                window=self.window_raw.astype(np.float32),
+                window_pwr=self.window_raw_pwr,
+                cal_offset=self.cal_offset_dbm
+            )
+        except Exception as e:
+            # Fallback a numpy puro si la DLL falla
+            pwr_raw_avg = np.zeros(self.fft_size)
+            for b in range(batches):
+                blk = iq[b * self.fft_size : (b + 1) * self.fft_size]
+                if len(blk) < self.fft_size:
+                    break
+                blk = blk - np.mean(blk)
+                fft_c = np.fft.fftshift(np.fft.fft(blk * self.window_raw))
+                pwr_raw_avg += np.abs(fft_c) ** 2
+            pwr_raw = 10 * np.log10(pwr_raw_avg / (max(1, batches) * self.window_raw_pwr) + 1e-12) + self.cal_offset_dbm
+        
         # 🛸 Alpha efectivo: 1.0 en modo RAW (sin suavizado)
         alpha_eff = 1.0 if self.raw_mode else self.vbw_alpha
         
@@ -759,15 +771,25 @@ class DSPEngine:
             else:
                 pwr = welch_res["psd"]
         else:
-            pwr_avg = np.zeros(self.fft_size)
-            for b in range(batches):
-                block_iq = iq_f[b * self.fft_size : (b + 1) * self.fft_size]
-                if len(block_iq) < self.fft_size:
-                    break
-                block_iq = block_iq - np.mean(block_iq)
-                fft_complex = np.fft.fftshift(np.fft.fft(block_iq * self.window_raw))
-                pwr_avg += np.abs(fft_complex) ** 2
-            pwr = 10 * np.log10(pwr_avg / (max(1, batches) * self.window_raw_pwr) + 1e-12) + self.cal_offset_dbm
+            try:
+                from core.dsp_c_wrapper import compute_spectrum_fast
+                pwr = compute_spectrum_fast(
+                    iq_complex=iq_f,
+                    fft_size=self.fft_size,
+                    window=self.window_raw.astype(np.float32),
+                    window_pwr=self.window_raw_pwr,
+                    cal_offset=self.cal_offset_dbm
+                )
+            except Exception as e:
+                pwr_avg = np.zeros(self.fft_size)
+                for b in range(batches):
+                    block_iq = iq_f[b * self.fft_size : (b + 1) * self.fft_size]
+                    if len(block_iq) < self.fft_size:
+                        break
+                    block_iq = block_iq - np.mean(block_iq)
+                    fft_complex = np.fft.fftshift(np.fft.fft(block_iq * self.window_raw))
+                    pwr_avg += np.abs(fft_complex) ** 2
+                pwr = 10 * np.log10(pwr_avg / (max(1, batches) * self.window_raw_pwr) + 1e-12) + self.cal_offset_dbm
 
         # ---- Estabilización Absoluta del Piso de Ruido (Anti-Flicker / Anti-Líneas) ----
         # Esto fuerza a que todos los frames tengan exactamente la misma mediana de ruido base.
