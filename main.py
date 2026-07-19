@@ -24,8 +24,12 @@ from ui.tabs.estado import build_estado
 
 def main(page: ft.Page):
     from core.dsp_engine import engine_instance
+    from ui.qt_monitor import launch_gpu_monitor
     engine_instance.load_config()
     C.set_theme(getattr(engine_instance, "theme", "dark"))
+    
+    # Lanzar el monitor GPU en segundo plano al iniciar
+    launch_gpu_monitor()
 
     key_state = {'ctrl': False, 'shift': False}
 
