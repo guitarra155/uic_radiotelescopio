@@ -16,10 +16,11 @@ def build_dual_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
     from ui.components.canvas_chart import CanvasChart
     import numpy as np
 
-    chart_spec_raw  = CanvasChart("Espectro RAW", C.ACCENT_CYAN, -150, -40)
-    chart_spec_filt = CanvasChart("Espectro Filtrado", C.ACCENT_GREEN, -150, -40)
-    chart_amp_raw   = CanvasChart("Amplitud RAW", C.ACCENT_CYAN, -0.5, 0.5)
-    chart_amp_filt  = CanvasChart("Amplitud Filtrada", C.ACCENT_AMBER, -0.5, 0.5)
+    chart_spec_raw  = CanvasChart("mon_raw_spec", "Espectro RAW", [C.ACCENT_CYAN], -150, -40)
+    chart_spec_filt = CanvasChart("mon_filt_spec", "Espectro Filtrado", [C.ACCENT_GREEN], -150, -40)
+    # Amplitudes muestran parte Real (I) e Imaginaria (Q) con 2 colores
+    chart_amp_raw   = CanvasChart("mon_raw_amp", "Amplitud RAW", [C.ACCENT_CYAN, C.COLOR_PINK], -0.5, 0.5)
+    chart_amp_filt  = CanvasChart("mon_filt_amp", "Amplitud Filtrada", [C.ACCENT_AMBER, C.COLOR_PINK], -0.5, 0.5)
 
     # Alias para mantener compatibilidad con el resto de la interfaz (on_maximize, etc)
     img_spec_raw  = chart_spec_raw
@@ -36,10 +37,10 @@ def build_dual_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
         if is_rendering[0]: return
         is_rendering[0] = True
         try:
-            # Obtener datos crudos del motor DSP
+            # Obtener datos del motor DSP
             spec_raw = getattr(engine_instance, "spectrum_raw_data", None)
             spec_filt = getattr(engine_instance, "spectrum_data", None)
-            iq_raw = getattr(engine_instance, "current_iq", None)
+            iq_raw = getattr(engine_instance, "amplitude_data", None) # Corregido: antes era current_iq (inexistente)
             iq_filt = getattr(engine_instance, "amplitude_ma_data", None)
 
             # Obtener configuraciones de escala de los charts
@@ -56,32 +57,29 @@ def build_dual_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
 
             if spec_raw is not None and len(spec_raw) == len(freqs):
                 chart_spec_raw.update_plot(
-                    freqs, spec_raw, 
+                    freqs, [spec_raw], 
                     x_min=cfg_spec_raw["xmin"], x_max=cfg_spec_raw["xmax"],
                     y_min=cfg_spec_raw["ymin"], y_max=cfg_spec_raw["ymax"]
                 )
             if spec_filt is not None and len(spec_filt) == len(freqs):
                 chart_spec_filt.update_plot(
-                    freqs, spec_filt,
+                    freqs, [spec_filt],
                     x_min=cfg_spec_filt["xmin"], x_max=cfg_spec_filt["xmax"],
                     y_min=cfg_spec_filt["ymin"], y_max=cfg_spec_filt["ymax"]
                 )
             if iq_raw is not None:
-                # Decimar y graficar parte Real
-                y_raw = np.real(iq_raw)
-                x_raw = np.linspace(cfg_amp_raw["xmin"], cfg_amp_raw["xmax"], len(y_raw))
+                # Pasar I y Q como lista de curvas
+                x_raw = np.linspace(cfg_amp_raw["xmin"], cfg_amp_raw["xmax"], len(iq_raw))
                 chart_amp_raw.update_plot(
-                    x_raw, y_raw,
+                    x_raw, [np.real(iq_raw), np.imag(iq_raw)],
                     x_min=cfg_amp_raw["xmin"], x_max=cfg_amp_raw["xmax"],
                     y_min=cfg_amp_raw["ymin"], y_max=cfg_amp_raw["ymax"]
                 )
             if iq_filt is not None:
-                y_filt = np.real(iq_filt)
-                x_filt = np.linspace(cfg_amp_filt["xmin"], cfg_amp_filt["xmax"], len(y_filt))
+                x_filt = np.linspace(cfg_amp_filt["xmin"], cfg_amp_filt["xmax"], len(iq_filt))
                 chart_amp_filt.update_plot(
-                    x_filt, y_filt,
+                    x_filt, [np.real(iq_filt), np.imag(iq_filt)],
                     x_min=cfg_amp_filt["xmin"], x_max=cfg_amp_filt["xmax"],
-                    y_min=cfg_amp_filt["ymin"], y_max=cfg_amp_filt["ymax"]
                 )
         except Exception as e:
             # print(f"DEBUG: Canvas update failed: {e}")
