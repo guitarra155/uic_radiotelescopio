@@ -96,7 +96,7 @@ class DualMonitorWindow(QtWidgets.QMainWindow):
             buff = ctypes.create_unicode_buffer(length + 1)
             user32.GetWindowTextW(hwnd, buff, length + 1)
             title = buff.value
-            if title.startswith("Procesamiento DSP"):
+            if title.startswith("Plataforma DSP"):
                 hwnd_out[0] = hwnd
                 return False
             return True
