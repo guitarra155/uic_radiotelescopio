@@ -24,8 +24,12 @@ from ui.tabs.estado import build_estado
 
 def main(page: ft.Page):
     from core.dsp_engine import engine_instance
+    from ui.qt_monitor import launch_gpu_monitor
     engine_instance.load_config()
     C.set_theme(getattr(engine_instance, "theme", "dark"))
+    
+    # Lanzar el monitor GPU en segundo plano al iniciar la app
+    launch_gpu_monitor()
 
     key_state = {'ctrl': False, 'shift': False}
 
@@ -148,11 +152,36 @@ def main(page: ft.Page):
     )
 
     # Capturar y sincronizar las dimensions de la ventana con el renderizador de gráficas
+    import socket
+    def send_qt_layout_cmd():
+        try:
+            # Si la pestaña activa es 1 (Monitoreo Dual)
+            if engine_instance.active_tab == 1:
+                sidebar_w = SIDEBAR_W_EXPANDED if sidebar_expanded[0] else SIDEBAR_W_COLLAPSED
+                right_w = 320 # Ancho fijo para el panel derecho
+                
+                # Posición y dimensiones relativas de la pestaña 1
+                x = sidebar_w + 12
+                y = 58 + 12
+                w = max(50, page.width - sidebar_w - right_w - 24)
+                h = max(50, page.height - 58 - 25 - 24) # 58 Header, 25 Footer, márgenes
+                
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.sendto(b"cmd:show", ("127.0.0.1", 9999))
+                s.sendto(f"cmd:layout {x} {y} {w} {h}".encode('utf-8'), ("127.0.0.1", 9999))
+            else:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.sendto(b"cmd:hide", ("127.0.0.1", 9999))
+        except:
+            pass
+
     def on_page_resize(e):
         engine_instance.window_width = page.width
         engine_instance.window_height = page.height
         # Avisar a todos que los charts deben recalcular su escala base
         page.pubsub.send_all("refresh_charts")
+        send_qt_layout_cmd()
+
     page.on_resized = on_page_resize  # Flet event is on_resized, not on_resize!
     engine_instance.window_width = page.width or 1280
     engine_instance.window_height = page.height or 720
@@ -203,6 +232,7 @@ def main(page: ft.Page):
         _tb_set_active(idx)
         page.pubsub.send_all("tab_changed")
         page.update()
+        send_qt_layout_cmd()
 
     def _set_item_state(idx, active):
         """Actualiza colores e indicador visual del ítem de sidebar."""
@@ -470,6 +500,7 @@ def main(page: ft.Page):
         content=build_config(page),
         border=ft.Border(left=ft.BorderSide(1, C.BORDER_COL)),
         bgcolor=C.DARK_BG,
+        width=320,
         expand=False,
         visible=False
     )
