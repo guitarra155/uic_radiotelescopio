@@ -1,45 +1,65 @@
 """
 tabs/dual_monitoring.py
-Pestaña Dual — Comparación de Señal Original vs. Filtrada.
-Sirve como contenedor para la ventana superpuesta OpenGL de PyQtGraph.
+Pestaña Dual — Lanzador del Monitor Acelerado por GPU Externo.
 """
 
 import flet as ft
 import core.constants as C
-import socket
+from ui.qt_monitor import launch_gpu_monitor
 
 def build_dual_monitoring(page: ft.Page, key_state: dict) -> ft.Control:
     
-    # Enviar comando de mostrar al iniciar la pestaña
-    def send_show_cmd():
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.sendto(b"cmd:show", ("127.0.0.1", 9999))
-        except:
-            pass
+    def on_launch_click(e):
+        launch_gpu_monitor()
 
-    # Sintonizar el cambio de pestaña para ocultar el overlay si cambiamos de tab
-    def on_tab_changed(msg):
-        from core.dsp_engine import engine_instance
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            if engine_instance.active_tab == 1:
-                s.sendto(b"cmd:show", ("127.0.0.1", 9999))
-            else:
-                s.sendto(b"cmd:hide", ("127.0.0.1", 9999))
-        except:
-            pass
-
-    # Suscribirse al evento de cambio de pestaña
-    page.pubsub.subscribe(on_tab_changed)
-
-    # Lanzar el monitor externo que se superpone automáticamente
-    from ui.qt_monitor import launch_gpu_monitor
+    # Lanzar la ventana del monitor automáticamente al hacer clic en la pestaña
     launch_gpu_monitor()
-    send_show_cmd()
 
     return ft.Container(
+        content=ft.Column(
+            [
+                ft.Container(height=40),
+                ft.Text("🌓", size=64),
+                ft.Container(height=10),
+                ft.Text(
+                    "Monitoreo Dual Acelerado por GPU",
+                    size=22,
+                    weight=ft.FontWeight.BOLD,
+                    color=C.TEXT_MAIN,
+                ),
+                ft.Container(height=10),
+                ft.Text(
+                    "Este módulo se ejecuta en una ventana externa independiente para aprovechar la aceleración\n"
+                    "por hardware 3D (GPU) y renderizar a 60 FPS fluidos sin bloquear la interfaz de Flet.",
+                    size=14,
+                    color=C.TEXT_MUTED,
+                    text_align=ft.TextAlign.CENTER,
+                ),
+                ft.Container(height=30),
+                ft.ElevatedButton(
+                    content=ft.Text("Abrir Monitor Gráfico Externo", size=13),
+                    bgcolor=C.ACCENT_CYAN,
+                    color=C.DARK_BG,
+                    on_click=on_launch_click,
+                    style=ft.ButtonStyle(
+                        shape=ft.RoundedRectangleBorder(radius=6),
+                        padding=15
+                    )
+                ),
+                ft.Container(height=15),
+                ft.Text(
+                    "Nota: La ventana contiene el panel lateral de configuraciones (límites de ejes,\n"
+                    "filtro de media móvil, etc.) y se comunica bidireccionalmente con el software.",
+                    size=12,
+                    color=C.TEXT_MUTED,
+                    italic=True,
+                    text_align=ft.TextAlign.CENTER,
+                ),
+            ],
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            alignment=ft.MainAxisAlignment.CENTER,
+        ),
         bgcolor=C.DARK_BG,
         expand=True,
-        padding=0
+        alignment=ft.alignment.Alignment(0.0, 0.0)
     )

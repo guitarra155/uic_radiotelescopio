@@ -78,6 +78,10 @@ class DSPEngine:
         self.bb60c_iq_bw = 20.0    # Ancho de banda digital (MHz)
         self.vbw_alpha = 0.3       # Factor de suavizado (0.1 a 1.0)
         self.ma_enabled = True      # Interruptor del filtro Moving Average
+
+        # Iniciar receptor de comandos UDP desde el monitor externo Qt
+        self._cmd_thread = threading.Thread(target=self._udp_cmd_listener, daemon=True)
+        self._cmd_thread.start()
         self.raw_mode = False       # Modo 100% RAW (sin suavizado VBW)
         
         # 🔗 Sincronización (Modo Espejo)
@@ -1736,6 +1740,39 @@ class DSPEngine:
         finally:
             # Siempre redimensionar el buffer del correlograma al SR restaurado
             self._resize_corr_buffer()
+
+    def _udp_cmd_listener(self):
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            sock.bind(("127.0.0.1", 9998))
+        except:
+            return
+        while True:
+            try:
+                data, _ = sock.recvfrom(1024)
+                text = data.decode('utf-8')
+                if text.startswith("cmd:"):
+                    parts = text.split(" ")
+                    cmd = parts[0]
+                    if cmd == "cmd:set_ma_enabled":
+                        self.ma_enabled = (parts[1] == "True")
+                        self.save_config()
+                    elif cmd == "cmd:set_ma_samples":
+                        self.moving_avg_samples = int(parts[1])
+                        self.save_config()
+                    elif cmd == "cmd:set_chart_config":
+                        chart_id = parts[1]
+                        key = parts[2]
+                        if parts[3] in ["True", "False"]:
+                            val = (parts[3] == "True")
+                        else:
+                            val = float(parts[3]) if '.' in parts[3] or 'e' in parts[3] else int(parts[3])
+                        if hasattr(self, "charts_config") and chart_id in self.charts_config:
+                            self.charts_config[chart_id][key] = val
+                            self.save_config()
+            except:
+                pass
 
 
 # Instancia global del DSP (Singleton pattern simple)
