@@ -6,16 +6,6 @@ import pyqtgraph as pg
 from PyQt6 import QtWidgets, QtCore
 import ctypes
 
-# ── FORZAR CONCORDANCIA DE DPI EN WINDOWS ──
-# Esto asegura que PyQt6 y Flet hablen en el mismo sistema de coordenadas (píxeles físicos)
-try:
-    ctypes.windll.shcore.SetProcessDpiAwareness(2) # Per-Monitor DPI Aware
-except:
-    try:
-        ctypes.windll.user32.SetProcessDPIAware()
-    except:
-        pass
-
 # Estructura RECT para Win32
 class RECT(ctypes.Structure):
     _fields_ = [
@@ -30,12 +20,9 @@ class DualMonitorWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.setWindowTitle("Monitor Acelerado por GPU (SDR++)")
         
-        # Frameless, stays on top
-        self.setWindowFlags(
-            QtCore.Qt.WindowType.FramelessWindowHint | 
-            QtCore.Qt.WindowType.WindowStaysOnTopHint |
-            QtCore.Qt.WindowType.SubWindow
-        )
+        # Como va a ser una ventana hija nativa de Flet (WS_CHILD),
+        # inicialmente la creamos sin bordes.
+        self.setWindowFlags(QtCore.Qt.WindowType.FramelessWindowHint)
         
         # Tema Oscuro Premium
         pg.setConfigOption('background', '#0b1319')
@@ -92,9 +79,10 @@ class DualMonitorWindow(QtWidgets.QMainWindow):
         self.sock.setblocking(False)
 
         self.flet_hwnd = None
+        self.embedded = False
         self.is_visible_state = False
 
-        # Timer rápido (16ms = 60 FPS) para datos y auto-seguimiento de ventana
+        # Timer rápido (16ms = 60 FPS) para datos y ajuste
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self.loop_tick)
         self.timer.start(16)
@@ -117,20 +105,52 @@ class DualMonitorWindow(QtWidgets.QMainWindow):
         user32.EnumWindows(WNDENUMPROC(enum_cb), 0)
         self.flet_hwnd = hwnd_out[0]
 
+    def try_embed(self):
+        """Incrusta la ventana Qt como hija real de Flet mediante Win32"""
+        if self.embedded or not self.flet_hwnd:
+            return
+            
+        user32 = ctypes.windll.user32
+        qt_hwnd = int(self.winId())
+        
+        # 1. Cambiar estilo a ventana hija (WS_CHILD = 0x40000000)
+        GWL_STYLE = -16
+        WS_CHILD = 0x40000000
+        WS_POPUP = 0x80000000
+        WS_CAPTION = 0x00C00000
+        WS_THICKFRAME = 0x00040000
+        
+        style = user32.GetWindowLongW(qt_hwnd, GWL_STYLE)
+        style = (style | WS_CHILD) & ~WS_POPUP & ~WS_CAPTION & ~WS_THICKFRAME
+        user32.SetWindowLongW(qt_hwnd, GWL_STYLE, style)
+        
+        # 2. Hacer a Flet el padre real de la ventana de Qt
+        user32.SetParent(qt_hwnd, self.flet_hwnd)
+        self.embedded = True
+        
+        # Forzar refresco de estilos en Windows
+        user32.SetWindowPos(qt_hwnd, 0, 0, 0, 0, 0, 0x0027) # SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER
+
     def loop_tick(self):
         self.read_udp()
-
-        if not self.is_visible_state:
-            return
 
         if not self.flet_hwnd:
             self.find_flet_hwnd()
             if not self.flet_hwnd:
                 return
 
+        if not self.embedded:
+            self.try_embed()
+
         user32 = ctypes.windll.user32
         
-        # Verificar si Flet está minimizado o activo
+        # Si la pestaña no está activa en Flet, ocultamos la ventana hija
+        if not self.is_visible_state:
+            if self.isVisible():
+                self.hide()
+            return
+        
+        # Si Flet está minimizado, Qt también se minimiza/oculta automáticamente
         if user32.IsIconic(self.flet_hwnd):
             if self.isVisible():
                 self.hide()
@@ -138,41 +158,34 @@ class DualMonitorWindow(QtWidgets.QMainWindow):
         elif not self.isVisible() and self.is_visible_state:
             self.show()
 
-        # Obtener coordenadas físicas de Flet
+        # Obtener el tamaño del área cliente interna de Flet (excluye marcos de ventana)
         rect = RECT()
-        user32.GetWindowRect(self.flet_hwnd, ctypes.byref(rect))
-        
-        # Calcular escala DPI actual en Windows para ajustar coordenadas si es necesario
+        user32.GetClientRect(self.flet_hwnd, ctypes.byref(rect))
+        w_client = rect.right - rect.left
+        h_client = rect.bottom - rect.top
+
+        # Escala DPI de Flet para ajustar los márgenes lógicos
         dpi = user32.GetDpiForWindow(self.flet_hwnd)
         scale = dpi / 96.0
 
-        w_flet = rect.right - rect.left
-        h_flet = rect.bottom - rect.top
-
-        # En Windows 10/11, si la ventana está maximizada, rect.left es -8 píxeles
-        # debido al borde invisible del sistema de sombras. Ajustamos esto.
-        is_maximized = user32.IsZoomed(self.flet_hwnd)
-        border_x = 0 if is_maximized else int(8 * scale)
-        title_y = int(23 * scale) if is_maximized else int(31 * scale)
-        
         sidebar_w = int(52 * scale)
         right_panel_w = int(320 * scale)
         header_h = int(56 * scale)
         footer_h = int(25 * scale)
 
-        # Ajuste exacto al contenedor vacío de Flet
-        x = rect.left + border_x + sidebar_w + int(10 * scale)
-        y = rect.top + title_y + header_h + int(10 * scale)
-        w = w_flet - (border_x * 2) - sidebar_w - right_panel_w - int(20 * scale)
-        h = h_flet - title_y - border_x - header_h - footer_h - int(20 * scale)
+        # Coordenadas relativas al área cliente de Flet
+        x = sidebar_w + int(10 * scale)
+        y = header_h + int(10 * scale)
+        w = w_client - sidebar_w - right_panel_w - int(20 * scale)
+        h = h_client - header_h - footer_h - int(20 * scale)
 
-        # Si tenemos DPI escala activa en Qt6, debemos pasarle las coordenadas escaladas hacia abajo
-        # ya que Qt las multiplicará internamente por la escala.
+        # Qt6 espera coordenadas divididas por la escala DPI de su propio contexto
         logical_x = x / scale
         logical_y = y / scale
         logical_w = w / scale
         logical_h = h / scale
 
+        # Posicionar ventana de Qt dentro de Flet
         self.setGeometry(int(logical_x), int(logical_y), int(logical_w), int(logical_h))
 
     def read_udp(self):
