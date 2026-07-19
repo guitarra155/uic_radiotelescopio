@@ -1024,15 +1024,29 @@ class DSPEngine:
                 step = max(1, len(raw_y) // 1024)
                 step_f = max(1, len(filt_y) // 1024)
                 
+                # Bins de onda recortados exactamente a 1024
+                raw_y_dec = raw_y[::step][:1024]
+                filt_y_dec = filt_y[::step_f][:1024]
+                
+                # Cabecera estructurada: center_freq (float32), sample_rate (float32), fft_size (int32), wave_size (int32)
+                header = np.array([
+                    self.center_freq, 
+                    self.sample_rate, 
+                    float(self.fft_size), 
+                    float(len(raw_y_dec))
+                ], dtype=np.float32).tobytes()
+                
                 payload = (
-                    self.frequencies_mhz.astype(np.float32).tobytes() +
+                    header +
                     self.spectrum_raw_data.astype(np.float32).tobytes() +
                     self.spectrum_data.astype(np.float32).tobytes() +
-                    raw_y[::step][:1024].tobytes() +
-                    filt_y[::step_f][:1024].tobytes()
+                    raw_y_dec.tobytes() +
+                    filt_y_dec.tobytes()
                 )
                 self._udp_sock.sendto(payload, self._udp_addr)
             except Exception as e:
+                # Si deseas depurar, puedes imprimir el error temporalmente:
+                # print(f"DEBUG UDP ERROR: {e}")
                 pass
 
         # ── 11. Snapshot de frame para navegación en pausa ───────────────────

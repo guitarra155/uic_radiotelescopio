@@ -63,12 +63,11 @@ class DualMonitorWindow(QtWidgets.QMainWindow):
         self.timer.start(10)
 
     def read_udp(self):
-        # Leer el paquete más reciente (vaciar el buffer para evitar lag)
         data = None
         while True:
             try:
-                packet, _ = self.sock.recvfrom(65536)
-                data = packet  # Guardamos solo el último
+                packet, _ = self.sock.recvfrom(262144)  # Buffer de lectura más grande para soportar FFTs grandes
+                data = packet
             except BlockingIOError:
                 break
             except Exception as e:
@@ -78,19 +77,34 @@ class DualMonitorWindow(QtWidgets.QMainWindow):
         if data is None:
             return
 
-        # El payload tiene 5 arrays de 1024 floats de 32 bits (4 bytes cada uno)
-        # Tamaño total = 1024 * 4 * 5 = 20480 bytes
-        expected_size = 1024 * 4 * 5
+        # El header tiene 4 floats (16 bytes): center_freq, sample_rate, fft_size, wave_size
+        if len(data) < 16:
+            return
+
+        header = np.frombuffer(data[:16], dtype=np.float32)
+        center_freq = header[0]
+        sample_rate = header[1]
+        fft_size = int(header[2])
+        wave_size = int(header[3])
+
+        # Verificar que el tamaño total del paquete sea correcto
+        # Header (16 bytes) + (fft_size * 2 + wave_size * 2) * 4 bytes
+        expected_size = 16 + (fft_size * 2 + wave_size * 2) * 4
         if len(data) != expected_size:
             return
 
         # Desempaquetar los arrays
-        arrs = np.frombuffer(data, dtype=np.float32)
-        freqs = arrs[0:1024]
-        spec_raw = arrs[1024:2048]
-        spec_filt = arrs[2048:3072]
-        amp_raw = arrs[3072:4096]
-        amp_filt = arrs[4096:5120]
+        payload = np.frombuffer(data[16:], dtype=np.float32)
+        
+        # Segmentar los datos
+        spec_raw = payload[0 : fft_size]
+        spec_filt = payload[fft_size : 2 * fft_size]
+        amp_raw = payload[2 * fft_size : 2 * fft_size + wave_size]
+        amp_filt = payload[2 * fft_size + wave_size : 2 * fft_size + 2 * wave_size]
+
+        # Calcular eje de frecuencias en MHz
+        fs_mhz = sample_rate / 1_000_000.0
+        freqs = np.linspace(center_freq - fs_mhz / 2, center_freq + fs_mhz / 2, fft_size)
 
         # Actualizar curvas
         self.curve_spec_raw.setData(freqs, spec_raw)
