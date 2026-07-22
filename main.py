@@ -97,6 +97,8 @@ def main(page: ft.Page):
                 switch_to_tab(next_idx)
             elif e.key.upper() == "B":
                 page.pubsub.send_all(("toggle_tab_panel", engine_instance.active_tab))
+            elif e.key.upper() == "O":
+                page.pubsub.send_all("open_iq_file_picker")
             else:
                 k = e.key
                 if k.startswith("Numpad "):

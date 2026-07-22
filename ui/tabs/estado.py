@@ -636,6 +636,8 @@ def build_estado(page: ft.Page) -> ft.Control:
                 btn.content.color = C.DARK_BG if is_sel else C.TEXT_MAIN
                 try: btn.update()
                 except: pass
+        elif msg == "open_iq_file_picker":
+            asyncio.create_task(on_pick_file(None))
                 
     page.pubsub.subscribe(on_refresh)
 
