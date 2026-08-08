@@ -2,7 +2,6 @@
 ui/charts/algorithms.py
 Gráficas de algoritmos DSP avanzados (Tab 6 — Algoritmo DSP):
   - chart_ar_spectrum           : AR/Burg — espectro paramétrico 1D
-  - chart_music_spectrum        : Pseudo-MUSIC / ESPRIT — pseudo-espectro 1D
   - chart_welch_spectrum        : Welch — PSD por promediado de periodogramas
   - chart_correlogram_spectrum  : Correlograma — Wiener-Khinchin 1D
 
@@ -38,30 +37,6 @@ def chart_ar_spectrum(result: dict) -> str:
         line.set_data(freqs, psd)
         safe_set_xlim(ax, freqs[0], freqs[-1])
         safe_set_ylim(ax, np.min(psd) - 5, np.max(psd) + 5)
-
-    return fig_to_b64(fig)
-
-
-def chart_music_spectrum(result: dict) -> str:
-    """Pseudo-espectro MUSIC o ESPRIT."""
-    method = result.get("method", "MUSIC")
-    name = "music_spectrum"
-    dyn_size = get_dynamic_figsize(19.0, 5.6)
-    fig, ax, is_new = get_cached_fig(name, figsize=dyn_size)
-    freqs = result["freqs"]
-    spec = result.get("music_spectrum", result.get("esprit_spectrum"))
-
-    if is_new or "line" not in cache.artists[name]:
-        ax.clear()
-        style_ax(ax, f"Pseudo-Espectro {method}", "Frecuencia (MHz)", "Pseudo-potencia (dB)")
-        col = C.ACCENT_RED if "MUSIC" in method else "#FF80AB"
-        (line,) = ax.plot(freqs, spec, color=col, linewidth=1.2)
-        cache.artists[name]["line"] = line
-    else:
-        line = cache.artists[name]["line"]
-        line.set_data(freqs, spec)
-        safe_set_xlim(ax, freqs[0], freqs[-1])
-        safe_set_ylim(ax, np.min(spec) - 2, np.max(spec) + 2)
 
     return fig_to_b64(fig)
 

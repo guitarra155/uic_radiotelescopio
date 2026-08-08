@@ -151,15 +151,12 @@ class DSPEngine:
         self.algo_results: dict = {
             "ar": None,
             "cwt": None,
-            "music": None,
-            "esprit": None,
             "welch": None,
             "correlogram": None,
             "aslt": None,
         }
         self.algo_params: dict = {
             "ar_order": 64,
-            "n_signals": 3,
             "method": "AR/Burg",
             "welch_fft": 1024,
             "welch_overlap": 0.5,

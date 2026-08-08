@@ -7,8 +7,6 @@ Uso en main.py:
     from ui.tabs.algo_tab import build_algo_tab
     build_algo_tab(page, "ar",     "AR / Burg",     C.COLOR_PURPLE)
     build_algo_tab(page, "cwt",    "CWT / Morlet",  "#00C8FF")
-    build_algo_tab(page, "music",  "Pseudo-MUSIC",  "#FF4C4C")
-    build_algo_tab(page, "esprit", "ESPRIT",        "#FF80AB")
 """
 
 import flet as ft

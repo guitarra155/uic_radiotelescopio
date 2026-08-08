@@ -47,7 +47,7 @@ def build_algo_result(page: ft.Page) -> ft.Control:
     algo_gen = [0]  # epoch: se incrementa al cambiar método
     ALGO_EVERY_N = 30
 
-     method_rg = ft.RadioGroup(
+    method_rg = ft.RadioGroup(
         value=engine_instance.algo_params.get("method", "AR/Burg"),
         content=ft.Column(
             [
@@ -135,17 +135,12 @@ def build_algo_result(page: ft.Page) -> ft.Control:
             engine_instance.algo_params["ar_order"] = int(ar_order_f.value or 64)
         except: pass
         try:
-            engine_instance.algo_params["n_signals"] = int(music_ns_f.value or 3)
-        except: pass
-        try:
             engine_instance.algo_params["corr_max_lag"] = int(corr_lag_f.value or 512)
         except: pass
         engine_instance.save_config()
 
     ar_order_f.on_change = _save_params
     ar_order_f.on_submit = _save_params
-    music_ns_f.on_change = _save_params
-    music_ns_f.on_submit = _save_params
     corr_lag_f.on_change = _save_params
     corr_lag_f.on_submit = _save_params
 
@@ -308,7 +303,6 @@ def build_algo_result(page: ft.Page) -> ft.Control:
             ft.Text("Método Avanzado:", color=C.TEXT_MAIN, size=12),
             method_rg,
             ar_order_row,
-            music_ns_row,
             corr_lag_row,
             ft.Divider(color=C.BORDER_COL, height=10),
             ft.Text("Estado:", color=C.TEXT_MUTED, size=10),

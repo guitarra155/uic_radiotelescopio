@@ -59,7 +59,6 @@ from ui.charts.freq_snr import (
 
 from ui.charts.algorithms import (
     chart_ar_spectrum,
-    chart_music_spectrum,
     chart_welch_spectrum,
     chart_correlogram_spectrum,
 )
@@ -105,6 +104,6 @@ __all__ = [
     # Freq SNR (Tab 5)
     "chart_freq_snr",
     # Algorithms (Tab 6)
-    "chart_ar_spectrum", "chart_music_spectrum",
+    "chart_ar_spectrum",
     "chart_welch_spectrum", "chart_correlogram_spectrum",
 ]
